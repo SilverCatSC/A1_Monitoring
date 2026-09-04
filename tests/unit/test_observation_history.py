@@ -33,6 +33,8 @@ def _seed(session):
         vin='VIN-HISTORY-1',
         brand='<script>Unsafe Brand</script>',
         model='V-Class',
+        generation='V-VIP',
+        price_hint=44_990_000,
         source_auto_ru='https://auto.ru/cars/used/sale/brand/model/1234567890-test/',
         is_active=True,
     )
@@ -145,6 +147,8 @@ def test_history_and_listing_templates_escape_imported_content(tmp_path):
         assert '&lt;script&gt;Unsafe Brand&lt;/script&gt;' in detail_html
         assert '&lt;script&gt;Unsafe Brand&lt;/script&gt;' in catalog_html
         assert 'Auto.ru ↗' in catalog_html
+        assert '44 990 000 ₽' in catalog_html
+        assert 'V-VIP' in catalog_html
         assert detail['previews'][0]['observation'].id == 'observation-auto'
     finally:
         session.close()
