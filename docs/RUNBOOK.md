@@ -1,76 +1,144 @@
-# Руководство по запуску A1_Search_Monitor
+# Runbook A1 Search Monitor
 
-Документ описывает порядок первичного запуска и повседневной эксплуатации.
+Краткий технический регламент. Пользовательский процесс — в `INSTRUCTION.md`.
 
-## 1. Первичная инициализация локально
-
-1. Откройте папку проекта.
-2. Заполните `.env` на основе `.env.example`.
-3. Запустите:
+## 1. Проверка состояния
 
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-pip install -e .
-python -m playwright install chromium
+docker-compose ps
+curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/health
+curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/ready
+curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/system/status
+docker-compose logs --tail=200 app
 ```
 
-4. Инициализация БД:
+`health=ok` означает только работающий процесс. Для бизнеса проверять
+`system/status`: `not_configured`, `overdue` и `degraded` требуют действия.
+
+## 2. Deploy
+
+Перед каждым обновлением:
 
 ```bash
-python -m app.cli init
+./scripts/backup_now.sh
+./scripts/restore_test.sh
+.venv312/bin/pytest -q
+.venv312/bin/ruff check src tests
+git diff --check
 ```
 
-5. Загрузка исходных данных из CSV/XLSX:
+Локальный stage:
 
 ```bash
-python -m app.cli import-source --path /path/to/source-table.csv
-```
-
-## 2. Запуск API и первого цикла
-
-```bash
-python -m app.cli serve
-```
-
-Для разового цикла:
-
-```bash
-python -m app.cli run-cycle
-```
-
-## 3. Docker-подъем
-
-```bash
-cp .env.example .env
 ./scripts/deploy.sh
+./scripts/smoke_stage.sh
 ```
 
-Проверка:
+Cloud:
 
 ```bash
-curl http://localhost:8000/api/v1/health
-curl http://localhost:8000/api/v1/dashboard/kpi
+docker-compose \
+  -f docker-compose.yml \
+  -f deploy/cloud/docker-compose.cloud.yml \
+  up -d --build
 ```
 
-## 4. Что обязательно проверять после изменений в структуре таблицы
+Startup сначала выполняет `alembic upgrade head`, затем запускает web/scheduler.
 
-1. Проверить загрузку: `GET /api/v1/status/imports`
-2. При `blocked_by_schema_drift=true` не продолжать автопубликацию результатов
-3. Зафиксировать блокировку в отчете инженера
-4. Запустить импорт только после уточнения/обновления матчинга заголовков
-
-## 5. Отклик по качеству данных
-
-Сотрудники создают обратную связь через `/api/v1/feedback` (UI может отправлять тот же payload).
-
-Поддерживаемые статусы: `new`, `checking`, `assigned`, `fixed`, `confirmed`.
-
-## 6. Выключение
+## 3. Ручные операции
 
 ```bash
-docker-compose down
-## 7. Примечание по окружению
-
-Если `docker-compose`/`docker compose` есть, но daemon не доступен (например, отсутствует socket Colima/Docker Desktop), запуск остановится с диагностикой.
+docker-compose exec -T app python -m app.cli import-source
+docker-compose exec -T app python -m app.cli scan
+docker-compose exec -T app python -m app.cli run-cycle
+./scripts/backup_now.sh
+./scripts/restore_test.sh
 ```
+
+Не запускать второй scan/discovery, если первый ещё выполняется: API вернёт 409.
+
+## 4. Диагностические запросы
+
+```bash
+docker-compose exec -T db psql -U monitor -d a1_search_monitor -c \
+  "SELECT version_num FROM alembic_version"
+
+docker-compose exec -T db psql -U monitor -d a1_search_monitor -c \
+  "SELECT source, status, started_at, finished_at, technical_errors, notes
+   FROM scan_runs ORDER BY started_at DESC LIMIT 20"
+
+docker-compose exec -T db psql -U monitor -d a1_search_monitor -c \
+  "SELECT started_at, valid_rows, invalid_rows, blocked_by_schema_drift
+   FROM source_import_snapshots ORDER BY started_at DESC LIMIT 10"
+```
+
+Не выводить `.env`, cookie или browser storage в тикет/чат.
+
+## 5. Инцидент: импорт
+
+### Признаки
+
+- HTTP 422 у `/import`;
+- `quarantine` в operational status;
+- резкое изменение valid/invalid rows.
+
+### Действия
+
+1. Не повторять импорт с ослабленным порогом.
+2. Сравнить заголовки с `docs/DATA_CONTRACT.md`.
+3. Зафиксировать реальное изменение подрядчика.
+4. Добавить alias и regression test.
+5. Повторить import; проверить, что last-good реестр не был обрезан.
+
+## 6. Инцидент: площадка
+
+### CAPTCHA / 429 / неизвестный DOM
+
+1. Проверить `network_profile` и среду запуска.
+2. Не переводить событие в absence вручную.
+3. Открыть screenshot evidence без cookie/token.
+4. Проверить публичную страницу вручную с тем же egress.
+5. Обновить parser на сохранённой fixture.
+6. Прогнать suite и один контрольный фильтр.
+
+VPN-результат нельзя экстраполировать на production без VPN.
+
+### Нулевые результаты по всем фильтрам
+
+Считать техническим инцидентом, пока ручная проверка не подтвердит реальную
+пустую выдачу. Проверить URL фильтра, редирект, страницу авторизации и карточки DOM.
+
+## 7. Инцидент: просроченный цикл
+
+1. Проверить `docker-compose ps` и uptime app.
+2. Проверить последние `ScanRun` и `SourceImportSnapshot`.
+3. Убедиться, что предыдущий Playwright процесс не завис.
+4. Проверить свободное место и DNS/HTTPS к Google Sheets.
+5. После устранения выполнить один `run-cycle` и сверить status.
+
+## 8. Восстановление
+
+Сначала проверить dump через `restore_test.sh`. Для реального восстановления:
+
+1. остановить app, не удаляя volumes;
+2. сохранить копию текущей БД;
+3. восстановить выбранный проверенный dump в отдельную БД;
+4. сравнить версии миграции и контрольные количества;
+5. переключить app только после проверки Owner;
+6. сохранить старую БД до окончания инцидента.
+
+Не использовать `docker-compose down -v`, `DROP DATABASE` production или
+destructive Alembic downgrade как штатный способ отката.
+
+## 9. Security stop-rules
+
+Остановить production deploy, если:
+
+- `AUTH_ENABLED=false`;
+- `NETWORK_PROFILE` не `cloud_no_vpn`;
+- домен не имеет валидного HTTPS;
+- PostgreSQL опубликован не на loopback;
+- в git/логах обнаружен секрет;
+- не отозваны старые GitHub/DeepSeek credentials;
+- Drive-файл остаётся публично доступным на запись;
+- последний backup не прошёл restore-test.
