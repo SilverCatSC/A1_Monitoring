@@ -2,7 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+from app.models import EngineType
 
 
 class HealthResponse(BaseModel):
@@ -21,6 +23,19 @@ class ImportResponse(BaseModel):
     rows_total: int
     rows_valid: int
     rows_invalid: int
+
+
+class FilterUpsert(BaseModel):
+    source: EngineType
+    name: str
+    url: str
+    active: bool = True
+    vins: list[str] = Field(default_factory=list)
+    apply_to_all_active: bool = False
+
+
+class FilterStateChange(BaseModel):
+    active: bool
 
 
 class FeedbackCreate(BaseModel):

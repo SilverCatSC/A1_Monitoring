@@ -12,8 +12,17 @@ from app.db import get_db
 from app.importer.service import SourceImporter, SourceImportError
 from app.importer.sheet_csv import CsvOrXlsxReader
 from app.models import AbsenceEpisode, SearchFilter, SourceImportSnapshot
-from app.schemas import FeedbackCreate, HealthResponse, ImportResponse, KPIResponse, TriggerScanResponse
+from app.schemas import (
+    FeedbackCreate,
+    FilterStateChange,
+    FilterUpsert,
+    HealthResponse,
+    ImportResponse,
+    KPIResponse,
+    TriggerScanResponse,
+)
 from app.service.feedback import FeedbackService
+from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.monitor import MonitorService
 from app.service.report import kpi_overview
 
@@ -135,9 +144,43 @@ def list_filters(db: Session = Depends(get_db)):
     filters = db.query(SearchFilter).order_by(SearchFilter.name.asc()).all()
     return {
         'filters': [
-            {'id': f.id, 'name': f.name, 'source': f.source.value, 'active': f.active} for f in filters
+            {
+                'id': f.id,
+                'name': f.name,
+                'source': f.source.value,
+                'url': f.raw_url,
+                'active': f.active,
+                'expectations': len(f.expectations),
+            }
+            for f in filters
         ]
     }
+
+
+@router.post('/filters')
+def upsert_filter(payload: FilterUpsert, db: Session = Depends(get_db)):
+    try:
+        return FilterRegistryService(db).upsert(
+            source=payload.source,
+            name=payload.name,
+            url=payload.url,
+            active=payload.active,
+            vins=payload.vins,
+            apply_to_all_active=payload.apply_to_all_active,
+        )
+    except FilterValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.patch('/filters/{filter_id}')
+def change_filter_state(
+    filter_id: str, payload: FilterStateChange, db: Session = Depends(get_db)
+):
+    try:
+        entity = FilterRegistryService(db).set_active(filter_id, payload.active)
+    except FilterValidationError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {'id': entity.id, 'active': entity.active}
 
 
 @router.post('/feedback')
