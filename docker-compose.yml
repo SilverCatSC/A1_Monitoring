@@ -4,10 +4,10 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: monitor
-      POSTGRES_PASSWORD: monitor
+      POSTGRES_PASSWORD: "${DB_PASSWORD:?Set DB_PASSWORD in .env}"
       POSTGRES_DB: a1_search_monitor
     ports:
-      - "${DB_BIND_PORT:-5433}:5432"
+      - "127.0.0.1:${DB_BIND_PORT:-5433}:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U monitor -d a1_search_monitor"]
       interval: 10s
@@ -25,19 +25,51 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_DSN: postgresql+psycopg2://monitor:monitor@db:5432/a1_search_monitor
+      DATABASE_DSN: "postgresql+psycopg2://monitor:${DB_PASSWORD:?Set DB_PASSWORD in .env}@db:5432/a1_search_monitor"
       APP_TZ: Europe/Moscow
       PLAYWRIGHT_HEADLESS: "true"
       SCAN_PAGES_LIMIT: 3
       SCAN_INTERVAL_MINUTES: 360
       APP_ENV: "${APP_ENV:-stage}"
     ports:
-      - "${APP_BIND_PORT:-8000}:8000"
+      - "127.0.0.1:${APP_BIND_PORT:-8000}:8000"
     command: >
       /bin/sh -c "python -m app.cli init && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
       - evidence:/app/artifacts
 
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: monitor
+      PGPASSWORD: "${DB_PASSWORD:?Set DB_PASSWORD in .env}"
+      PGDATABASE: a1_search_monitor
+      BACKUP_RETENTION_DAYS: "${BACKUP_RETENTION_DAYS:-14}"
+      BACKUP_INTERVAL_SECONDS: "${BACKUP_INTERVAL_SECONDS:-86400}"
+    command:
+      - /bin/sh
+      - -eu
+      - -c
+      - |
+        mkdir -p /backups
+        while true; do
+          stamp=$$(date -u +%Y%m%dT%H%M%SZ)
+          temporary="/backups/a1_search_monitor_$${stamp}.dump.tmp"
+          target="/backups/a1_search_monitor_$${stamp}.dump"
+          pg_dump --format=custom --file="$${temporary}"
+          mv "$${temporary}" "$${target}"
+          find /backups -type f -name 'a1_search_monitor_*.dump' -mtime "+$${BACKUP_RETENTION_DAYS}" -delete
+          sleep "$${BACKUP_INTERVAL_SECONDS}"
+        done
+    volumes:
+      - db_backups:/backups
+
 volumes:
   db_data:
   evidence:
+  db_backups:

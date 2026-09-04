@@ -45,3 +45,9 @@ up:
 
 down:
 	$(DOCKER_COMPOSE) down
+
+backup:
+	./scripts/backup_now.sh
+
+restore-test:
+	./scripts/restore_test.sh
