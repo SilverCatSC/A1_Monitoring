@@ -12,6 +12,7 @@ class Settings(BaseSettings):
 
     app_env: str = Field(default='development', alias='APP_ENV')
     app_tz: str = Field(default='Europe/Moscow', alias='APP_TZ')
+    network_profile: str = Field(default='unknown', alias='NETWORK_PROFILE')
     auth_enabled: bool = Field(default=False, alias='AUTH_ENABLED')
     admin_username: str | None = Field(default=None, alias='ADMIN_USERNAME')
     admin_password: str | None = Field(default=None, alias='ADMIN_PASSWORD')
@@ -43,6 +44,15 @@ class Settings(BaseSettings):
         if value not in {'csv', 'sheet', 'xlsx', 'excel', 'auto'}:
             raise ValueError('source_import_source must be csv, sheet, xlsx, excel or auto')
         return value
+
+    @field_validator('network_profile')
+    @classmethod
+    def _validate_network_profile(cls, value: str) -> str:
+        normalized = value.lower().strip()
+        allowed = {'unknown', 'local_vpn', 'local_no_vpn', 'cloud_no_vpn'}
+        if normalized not in allowed:
+            raise ValueError(f'network_profile must be one of: {", ".join(sorted(allowed))}')
+        return normalized
 
     @field_validator('admin_username', 'admin_password', mode='before')
     @classmethod

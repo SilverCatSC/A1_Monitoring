@@ -10,13 +10,22 @@ class SecurityConfigurationError(RuntimeError):
 
 
 def validate_security_configuration(
-    *, environment: str, enabled: bool, username: str | None, password: str | None
+    *,
+    environment: str,
+    enabled: bool,
+    username: str | None,
+    password: str | None,
+    network_profile: str = 'unknown',
 ) -> None:
     if environment.lower() == 'production' and (
         not enabled or not username or not password or len(password) < 16
     ):
         raise SecurityConfigurationError(
             'production requires AUTH_ENABLED=true, ADMIN_USERNAME and ADMIN_PASSWORD of 16+ characters'
+        )
+    if environment.lower() == 'production' and network_profile != 'cloud_no_vpn':
+        raise SecurityConfigurationError(
+            'production requires NETWORK_PROFILE=cloud_no_vpn after no-VPN connectivity verification'
         )
 
 

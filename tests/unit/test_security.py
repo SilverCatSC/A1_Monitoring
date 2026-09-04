@@ -35,7 +35,19 @@ def test_production_refuses_disabled_or_weak_auth():
         enabled=True,
         username='admin',
         password='long-random-password',
+        network_profile='cloud_no_vpn',
     )
+
+
+def test_production_refuses_unverified_network_profile():
+    with pytest.raises(SecurityConfigurationError, match='NETWORK_PROFILE'):
+        validate_security_configuration(
+            environment='production',
+            enabled=True,
+            username='admin',
+            password='long-random-password',
+            network_profile='local_vpn',
+        )
 
 
 def test_stage_can_run_without_auth_but_is_not_production():

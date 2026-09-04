@@ -66,6 +66,7 @@ class DealerDiscoveryService:
                 record = DealerDiscoveryRun(
                     source=source,
                     dealer_url=dealer_url,
+                    network_profile=settings.network_profile,
                     started_at=started,
                 )
                 self.db.add(record)
@@ -127,11 +128,13 @@ class DealerDiscoveryService:
                     external_key=key,
                     dealer_url=dealer_url,
                     listing_url=hit.url,
+                    network_profile=settings.network_profile,
                     first_seen_at=observed_at,
                 )
                 self.db.add(candidate)
             candidate.dealer_url = dealer_url
             candidate.listing_url = hit.url
+            candidate.network_profile = settings.network_profile
             candidate.title = hit.title
             candidate.price_hint = hit.price
             candidate.active = True

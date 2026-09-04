@@ -190,6 +190,7 @@ class MonitorService:
             scan_run = ScanRun(
                 started_at=started,
                 source=source,
+                network_profile=settings.network_profile,
                 status=ScanRunStatus.IN_PROGRESS,
                 filters_total=len(filters),
                 notes=None,

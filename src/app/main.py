@@ -38,6 +38,7 @@ def on_startup():
         enabled=settings.auth_enabled,
         username=settings.admin_username,
         password=settings.admin_password,
+        network_profile=settings.network_profile,
     )
     init_db()
     if settings.app_env in {'stage', 'production'}:

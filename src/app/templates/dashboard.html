@@ -35,6 +35,7 @@
 </header>
 <main>
   {% if not auth_enabled %}<div class="notice"><strong>Stage:</strong> аутентификация отключена. Этот экземпляр нельзя публиковать в интернете.</div>{% endif %}
+  {% if context.network_profile != 'cloud_no_vpn' %}<div class="notice"><strong>Сетевой профиль {{ context.network_profile }}:</strong> живые результаты этого экземпляра не являются доказательством работы production без VPN.</div>{% endif %}
   {% if not context.active_filters %}<div class="notice"><strong>Мониторинг ещё не настроен:</strong> добавьте утверждённые поисковые URL ниже. До этого система не формирует выводов о видимости.</div>{% endif %}
 
   <section class="grid">
@@ -94,10 +95,10 @@
 
   <section class="two">
     <div class="card"><h2>Кандидаты из кабинетов дилера</h2><p class="muted">Система собирает ссылки, но не угадывает VIN. Выберите кандидата выше и подтвердите связь вручную.</p><div class="scroll"><table><thead><tr><th>Площадка</th><th>Объявление</th><th>Цена</th><th>Последний раз</th></tr></thead><tbody>
-      {% for item in context.dealer_candidates %}<tr><td>{{ item.source.value }}</td><td><a href="{{ item.listing_url }}" target="_blank" rel="noreferrer">{{ item.title or item.external_key }}</a></td><td>{{ item.price_hint or '—' }}</td><td>{{ item.last_seen_at }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Каталог ещё не собран</td></tr>{% endfor %}
+      {% for item in context.dealer_candidates %}<tr><td>{{ item.source.value }}<br><span class="muted">{{ item.network_profile }}</span></td><td><a href="{{ item.listing_url }}" target="_blank" rel="noreferrer">{{ item.title or item.external_key }}</a></td><td>{{ item.price_hint or '—' }}</td><td>{{ item.last_seen_at }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Каталог ещё не собран</td></tr>{% endfor %}
     </tbody></table></div></div>
     <div class="card"><h2>Последние обходы кабинетов</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка</th><th>Статус</th><th>Ссылок</th><th>Причина</th></tr></thead><tbody>
-      {% for item in context.dealer_discovery_runs %}<tr><td>{{ item.started_at }}</td><td>{{ item.source.value }}</td><td><span class="pill {{ 'healthy' if item.complete else 'degraded' }}">{{ 'complete' if item.complete else 'failed' }}</span></td><td>{{ item.candidates_found }}</td><td>{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Обходов пока нет</td></tr>{% endfor %}
+      {% for item in context.dealer_discovery_runs %}<tr><td>{{ item.started_at }}</td><td>{{ item.source.value }}<br><span class="muted">{{ item.network_profile }}</span></td><td><span class="pill {{ 'healthy' if item.complete else 'degraded' }}">{{ 'complete' if item.complete else 'failed' }}</span></td><td>{{ item.candidates_found }}</td><td>{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Обходов пока нет</td></tr>{% endfor %}
     </tbody></table></div></div>
   </section>
 

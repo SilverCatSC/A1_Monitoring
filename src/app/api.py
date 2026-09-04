@@ -180,6 +180,7 @@ def dealer_candidates(
                 'first_seen_at': row.first_seen_at,
                 'last_seen_at': row.last_seen_at,
                 'dealer_url': row.dealer_url,
+                'network_profile': row.network_profile,
             }
             for row in rows
         ]

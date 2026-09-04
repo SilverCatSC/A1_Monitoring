@@ -272,6 +272,7 @@ def operational_status(
     return {
         'overall': overall,
         'checked_at': current,
+        'network_profile': settings.network_profile,
         'expected_interval_minutes': interval,
         'grace_minutes': grace_minutes,
         'import': {
@@ -355,6 +356,7 @@ def dashboard_context(session, days: int = 7) -> dict:
     return {
         'days': days,
         'generated_at': datetime.now(UTC),
+        'network_profile': settings.network_profile,
         'listings_total': session.query(Listing).count(),
         'listings_active': session.query(Listing).filter(Listing.is_active.is_(True)).count(),
         'auto_links': session.query(Listing).filter(Listing.source_auto_ru.is_not(None)).count(),

@@ -183,6 +183,7 @@ class DealerDiscoveryRun(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
     dealer_url: Mapped[str] = mapped_column(Text, nullable=False)
+    network_profile: Mapped[str] = mapped_column(String, default='unknown', nullable=False)
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -202,6 +203,7 @@ class DealerListingCandidate(Base):
     external_key: Mapped[str] = mapped_column(String, nullable=False)
     dealer_url: Mapped[str] = mapped_column(Text, nullable=False)
     listing_url: Mapped[str] = mapped_column(Text, nullable=False)
+    network_profile: Mapped[str] = mapped_column(String, default='unknown', nullable=False)
     title: Mapped[str | None] = mapped_column(String, nullable=True)
     price_hint: Mapped[float | None] = mapped_column(Float, nullable=True)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
@@ -246,6 +248,7 @@ class ScanRun(Base):
     )
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
+    network_profile: Mapped[str] = mapped_column(String, default='unknown', nullable=False)
     status: Mapped[ScanRunStatus] = mapped_column(Enum(ScanRunStatus), default=ScanRunStatus.IN_PROGRESS)
     pages_scanned: Mapped[int] = mapped_column(Integer, default=0)
     technical_errors: Mapped[int] = mapped_column(Integer, default=0)
