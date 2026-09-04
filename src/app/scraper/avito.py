@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from urllib.parse import urlencode
 
@@ -96,12 +97,13 @@ class AvitoAdapter:
             if raw_url.startswith('/'):
                 raw_url = 'https://www.avito.ru' + raw_url
             title = card.get('data-item-name') or card.get_text(' ', strip=True)[:255]
-            price = None
             price_text = card.get_text(' ', strip=True)
-            for token in price_text.replace('\xa0', ' ').replace(' ', '').split():
-                if token.isdigit() and int(token) > 0:
-                    price = float(token)
-                    break
+            price_match = re.search(r'(?<!\d)(\d{1,3}(?:[\s\u00a0]\d{3})+)\s*₽', price_text)
+            price = (
+                float(re.sub(r'\D', '', price_match.group(1)))
+                if price_match and re.sub(r'\D', '', price_match.group(1))
+                else None
+            )
             results.append(
                 ListingHit(
                     external_id=raw_url,

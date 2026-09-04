@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime
 from urllib.parse import urlencode
 
@@ -9,7 +10,12 @@ from playwright.async_api import Browser, Page, async_playwright
 
 from app.config import settings
 from app.models import EngineType
-from app.scraper.base import ListingHit, ScanResult, classify_result_page
+from app.scraper.base import (
+    ListingHit,
+    ScanResult,
+    canonical_listing_key,
+    classify_result_page,
+)
 
 
 class AutoRuAdapter:
@@ -81,33 +87,57 @@ class AutoRuAdapter:
 
     def _extract(self, html: str, page_number: int) -> list[ListingHit]:
         soup = BeautifulSoup(html, 'html.parser')
-        cards = soup.select('[data-bumper="SearchResults"] .ListingItem, .ListingItem, .OfferSnippet')
         results: list[ListingHit] = []
-        for i, card in enumerate(cards, start=1):
-            link = card.select_one('a')
-            if not link or not link.get('href'):
+        seen: set[str] = set()
+        links = soup.select(
+            'a.ListingItemTitle__link[href*="/cars/"][href*="/sale/"], '
+            'a[href*="/cars/used/sale/"], a[href*="/cars/new/sale/"]'
+        )
+        for link in links:
+            if not link.get('href'):
                 continue
-            title = card.get_text(' ', strip=True)[:255]
             raw_url = link['href']
             if raw_url.startswith('//'):
                 raw_url = 'https:' + raw_url
             if raw_url.startswith('/'):
                 raw_url = 'https://auto.ru' + raw_url
-            price_text = card.get_text(' ', strip=True).replace('\u00a0', '').replace(' ', '').lower()
-            price = None
-            for token in price_text.split():
-                if token.isdigit() and int(token) > 0:
-                    price = float(token)
+            key = canonical_listing_key(EngineType.AUTO_RU, raw_url)
+            if not key or key in seen:
+                continue
+            seen.add(key)
+
+            card = None
+            for ancestor in link.parents:
+                classes = ancestor.get('class') or []
+                if any(
+                    class_name == 'ListingItem'
+                    or class_name == 'OfferSnippet'
+                    or (
+                        class_name.startswith('ListingItemUniversal-')
+                        and '__' not in class_name
+                    )
+                    for class_name in classes
+                ):
+                    card = ancestor
                     break
+            card = card or link.parent
+            card_text = card.get_text(' ', strip=True)
+            title = link.get_text(' ', strip=True)[:255] or card_text[:255]
+            price_match = re.search(r'(?<!\d)(\d{1,3}(?:[\s\u00a0]\d{3})+)\s*₽', card_text)
+            price = (
+                float(re.sub(r'\D', '', price_match.group(1)))
+                if price_match and re.sub(r'\D', '', price_match.group(1))
+                else None
+            )
             results.append(
                 ListingHit(
                     external_id=str(raw_url),
                     title=title,
                     url=raw_url,
                     page_number=page_number,
-                    position=i,
+                    position=len(results) + 1,
                     price=price,
-                    raw={'raw_text': card.get_text(' ', strip=True), 'html': str(card)[:2048]},
+                    raw={'raw_text': card_text, 'html': str(card)[:2048]},
                 )
             )
         return results
