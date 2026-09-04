@@ -27,6 +27,11 @@ READY_JSON="$(curl --fail --silent --show-error "$BASE_URL/ready")"
 IMPORT_JSON="$(curl --fail --silent --show-error --request POST "$BASE_URL/import")"
 STATUS_JSON="$(curl --fail --silent --show-error "$BASE_URL/system/status")"
 DASHBOARD_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard")"
+CATALOG_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/listings")"
+HISTORY_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/history")"
+LISTINGS_JSON="$(curl --fail --silent --show-error "$BASE_URL/listings?active=true&limit=1")"
+LISTING_ID="$(printf '%s' "$LISTINGS_JSON" | python3 -c 'import json, sys; print(json.load(sys.stdin)["listings"][0]["id"])')"
+DETAIL_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/listings/$LISTING_ID")"
 
 HEALTH_JSON="$HEALTH_JSON" READY_JSON="$READY_JSON" IMPORT_JSON="$IMPORT_JSON" \
 STATUS_JSON="$STATUS_JSON" python3 - <<'PY'
@@ -56,6 +61,14 @@ PY
 if [[ "$DASHBOARD_HTML" != *"Здоровье системы"* ]] \
   || [[ "$DASHBOARD_HTML" != *"Мониторинг ещё не настроен"* ]]; then
   echo "Dashboard does not expose required operational state." >&2
+  exit 1
+fi
+
+if [[ "$CATALOG_HTML" != *"Объявления компании"* ]] \
+  || [[ "$CATALOG_HTML" != *"Auto.ru ↗"* ]] \
+  || [[ "$HISTORY_HTML" != *"История наблюдений"* ]] \
+  || [[ "$DETAIL_HTML" != *"Сообщить о неточности"* ]]; then
+  echo "Report drill-down is incomplete." >&2
   exit 1
 fi
 
