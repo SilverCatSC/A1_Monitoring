@@ -8,7 +8,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.contracts import CANONICAL_FIELDS, SourceRecord
+from app.contracts import CANONICAL_FIELDS, SourceRecord, split_brand_model
 from app.models import (
     EngineType,
     ImportFieldDrift,
@@ -72,6 +72,16 @@ def _coerce_filters(row: dict[str, Any]) -> list[SearchFilterDefinition]:
     return detect_filters_in_row(row)
 
 
+def _normalize_vehicle_names(row: dict[str, Any]) -> None:
+    if not row.get('brand_model'):
+        return
+    parsed_brand, parsed_model = split_brand_model(row.get('brand_model'))
+    if not row.get('brand') and parsed_brand:
+        row['brand'] = parsed_brand
+    if not row.get('model') and parsed_model:
+        row['model'] = parsed_model
+
+
 class SourceImporter:
     def __init__(self, db: Session):
         self.db = db
@@ -126,6 +136,7 @@ class SourceImporter:
             if not row:
                 missing += 1
                 continue
+            _normalize_vehicle_names(row)
 
             anchor_keys = ('vehicle_signature', 'brand', 'model', 'generation', 'year', 'vin')
             if any(row.get(key) for key in anchor_keys):

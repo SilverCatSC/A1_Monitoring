@@ -51,6 +51,29 @@ def test_import_service_accepts_optional_unknown_columns(db_modules):
         session.close()
 
 
+def test_importer_splits_current_combined_brand_model_header(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import Listing
+
+    session = app_db.SessionLocal()
+    try:
+        rows = _make_rows(
+            {
+                'brand_model': 'Mercedes-Benz V-Class',
+                'vin': 'W1VVNLTZ5S4556796',
+                'source_status': 'Актуально',
+            }
+        )
+        SourceImporter(session).run(rows, source_signature='combined-name')
+
+        listing = session.query(Listing).one()
+        assert listing.brand == 'Mercedes-Benz'
+        assert listing.model == 'V-Class'
+    finally:
+        session.close()
+
+
 def test_import_service_marks_anchor_missing_as_drift(monkeypatch, tmp_path):
     import importlib
 

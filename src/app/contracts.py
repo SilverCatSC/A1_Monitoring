@@ -9,6 +9,7 @@ from typing import Any
 CANONICAL_FIELDS = {
     'vehicle_signature',
     'brand',
+    'brand_model',
     'model',
     'generation',
     'year',
@@ -42,7 +43,7 @@ HEADER_ALIASES: dict[str, str] = {
     'id': 'vehicle_signature',
     'марка': 'brand',
     'бренд': 'brand',
-    'марка_модель': 'brand',
+    'марка_модель': 'brand_model',
     'модель': 'model',
     'комплектация_а1': 'configuration',
     'комплектация_a1': 'configuration',
@@ -105,6 +106,35 @@ def canonicalize_headers(headers: Iterable[str]) -> dict[str, str]:
         # keep non-empty unmapped names under lower_snake_case
         mapping[key] = key
     return mapping
+
+
+KNOWN_BRANDS = (
+    'Mercedes-Benz',
+    'Land Rover',
+    'Rolls-Royce',
+    'Hongqi',
+    'Lexus',
+    'Maextro',
+    'Voyah',
+    'Zeekr',
+)
+
+
+def split_brand_model(value: Any) -> tuple[str | None, str | None]:
+    combined = str(value or '').strip()
+    if not combined:
+        return None, None
+    folded = combined.casefold()
+    for brand in sorted(KNOWN_BRANDS, key=len, reverse=True):
+        brand_folded = brand.casefold()
+        if folded == brand_folded:
+            return brand, None
+        prefix = f'{brand_folded} '
+        if folded.startswith(prefix):
+            model = combined[len(brand) :].strip()
+            return brand, model or None
+    # Неизвестную марку нельзя надёжно отделить от модели по первому пробелу.
+    return combined, None
 
 
 def map_row(headers_map: dict[str, str], row: dict[str, Any]) -> dict[str, str | int | float | None]:

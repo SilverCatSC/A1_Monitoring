@@ -51,7 +51,7 @@ HTML-отчёт + JSON API + operational status
 
 - реальный импорт: 130 строк, 106 валидных, 24 диагностических;
 - в реестре 34 активных автомобиля, 78 ссылок Auto.ru и 76 ссылок Avito;
-- unit/integration suite: 55 тестов;
+- unit/integration suite: 57 тестов;
 - stage smoke включает readiness, импорт, отчёт, миграцию, loopback-порты,
   backup и изолированный restore;
 - восстановление подтвердило совпадение количества объявлений и снимков;

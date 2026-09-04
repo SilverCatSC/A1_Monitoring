@@ -1,4 +1,4 @@
-from app.contracts import canonicalize_headers, map_row, normalize_header
+from app.contracts import canonicalize_headers, map_row, normalize_header, split_brand_model
 
 
 def test_map_row_keeps_first_non_empty_alias():
@@ -35,7 +35,14 @@ def test_actual_contract_headers_map_listing_links_not_filters():
 
     assert normalize_header('Марка, модель') == 'марка_модель'
     assert mapped['source_status'] == 'Актуально'
-    assert mapped['brand'] == 'Mercedes-Benz V-Class'
+    assert mapped['brand_model'] == 'Mercedes-Benz V-Class'
     assert mapped['vin'] == 'W1VVNLTZ5S4556796'
     assert mapped['listing_url_auto_ru'].startswith('https://auto.ru/')
     assert mapped['listing_url_avito'].startswith('https://www.avito.ru/')
+
+
+def test_combined_vehicle_name_is_split_only_for_known_brand_prefixes():
+    assert split_brand_model('Mercedes-Benz V-Class') == ('Mercedes-Benz', 'V-Class')
+    assert split_brand_model('Land Rover Range Rover') == ('Land Rover', 'Range Rover')
+    assert split_brand_model('Zeekr 009') == ('Zeekr', '009')
+    assert split_brand_model('Unknown Future Model X') == ('Unknown Future Model X', None)
