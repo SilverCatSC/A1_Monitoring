@@ -6,6 +6,7 @@ from app.config import settings
 from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
 from app.service.evidence import cleanup_evidence
+from app.service.filters import FilterRegistryService
 from app.service.monitor import MonitorService
 
 
@@ -26,9 +27,11 @@ class MonitoringCycleService:
         )
         rows = CsvOrXlsxReader(source_path).read()
         imported = SourceImporter(self.db).run(rows, source_signature=source_path)
+        assignments = FilterRegistryService(self.db).refresh_managed_assignments()
         scanned = MonitorService(self.db).run_full_cycle()
         return {
             'import': imported,
+            'filter_assignments': assignments,
             'scan': scanned,
             'evidence_removed': evidence_removed,
         }

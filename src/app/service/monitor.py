@@ -51,7 +51,9 @@ class MonitorService:
     def _all_expectations(self, filter_id: str) -> list[VehicleFilterExpectation]:
         return (
             self.db.query(VehicleFilterExpectation)
+            .join(VehicleFilterExpectation.listing)
             .filter(VehicleFilterExpectation.filter_id == filter_id)
+            .filter(VehicleFilterExpectation.listing.has(is_active=True))
             .all()
         )
 
@@ -241,6 +243,7 @@ class MonitorService:
 
                 scan_run.filters_ok += 1
                 expected_by_key: dict[str, VehicleFilterExpectation] = {}
+                unmatchable_ids: set[str] = set()
                 for expectation in expectations:
                     direct_url = (
                         expectation.listing.source_auto_ru
@@ -250,6 +253,24 @@ class MonitorService:
                     key = canonical_listing_key(source, direct_url)
                     if key:
                         expected_by_key[key] = expectation
+                    else:
+                        unmatchable_ids.add(expectation.listing_id)
+                        self._record_observation(
+                            scan_run,
+                            expectation.listing_id,
+                            filter_entity.id,
+                            source,
+                            ObservationState.TECHNICAL_ERROR,
+                            diagnostics={
+                                'error': 'active listing has no valid direct marketplace URL'
+                            },
+                        )
+                if unmatchable_ids:
+                    scan_run.technical_errors += 1
+                    scan_run.notes = (scan_run.notes or '') + (
+                        f'[{filter_entity.id}] {len(unmatchable_ids)} active listing(s) '
+                        'have no valid direct marketplace URL.\n'
+                    )
 
                 found_ids: set[str] = set()
                 for hit in scan_result.hits:
@@ -273,7 +294,7 @@ class MonitorService:
                     summary['found'] += 1
 
                 for expectation in expectations:
-                    if expectation.listing_id in found_ids:
+                    if expectation.listing_id in found_ids or expectation.listing_id in unmatchable_ids:
                         continue
                     previous_misses, first_missing_at = self._previous_miss_streak(
                         expectation.listing_id, filter_entity.id, source
@@ -310,7 +331,7 @@ class MonitorService:
             scan_run.finished_at = datetime.now(UTC)
             if scan_run.filters_total == 0:
                 scan_run.status = ScanRunStatus.FAILED
-            elif scan_run.filters_ok == scan_run.filters_total:
+            elif scan_run.filters_ok == scan_run.filters_total and scan_run.technical_errors == 0:
                 scan_run.status = ScanRunStatus.SUCCESS
             elif scan_run.filters_ok == 0:
                 scan_run.status = ScanRunStatus.FAILED

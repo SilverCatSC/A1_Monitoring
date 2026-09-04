@@ -7,6 +7,7 @@ from app.db import get_db_context, init_db
 from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
 from app.service.cycle import MonitoringCycleService
+from app.service.filters import FilterRegistryService
 from app.service.monitor import MonitorService
 
 
@@ -55,6 +56,7 @@ def main() -> None:
         rows = CsvOrXlsxReader(source_path).read()
         with get_db_context() as db:
             SourceImporter(db).run(rows, source_signature=source_path)
+            FilterRegistryService(db).refresh_managed_assignments()
         return
 
 

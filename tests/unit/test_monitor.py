@@ -154,6 +154,44 @@ def test_incomplete_scan_records_technical_error_not_absence(tmp_path, monkeypat
         engine.dispose()
 
 
+def test_inactive_expectations_are_ignored_and_missing_url_fails_closed(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    session, engine = _session(tmp_path)
+    try:
+        active, search_filter = _seed(session)
+        active.source_auto_ru = None
+        inactive = Listing(
+            vehicle_signature='X89183511M1GB1114',
+            vin='X89183511M1GB1114',
+            source_auto_ru='https://auto.ru/cars/used/sale/mercedes/v_class/2234567890-b/',
+            is_active=False,
+        )
+        session.add(inactive)
+        session.flush()
+        session.add(
+            VehicleFilterExpectation(filter_id=search_filter.id, listing_id=inactive.id)
+        )
+        session.commit()
+
+        summary = MonitorService(
+            session, auto_adapter=FakeAdapter([_result()])
+        ).run_full_cycle()
+
+        observations = session.query(ListingObservation).all()
+        assert len(observations) == 1
+        assert observations[0].listing_id == active.id
+        assert observations[0].state == ObservationState.TECHNICAL_ERROR
+        assert session.query(AbsenceEpisode).count() == 0
+        assert summary['missed_uncertain'] == 0
+        assert summary['technical_errors'] == 1
+        assert observations[0].scan_run.status == ScanRunStatus.PARTIAL
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_overlapping_scan_is_rejected(tmp_path):
     import app.service.monitor as monitor_module
 

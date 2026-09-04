@@ -79,3 +79,60 @@ def test_registry_rejects_non_marketplace_and_ambiguous_assignment(session):
             vins=['W1VVNLTZ5S4556796'],
             apply_to_all_active=True,
         )
+
+
+def test_all_active_assignments_refresh_after_stock_changes(session):
+    first = _listing(
+        'W1VVNLTZ5S4556796',
+        auto_url='https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-a/',
+    )
+    session.add(first)
+    session.commit()
+    service = FilterRegistryService(session)
+    created = service.upsert(
+        source=EngineType.AUTO_RU,
+        name='Весь активный сток',
+        url='https://auto.ru/moskva/cars/all/',
+        apply_to_all_active=True,
+    )
+
+    first.is_active = False
+    second = _listing(
+        'X89183511M1GB1114',
+        auto_url='https://auto.ru/cars/used/sale/mercedes/v_class/2234567890-b/',
+    )
+    session.add(second)
+    session.commit()
+    refreshed = service.refresh_managed_assignments()
+
+    expectation = session.query(VehicleFilterExpectation).one()
+    assert expectation.filter_id == created['id']
+    assert expectation.listing_id == second.id
+    assert refreshed == {
+        'managed_filters': 1,
+        'added': 1,
+        'removed': 1,
+        'expectations': 1,
+    }
+
+
+def test_legacy_managed_filter_without_assignment_mode_is_not_guessed(session):
+    listing = _listing(
+        'W1VVNLTZ5S4556796',
+        auto_url='https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-a/',
+    )
+    search_filter = SearchFilter(
+        source=EngineType.AUTO_RU,
+        external_key='legacy',
+        name='Legacy',
+        raw_url='https://auto.ru/moskva/cars/all/',
+        raw_criteria={'managed_by': 'filter_registry'},
+        active=True,
+    )
+    session.add_all([listing, search_filter])
+    session.commit()
+
+    refreshed = FilterRegistryService(session).refresh_managed_assignments()
+
+    assert refreshed['managed_filters'] == 0
+    assert session.query(VehicleFilterExpectation).count() == 0

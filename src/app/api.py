@@ -151,6 +151,7 @@ def import_source(file_path: str | None = None, db: Session = Depends(get_db)):
     importer = SourceImporter(db)
     try:
         summary = importer.run(rows, source_signature=source_path)
+        FilterRegistryService(db).refresh_managed_assignments()
     except SourceImportError as exc:
         # keep last-good snapshot and still expose drift diagnostics
         raise HTTPException(status_code=422, detail=str(exc)) from exc
