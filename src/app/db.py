@@ -35,6 +35,12 @@ def _apply_compatibility_migrations() -> None:
             'CREATE UNIQUE INDEX IF NOT EXISTS uq_open_absence_active '
             'ON absence_episodes (listing_id, filter_id, source) WHERE open IS TRUE'
         )
+        connection.exec_driver_sql(
+            "ALTER TABLE manager_feedback ADD COLUMN IF NOT EXISTS category VARCHAR NOT NULL DEFAULT 'other'"
+        )
+        connection.exec_driver_sql(
+            'ALTER TABLE manager_feedback ADD COLUMN IF NOT EXISTS assignee VARCHAR'
+        )
 
 
 def get_db() -> Generator[Session, None, None]:

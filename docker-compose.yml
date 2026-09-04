@@ -30,7 +30,7 @@ services:
       PLAYWRIGHT_HEADLESS: "true"
       SCAN_PAGES_LIMIT: 3
       SCAN_INTERVAL_MINUTES: 360
-      APP_ENV: production
+      APP_ENV: "${APP_ENV:-stage}"
     ports:
       - "${APP_BIND_PORT:-8000}:8000"
     command: >

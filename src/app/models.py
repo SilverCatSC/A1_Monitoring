@@ -272,10 +272,12 @@ class ManagerFeedback(Base):
     observed_id: Mapped[str | None] = mapped_column(
         ForeignKey('listing_observations.id'), index=True, nullable=True
     )
+    category: Mapped[str] = mapped_column(String, default='other', nullable=False)
     severity: Mapped[str] = mapped_column(String, default='medium')
     message: Mapped[str] = mapped_column(Text, nullable=False)
     source: Mapped[str | None] = mapped_column(String, nullable=True)
     manager_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    assignee: Mapped[str | None] = mapped_column(String, nullable=True)
     status: Mapped[FeedbackStatus] = mapped_column(Enum(FeedbackStatus), default=FeedbackStatus.NEW)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -286,3 +288,22 @@ class ManagerFeedback(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     listing: Mapped[Listing | None] = relationship('Listing')
+    events: Mapped[list['FeedbackEvent']] = relationship(
+        'FeedbackEvent', back_populates='feedback', cascade='all, delete-orphan'
+    )
+
+
+class FeedbackEvent(Base):
+    __tablename__ = 'feedback_events'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    feedback_id: Mapped[str] = mapped_column(ForeignKey('manager_feedback.id'), index=True)
+    from_status: Mapped[str | None] = mapped_column(String, nullable=True)
+    to_status: Mapped[str] = mapped_column(String, nullable=False)
+    actor: Mapped[str | None] = mapped_column(String, nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    feedback: Mapped[ManagerFeedback] = relationship('ManagerFeedback', back_populates='events')

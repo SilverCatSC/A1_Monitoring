@@ -12,6 +12,9 @@ class Settings(BaseSettings):
 
     app_env: str = Field(default='development', alias='APP_ENV')
     app_tz: str = Field(default='Europe/Moscow', alias='APP_TZ')
+    auth_enabled: bool = Field(default=False, alias='AUTH_ENABLED')
+    admin_username: str | None = Field(default=None, alias='ADMIN_USERNAME')
+    admin_password: str | None = Field(default=None, alias='ADMIN_PASSWORD')
     database_dsn: str = Field(default='sqlite:///./a1_monitor.db', alias='DATABASE_DSN')
     source_import_source: str = Field(default='csv', alias='SOURCE_IMPORT_SOURCE')
     source_csv_path: str | None = Field(default=None, alias='SOURCE_CSV_PATH')
@@ -36,6 +39,14 @@ class Settings(BaseSettings):
         if value not in {'csv', 'sheet', 'xlsx', 'excel', 'auto'}:
             raise ValueError('source_import_source must be csv, sheet, xlsx, excel or auto')
         return value
+
+    @field_validator('admin_username', 'admin_password', mode='before')
+    @classmethod
+    def _empty_credentials_to_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        clean = str(value).strip()
+        return clean or None
 
     @field_validator('source_google_sheet_export_url', mode='before')
     @classmethod

@@ -48,9 +48,17 @@ class FeedbackCreate(BaseModel):
     listing_id: str | None = None
     filter_id: str | None = None
     severity: str = 'medium'
+    category: str = 'other'
     message: str
     manager_name: str | None = None
     source: str | None = None
+
+
+class FeedbackUpdate(BaseModel):
+    status: str
+    actor: str
+    note: str | None = None
+    assignee: str | None = None
 
 
 class KPIResponse(BaseModel):

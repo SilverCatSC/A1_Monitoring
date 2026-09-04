@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Request, Response
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
@@ -11,9 +13,16 @@ from app.config import settings
 from app.db import get_db
 from app.importer.service import SourceImporter, SourceImportError
 from app.importer.sheet_csv import CsvOrXlsxReader
-from app.models import AbsenceEpisode, SearchFilter, SourceImportSnapshot
+from app.models import (
+    AbsenceEpisode,
+    FeedbackStatus,
+    ManagerFeedback,
+    SearchFilter,
+    SourceImportSnapshot,
+)
 from app.schemas import (
     FeedbackCreate,
+    FeedbackUpdate,
     FilterStateChange,
     FilterUpsert,
     HealthResponse,
@@ -23,19 +32,20 @@ from app.schemas import (
     TriggerScanResponse,
 )
 from app.service.cycle import MonitoringCycleService
-from app.service.feedback import FeedbackService
+from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.monitor import MonitorService, ScanAlreadyRunning
-from app.service.report import kpi_overview
+from app.service.report import dashboard_context, kpi_overview
 
 router = APIRouter()
+templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
 
 
 @router.get('/health', response_model=HealthResponse)
 def health():
     return HealthResponse(
         status='ok',
-        timestamp=datetime.datetime.utcnow(),
+        timestamp=datetime.datetime.now(datetime.UTC),
         app_version=settings.app_version,
     )
 
@@ -46,7 +56,12 @@ def ready(db: Session = Depends(get_db)):
         db.execute(text('SELECT 1'))
     except Exception as exc:
         raise HTTPException(status_code=503, detail='database unavailable') from exc
-    return {'status': 'ready', 'database': 'ok'}
+    return {
+        'status': 'ready',
+        'database': 'ok',
+        'environment': settings.app_env,
+        'authentication': 'enabled' if settings.auth_enabled else 'disabled',
+    }
 
 
 @router.get('/dashboard/kpi')
@@ -78,46 +93,22 @@ def dashboard_missing(db: Session = Depends(get_db)):
 
 
 @router.get('/dashboard', response_class=HTMLResponse)
-def dashboard_html(days: int = 7, db: Session = Depends(get_db)):
-    kpi = kpi_overview(db, days=days)
-    missing = (
-        db.query(AbsenceEpisode)
-        .filter(AbsenceEpisode.open.is_(True))
-        .order_by(AbsenceEpisode.started_at.desc())
-        .limit(200)
-        .all()
+def dashboard_html(request: Request, days: int = 7, db: Session = Depends(get_db)):
+    safe_days = min(max(days, 1), 90)
+    return templates.TemplateResponse(
+        request=request,
+        name='dashboard.html',
+        context={
+            'context': dashboard_context(db, days=safe_days),
+            'auth_enabled': settings.auth_enabled,
+        },
     )
-    rows_html = ''.join(
-        f'<tr><td>{item.listing_id}</td><td>{item.filter_id}</td><td>{item.source.value}</td>'
-        f'<td>{item.started_at}</td><td>{item.consecutive_misses}</td></tr>'
-        for item in missing
-    )
-    return f"""
-    <html>
-      <head>
-        <meta charset='utf-8' />
-        <title>Monitoring Dashboard</title>
-      </head>
-      <body>
-        <h1>Мониторинг A1 Search</h1>
-        <p>Найдено: {kpi['observed_found']}</p>
-        <p>Отсутствует: {kpi['observed_missed']}</p>
-        <p>Успешные прогоны: {kpi['scan_runs_success']}</p>
-        <p>Открытых эпизодов отсутствия: {kpi['absent_active']}</p>
-        <h2>Текущие пропуски</h2>
-        <table border='1'>
-          <thead><tr><th>Listing</th><th>Filter</th><th>Источник</th><th>Начало</th><th>Пропуски подряд</th></tr></thead>
-          <tbody>{rows_html}</tbody>
-        </table>
-      </body>
-    </html>
-    """
 
 
 @router.post('/scan', response_model=TriggerScanResponse)
 def trigger_scan(db: Session = Depends(get_db)):
     service = MonitorService(db)
-    started_at = datetime.datetime.utcnow()
+    started_at = datetime.datetime.now(datetime.UTC)
     try:
         summary = service.run_full_cycle()
     except ScanAlreadyRunning as exc:
@@ -129,7 +120,7 @@ def trigger_scan(db: Session = Depends(get_db)):
 
 @router.post('/cycle', response_model=TriggerCycleResponse)
 def trigger_cycle(db: Session = Depends(get_db)):
-    started_at = datetime.datetime.utcnow()
+    started_at = datetime.datetime.now(datetime.UTC)
     try:
         summary = MonitoringCycleService(db).run()
     except ScanAlreadyRunning as exc:
@@ -204,15 +195,77 @@ def change_filter_state(
 @router.post('/feedback')
 def create_feedback(payload: FeedbackCreate, db: Session = Depends(get_db)):
     service = FeedbackService(db)
-    feedback_id = service.create(
-        message=payload.message,
-        listing_id=payload.listing_id,
-        filter_id=payload.filter_id,
-        severity=payload.severity,
-        manager_name=payload.manager_name,
-        source=payload.source,
-    )
+    try:
+        feedback_id = service.create(
+            message=payload.message,
+            listing_id=payload.listing_id,
+            filter_id=payload.filter_id,
+            severity=payload.severity,
+            category=payload.category,
+            manager_name=payload.manager_name,
+            source=payload.source,
+        )
+    except FeedbackValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     return {'feedback_id': feedback_id, 'status': 'created'}
+
+
+@router.get('/feedback')
+def list_feedback(status: str | None = None, db: Session = Depends(get_db)):
+    query = db.query(ManagerFeedback)
+    if status:
+        try:
+            parsed_status = FeedbackStatus(status)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail='unsupported feedback status') from exc
+        query = query.filter(ManagerFeedback.status == parsed_status)
+    rows = query.order_by(ManagerFeedback.created_at.desc()).limit(500).all()
+    return {
+        'feedback': [
+            {
+                'id': item.id,
+                'listing_id': item.listing_id,
+                'filter_id': item.filter_id,
+                'category': item.category,
+                'severity': item.severity,
+                'message': item.message,
+                'manager_name': item.manager_name,
+                'assignee': item.assignee,
+                'status': item.status.value,
+                'created_at': item.created_at,
+                'closed_at': item.closed_at,
+                'events': [
+                    {
+                        'from': event.from_status,
+                        'to': event.to_status,
+                        'actor': event.actor,
+                        'note': event.note,
+                        'created_at': event.created_at,
+                    }
+                    for event in item.events
+                ],
+            }
+            for item in rows
+        ]
+    }
+
+
+@router.patch('/feedback/{feedback_id}')
+def update_feedback(
+    feedback_id: str, payload: FeedbackUpdate, db: Session = Depends(get_db)
+):
+    try:
+        item = FeedbackService(db).update_status(
+            feedback_id,
+            payload.status,
+            actor=payload.actor,
+            note=payload.note,
+            assignee=payload.assignee,
+        )
+    except FeedbackValidationError as exc:
+        code = 404 if str(exc) == 'feedback not found' else 422
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    return {'id': item.id, 'status': item.status.value, 'assignee': item.assignee}
 
 
 @router.get('/status/imports')
