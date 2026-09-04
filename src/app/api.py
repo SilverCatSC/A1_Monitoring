@@ -38,7 +38,7 @@ from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import MonitorService, ScanAlreadyRunning
-from app.service.report import dashboard_context, kpi_overview, weekend_summary
+from app.service.report import dashboard_context, kpi_overview, operational_status, weekend_summary
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
@@ -99,6 +99,11 @@ def dashboard_missing(db: Session = Depends(get_db)):
 def dashboard_weekends(days: int = 14, db: Session = Depends(get_db)):
     safe_days = min(max(days, 1), 90)
     return {'days': safe_days, 'rows': weekend_summary(db, days=safe_days)}
+
+
+@router.get('/system/status')
+def system_status(db: Session = Depends(get_db)):
+    return operational_status(db)
 
 
 @router.get('/dashboard', response_class=HTMLResponse)

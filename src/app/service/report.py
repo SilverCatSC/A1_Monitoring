@@ -5,8 +5,10 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 
+from app.config import settings
 from app.models import (
     AbsenceEpisode,
+    EngineType,
     FeedbackStatus,
     Listing,
     ListingObservation,
@@ -163,6 +165,119 @@ def filter_statistics(session, since: datetime) -> list[dict]:
     return sorted(aggregates.values(), key=lambda row: (row['source'], row['name']))
 
 
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def operational_status(
+    session,
+    *,
+    now: datetime | None = None,
+    interval_minutes: int | None = None,
+    enabled_sources: list[str] | None = None,
+) -> dict:
+    current = _as_utc(now) or datetime.now(UTC)
+    interval = interval_minutes or settings.scan_interval_minutes
+    grace_minutes = max(15, interval // 4)
+    overdue_after = timedelta(minutes=interval + grace_minutes)
+    sources = enabled_sources if enabled_sources is not None else settings.scan_engines
+
+    last_import = (
+        session.query(SourceImportSnapshot)
+        .order_by(SourceImportSnapshot.started_at.desc())
+        .first()
+    )
+    import_time = _as_utc(last_import.finished_at if last_import else None)
+    if last_import is None:
+        import_state = 'never_run'
+        import_reason = 'Импорт ещё не выполнялся'
+    elif last_import.blocked_by_schema_drift:
+        import_state = 'quarantine'
+        import_reason = 'Последний импорт помещён в карантин из-за изменения структуры'
+    elif import_time is None or current - import_time > overdue_after:
+        import_state = 'overdue'
+        import_reason = 'Новый снимок источника не получен в ожидаемый интервал'
+    else:
+        import_state = 'healthy'
+        import_reason = 'Последний импорт завершён без карантина'
+
+    source_rows = []
+    for source_name in sources:
+        try:
+            source = EngineType(source_name)
+        except ValueError:
+            source_rows.append(
+                {
+                    'source': source_name,
+                    'state': 'invalid_configuration',
+                    'reason': 'Неизвестное имя адаптера в SCAN_ENABLED_ENGINES',
+                    'last_run_at': None,
+                    'age_minutes': None,
+                }
+            )
+            continue
+        active_count = (
+            session.query(SearchFilter)
+            .filter(SearchFilter.source == source, SearchFilter.active.is_(True))
+            .count()
+        )
+        last_run = (
+            session.query(ScanRun)
+            .filter(ScanRun.source == source)
+            .order_by(ScanRun.started_at.desc())
+            .first()
+        )
+        run_time = _as_utc(last_run.finished_at if last_run else None) or _as_utc(
+            last_run.started_at if last_run else None
+        )
+        age_minutes = int((current - run_time).total_seconds() // 60) if run_time else None
+        if active_count == 0:
+            state = 'not_configured'
+            reason = 'Нет утверждённых активных поисковых фильтров'
+        elif last_run is None:
+            state = 'never_run'
+            reason = 'После настройки фильтра проверка ещё не выполнялась'
+        elif run_time is None or current - run_time > overdue_after:
+            state = 'overdue'
+            reason = 'Плановый цикл просрочен'
+        elif last_run.status == ScanRunStatus.SUCCESS:
+            state = 'healthy'
+            reason = 'Последний цикл завершён полностью'
+        else:
+            state = 'degraded'
+            reason = last_run.notes.strip() if last_run.notes else 'Последний цикл завершён не полностью'
+        source_rows.append(
+            {
+                'source': source.value,
+                'state': state,
+                'reason': reason,
+                'last_run_at': run_time,
+                'age_minutes': age_minutes,
+                'active_filters': active_count,
+                'last_run_status': last_run.status.value if last_run else None,
+            }
+        )
+
+    states = {import_state, *(row['state'] for row in source_rows)}
+    overall = 'healthy' if states == {'healthy'} else 'action_required'
+    return {
+        'overall': overall,
+        'checked_at': current,
+        'expected_interval_minutes': interval,
+        'grace_minutes': grace_minutes,
+        'import': {
+            'state': import_state,
+            'reason': import_reason,
+            'last_finished_at': import_time,
+        },
+        'sources': source_rows,
+    }
+
+
 def dashboard_context(session, days: int = 7) -> dict:
     since = datetime.now(UTC) - timedelta(days=days)
     observation_counts = {
@@ -246,4 +361,5 @@ def dashboard_context(session, days: int = 7) -> dict:
         .filter(ScanRun.started_at >= since, ScanRun.technical_errors > 0)
         .count(),
         'weekend_summary': weekend_summary(session, days=max(days, 14)),
+        'operational_status': operational_status(session),
     }

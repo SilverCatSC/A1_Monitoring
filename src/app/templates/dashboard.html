@@ -19,7 +19,7 @@
     h2 { font-size:18px; margin:0 0 14px; } h3 { font-size:15px; }
     table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-size:11px; text-transform:uppercase; }
     .scroll { overflow:auto; max-height:420px; }
-    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#eef2ff; font-size:11px; } .SUCCESS,.FOUND { color:var(--green); background:#e7f8f1; } .FAILED,.critical { color:var(--red); background:#fff0f1; } .PARTIAL,.high { color:var(--amber); background:#fff4dc; }
+    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#eef2ff; font-size:11px; } .SUCCESS,.FOUND,.healthy { color:var(--green); background:#e7f8f1; } .FAILED,.critical,.overdue,.never_run,.invalid_configuration,.quarantine { color:var(--red); background:#fff0f1; } .PARTIAL,.high,.degraded,.not_configured,.action_required { color:var(--amber); background:#fff4dc; }
     form { display:grid; gap:10px; } input,select,textarea,button { width:100%; border:1px solid #d5dae4; border-radius:8px; padding:9px 10px; font:inherit; } textarea { min-height:76px; resize:vertical; } button { background:var(--blue); color:white; border:0; font-weight:650; cursor:pointer; } button.secondary { background:#fff; color:var(--ink); border:1px solid #d5dae4; }
     .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .check { display:flex; gap:8px; align-items:center; } .check input { width:auto; }
     .muted { color:var(--muted); } .empty { padding:28px 8px; color:var(--muted); text-align:center; }
@@ -45,6 +45,11 @@
     <div class="card metric"><div class="label">Тех. сбои</div><div class="value">{{ context.observation_counts.get('technical_error',0) }}</div></div>
     <div class="card metric"><div class="label">Обратная связь</div><div class="value">{{ context.open_feedback_count }}</div><div class="muted">в работе</div></div>
   </section>
+
+  <section class="card"><h2>Здоровье системы</h2><p><span class="pill {{ context.operational_status.overall }}">{{ context.operational_status.overall }}</span> <span class="muted">ожидаемый интервал {{ context.operational_status.expected_interval_minutes }} мин. + допуск {{ context.operational_status.grace_minutes }} мин.</span></p><div class="scroll"><table><thead><tr><th>Контур</th><th>Состояние</th><th>Последнее событие</th><th>Пояснение</th></tr></thead><tbody>
+    <tr><td>Импорт таблицы</td><td><span class="pill {{ context.operational_status.import.state }}">{{ context.operational_status.import.state }}</span></td><td>{{ context.operational_status.import.last_finished_at or '—' }}</td><td>{{ context.operational_status.import.reason }}</td></tr>
+    {% for item in context.operational_status.sources %}<tr><td>{{ item.source }}</td><td><span class="pill {{ item.state }}">{{ item.state }}</span></td><td>{{ item.last_run_at or '—' }}{% if item.age_minutes is not none %}<br><span class="muted">{{ item.age_minutes }} мин. назад</span>{% endif %}</td><td>{{ item.reason }}{% if item.active_filters is defined %}<br><span class="muted">активных фильтров: {{ item.active_filters }}</span>{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div></section>
 
   <section class="two">
     <div class="card"><h2>Последние циклы</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка</th><th>Статус</th><th>Фильтры</th><th>Страницы</th><th>Ошибки</th></tr></thead><tbody>
