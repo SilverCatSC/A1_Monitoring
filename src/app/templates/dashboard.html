@@ -85,10 +85,20 @@
     <div class="card"><h2>Подтвердить найденную ссылку</h2><form id="listing-link-form">
       <select name="listing_id" required><option value="">Выберите автомобиль</option>{% for item in context.missing_links %}<option value="{{ item.id }}">{{ item.vin or item.id }} — {{ item.brand or '' }}</option>{% endfor %}</select>
       <div class="row"><select name="source"><option value="auto_ru">Auto.ru</option><option value="avito">Avito</option></select><input name="actor" placeholder="Кто проверил" required></div>
-      <input name="url" type="url" placeholder="Прямая ссылка на объявление" required>
+      <input name="url" type="url" list="dealer-candidate-urls" placeholder="Прямая ссылка на объявление" required>
+      <datalist id="dealer-candidate-urls">{% for item in context.dealer_candidates %}<option value="{{ item.listing_url }}">{{ item.source.value }} — {{ item.title or item.external_key }}</option>{% endfor %}</datalist>
       <textarea name="reason" placeholder="Откуда получена ссылка и как проверена" required></textarea>
       <button type="submit">Сохранить с записью в журнал</button><div id="listing-link-result" class="muted"></div>
     </form></div>
+  </section>
+
+  <section class="two">
+    <div class="card"><h2>Кандидаты из кабинетов дилера</h2><p class="muted">Система собирает ссылки, но не угадывает VIN. Выберите кандидата выше и подтвердите связь вручную.</p><div class="scroll"><table><thead><tr><th>Площадка</th><th>Объявление</th><th>Цена</th><th>Последний раз</th></tr></thead><tbody>
+      {% for item in context.dealer_candidates %}<tr><td>{{ item.source.value }}</td><td><a href="{{ item.listing_url }}" target="_blank" rel="noreferrer">{{ item.title or item.external_key }}</a></td><td>{{ item.price_hint or '—' }}</td><td>{{ item.last_seen_at }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Каталог ещё не собран</td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="card"><h2>Последние обходы кабинетов</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка</th><th>Статус</th><th>Ссылок</th><th>Причина</th></tr></thead><tbody>
+      {% for item in context.dealer_discovery_runs %}<tr><td>{{ item.started_at }}</td><td>{{ item.source.value }}</td><td><span class="pill {{ 'healthy' if item.complete else 'degraded' }}">{{ 'complete' if item.complete else 'failed' }}</span></td><td>{{ item.candidates_found }}</td><td>{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Обходов пока нет</td></tr>{% endfor %}
+    </tbody></table></div></div>
   </section>
 
   <section class="two">

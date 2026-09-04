@@ -8,6 +8,8 @@ from sqlalchemy import or_
 from app.config import settings
 from app.models import (
     AbsenceEpisode,
+    DealerDiscoveryRun,
+    DealerListingCandidate,
     EngineType,
     FeedbackStatus,
     Listing,
@@ -372,4 +374,13 @@ def dashboard_context(session, days: int = 7) -> dict:
         .count(),
         'weekend_summary': weekend_summary(session, days=max(days, 14)),
         'operational_status': operational_status(session),
+        'dealer_candidates': session.query(DealerListingCandidate)
+        .filter(DealerListingCandidate.active.is_(True))
+        .order_by(DealerListingCandidate.source, DealerListingCandidate.title)
+        .limit(300)
+        .all(),
+        'dealer_discovery_runs': session.query(DealerDiscoveryRun)
+        .order_by(DealerDiscoveryRun.started_at.desc())
+        .limit(10)
+        .all(),
     }

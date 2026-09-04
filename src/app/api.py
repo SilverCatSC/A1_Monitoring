@@ -15,6 +15,7 @@ from app.importer.service import SourceImporter, SourceImportError
 from app.importer.sheet_csv import CsvOrXlsxReader
 from app.models import (
     AbsenceEpisode,
+    DealerListingCandidate,
     FeedbackStatus,
     Listing,
     ManagerFeedback,
@@ -34,6 +35,7 @@ from app.schemas import (
     TriggerScanResponse,
 )
 from app.service.cycle import MonitoringCycleService
+from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
 from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
@@ -144,6 +146,44 @@ def trigger_cycle(db: Session = Depends(get_db)):
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return TriggerCycleResponse(status='ok', started_at=started_at, summary=summary)
+
+
+@router.post('/dealer/discover')
+def discover_dealer_listings(db: Session = Depends(get_db)):
+    try:
+        return DealerDiscoveryService(db).run()
+    except DiscoveryAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.get('/dealer/candidates')
+def dealer_candidates(
+    source: str | None = None, active: bool | None = True, db: Session = Depends(get_db)
+):
+    query = db.query(DealerListingCandidate)
+    if source is not None:
+        if source not in {'auto_ru', 'avito'}:
+            raise HTTPException(status_code=422, detail='source must be auto_ru or avito')
+        query = query.filter(DealerListingCandidate.source == source)
+    if active is not None:
+        query = query.filter(DealerListingCandidate.active == active)
+    rows = query.order_by(DealerListingCandidate.last_seen_at.desc()).limit(1000).all()
+    return {
+        'candidates': [
+            {
+                'id': row.id,
+                'source': row.source.value,
+                'title': row.title,
+                'url': row.listing_url,
+                'price_hint': row.price_hint,
+                'active': row.active,
+                'first_seen_at': row.first_seen_at,
+                'last_seen_at': row.last_seen_at,
+                'dealer_url': row.dealer_url,
+            }
+            for row in rows
+        ]
+    }
 
 
 @router.post('/import', response_model=ImportResponse)

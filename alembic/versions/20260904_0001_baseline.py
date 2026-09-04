@@ -18,7 +18,24 @@ def upgrade() -> None:
     bind = op.get_bind()
     # checkfirst makes the baseline safe for both a clean database and installations
     # created by the pre-Alembic application startup path.
-    Base.metadata.create_all(bind=bind, checkfirst=True)
+    baseline_tables = [
+        'source_import_snapshots',
+        'import_field_drift',
+        'search_filters',
+        'listings',
+        'listing_link_events',
+        'vehicle_filter_expectations',
+        'scan_runs',
+        'listing_observations',
+        'absence_episodes',
+        'manager_feedback',
+        'feedback_events',
+    ]
+    Base.metadata.create_all(
+        bind=bind,
+        tables=[Base.metadata.tables[name] for name in baseline_tables],
+        checkfirst=True,
+    )
     if bind.dialect.name == 'postgresql':
         op.execute('ALTER TABLE absence_episodes DROP CONSTRAINT IF EXISTS uq_open_absence')
         op.execute(

@@ -27,6 +27,10 @@ class Settings(BaseSettings):
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')
     run_every_minutes: int = Field(default=30, alias='RUN_EVERY_MINUTES', ge=1)
     report_retention_days: int = Field(default=90, alias='REPORT_RETENTION_DAYS', ge=1)
+    dealer_discovery_enabled: bool = Field(default=True, alias='DEALER_DISCOVERY_ENABLED')
+    dealer_auto_urls: str = Field(default='', alias='DEALER_AUTO_URLS')
+    dealer_avito_urls: str = Field(default='', alias='DEALER_AVITO_URLS')
+    dealer_pages_limit: int = Field(default=3, alias='DEALER_PAGES_LIMIT', ge=1, le=10)
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
     app_version: str = '0.2.0'
     min_confirmed_absence_runs: int = 2
@@ -71,6 +75,13 @@ class Settings(BaseSettings):
     @property
     def scan_engines(self) -> List[str]:
         return [token.strip() for token in self.scan_enabled_engines.split(',') if token.strip()]
+
+    @property
+    def dealer_sources(self) -> dict[str, list[str]]:
+        return {
+            'auto_ru': [url.strip() for url in self.dealer_auto_urls.split(',') if url.strip()],
+            'avito': [url.strip() for url in self.dealer_avito_urls.split(',') if url.strip()],
+        }
 
     @field_validator('evidence_dir')
     @classmethod

@@ -177,6 +177,47 @@ class ListingLinkEvent(Base):
     listing: Mapped[Listing] = relationship('Listing', back_populates='link_events')
 
 
+class DealerDiscoveryRun(Base):
+    __tablename__ = 'dealer_discovery_runs'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
+    dealer_url: Mapped[str] = mapped_column(Text, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    complete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    pages_scanned: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    candidates_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    diagnostics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class DealerListingCandidate(Base):
+    __tablename__ = 'dealer_listing_candidates'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
+    external_key: Mapped[str] = mapped_column(String, nullable=False)
+    dealer_url: Mapped[str] = mapped_column(Text, nullable=False)
+    listing_url: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(String, nullable=True)
+    price_hint: Mapped[float | None] = mapped_column(Float, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    raw_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    __table_args__ = (
+        UniqueConstraint('source', 'external_key', name='uq_dealer_candidate_source_key'),
+    )
+
+
 class VehicleFilterExpectation(Base):
     __tablename__ = 'vehicle_filter_expectations'
 
