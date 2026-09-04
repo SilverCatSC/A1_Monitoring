@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>История наблюдений · A1 Search Monitor</title>
+  <style>
+    :root { --ink:#172033;--muted:#667085;--line:#e7eaf0;--bg:#f5f7fb;--card:#fff;--blue:#315efb;--red:#c72c41;--amber:#b66a00;--green:#087f5b }
+    *{box-sizing:border-box} body{margin:0;color:var(--ink);background:var(--bg);font:14px/1.45 Inter,Arial,sans-serif} header{padding:24px max(20px,calc((100vw - 1440px)/2));color:#fff;background:#111827} h1{margin:8px 0 0;font-size:27px} a{color:var(--blue)} header a{color:#cbd5e1} main{max-width:1440px;margin:auto;padding:22px}.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:17px;box-shadow:0 2px 10px #1018280a}.filters{display:grid;grid-template-columns:repeat(6,minmax(120px,1fr));gap:10px;margin-bottom:18px}.filters label{color:var(--muted);font-size:12px}.filters select,.filters input,.filters button{width:100%;margin-top:4px;border:1px solid #d5dae4;border-radius:8px;padding:9px;font:inherit}.filters button{align-self:end;background:var(--blue);border:0;color:#fff;font-weight:650}.scroll{overflow:auto}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:9px 8px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:11px;text-transform:uppercase}.pill{display:inline-block;padding:3px 8px;border-radius:999px;background:#eef2ff;font-size:11px}.found{color:var(--green);background:#e7f8f1}.absent_confirmed,.technical_error{color:var(--red);background:#fff0f1}.absent_uncertain,.filter_mismatch{color:var(--amber);background:#fff4dc}.muted{color:var(--muted)}.pager{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:16px}.pager form{margin:0}.pager button{border:1px solid #d5dae4;border-radius:8px;padding:8px 14px;background:#fff}.empty{text-align:center;color:var(--muted);padding:34px 8px}@media(max-width:900px){.filters{grid-template-columns:1fr 1fr}main{padding:12px}th,td{white-space:nowrap}}@media(max-width:520px){.filters{grid-template-columns:1fr}.hide-mobile{display:none}}
+  </style>
+</head>
+<body>
+<header><a href="/api/v1/dashboard">← Сводка</a><h1>История наблюдений</h1></header>
+<main>
+  <form class="card filters" method="get">
+    <label>Период<select name="days"><option value="7" {{ 'selected' if context.days == 7 else '' }}>7 дней</option><option value="30" {{ 'selected' if context.days == 30 else '' }}>30 дней</option><option value="90" {{ 'selected' if context.days == 90 else '' }}>90 дней</option><option value="365" {{ 'selected' if context.days == 365 else '' }}>365 дней</option></select></label>
+    <label>Площадка<select name="source"><option value="">Все</option><option value="auto_ru" {{ 'selected' if context.source == 'auto_ru' else '' }}>Auto.ru</option><option value="avito" {{ 'selected' if context.source == 'avito' else '' }}>Avito</option></select></label>
+    <label>Марка<select name="brand"><option value="">Все</option>{% for value in context.brand_options %}<option value="{{ value }}" {{ 'selected' if context.brand == value else '' }}>{{ value }}</option>{% endfor %}</select></label>
+    <label>Модель<select name="model"><option value="">Все</option>{% for value in context.model_options %}<option value="{{ value }}" {{ 'selected' if context.model == value else '' }}>{{ value }}</option>{% endfor %}</select></label>
+    <label>Статус<select name="state"><option value="">Все</option>{% for value in context.states %}<option value="{{ value }}" {{ 'selected' if context.state == value else '' }}>{{ value }}</option>{% endfor %}</select></label>
+    <button type="submit">Применить</button>
+  </form>
+  <section class="card">
+    <p><strong>{{ context.total }}</strong> наблюдений за выбранный период</p>
+    <div class="scroll"><table><thead><tr><th>Время</th><th>Автомобиль</th><th>Объявление</th><th>Площадка / фильтр</th><th>Результат</th><th>Страница</th><th>Позиция</th><th>Доказательство</th></tr></thead><tbody>
+      {% for row in context.rows %}{% set item = row.observation %}<tr>
+        <td>{{ item.observed_at.strftime('%d.%m.%Y %H:%M') }}</td>
+        <td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}"><strong>{{ item.listing.vin or item.listing_id }}</strong></a><br><span class="muted">{{ item.listing.brand or '' }} {{ item.listing.model or '' }}</span></td>
+        <td>{% if row.listing_url %}<a href="{{ row.listing_url }}" target="_blank" rel="noreferrer"><strong>{{ item.title or 'Открыть объявление' }}</strong></a>{% else %}<span class="muted">ссылка не сохранена</span>{% endif %}{% if item.price_hint %}<br>{{ '{:,.0f}'.format(item.price_hint).replace(',', ' ') }} ₽{% endif %}</td>
+        <td>{{ item.source.value }}<br><span class="muted">{{ item.filter.name }}</span></td>
+        <td><span class="pill {{ item.state.value }}">{{ item.state.value }}</span></td>
+        <td>{{ item.page_number if item.page_number else '—' }}</td>
+        <td>{{ item.absolute_position if item.absolute_position else '—' }}{% if item.position_in_page %}<br><span class="muted">на стр.: {{ item.position_in_page }}</span>{% endif %}</td>
+        <td>{% for evidence_page in row.evidence_pages %}<a href="/api/v1/observations/{{ item.id }}/evidence/{{ evidence_page }}" target="_blank"><img src="/api/v1/observations/{{ item.id }}/evidence/{{ evidence_page }}" alt="Снимок страницы {{ evidence_page }}" style="width:120px;max-height:76px;object-fit:cover;border-radius:6px;border:1px solid var(--line)"><br>стр. {{ evidence_page }}</a>{% if not loop.last %}<br>{% endif %}{% else %}<span class="muted">не сохранено</span>{% endfor %}</td>
+      </tr>{% else %}<tr><td colspan="8" class="empty">По выбранным условиям наблюдений нет</td></tr>{% endfor %}
+    </tbody></table></div>
+    <div class="pager">
+      {% if context.page > 1 %}<form method="get"><input type="hidden" name="days" value="{{ context.days }}"><input type="hidden" name="source" value="{{ context.source }}"><input type="hidden" name="brand" value="{{ context.brand }}"><input type="hidden" name="model" value="{{ context.model }}"><input type="hidden" name="state" value="{{ context.state }}"><input type="hidden" name="page" value="{{ context.page - 1 }}"><button>← Назад</button></form>{% else %}<span></span>{% endif %}
+      <span class="muted">Страница {{ context.page }} из {{ context.pages_total }}</span>
+      {% if context.page < context.pages_total %}<form method="get"><input type="hidden" name="days" value="{{ context.days }}"><input type="hidden" name="source" value="{{ context.source }}"><input type="hidden" name="brand" value="{{ context.brand }}"><input type="hidden" name="model" value="{{ context.model }}"><input type="hidden" name="state" value="{{ context.state }}"><input type="hidden" name="page" value="{{ context.page + 1 }}"><button>Вперёд →</button></form>{% else %}<span></span>{% endif %}
+    </div>
+  </section>
+</main>
+</body>
+</html>

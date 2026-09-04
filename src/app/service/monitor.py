@@ -66,6 +66,7 @@ class MonitorService:
         state: ObservationState,
         hit: ListingHit | None = None,
         diagnostics: dict | None = None,
+        absolute_position: int | None = None,
     ) -> None:
         found = state == ObservationState.FOUND
         raw_payload = dict(hit.raw) if hit else {}
@@ -82,6 +83,7 @@ class MonitorService:
                 source=source,
                 page_number=hit.page_number if hit else 0,
                 position_in_page=hit.position if hit else 0,
+                absolute_position=absolute_position,
                 found=found,
                 state=state,
                 listing_url=hit.url if hit else None,
@@ -274,7 +276,7 @@ class MonitorService:
                     )
 
                 found_ids: set[str] = set()
-                for hit in scan_result.hits:
+                for absolute_position, hit in enumerate(scan_result.hits, start=1):
                     key = canonical_listing_key(source, hit.url)
                     expectation = expected_by_key.get(key or '')
                     if expectation is None or expectation.listing_id in found_ids:
@@ -287,6 +289,8 @@ class MonitorService:
                         source,
                         ObservationState.FOUND,
                         hit=hit,
+                        diagnostics=scan_result.diagnostics,
+                        absolute_position=absolute_position,
                     )
                     expectation.listing.last_seen_at = datetime.now(UTC)
                     self._close_absence(

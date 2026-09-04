@@ -3,6 +3,57 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
+from app.models import ListingObservation
+
+
+class EvidenceAccessError(ValueError):
+    pass
+
+
+def evidence_pages(observation: ListingObservation) -> list[int]:
+    diagnostics = (observation.raw_payload or {}).get('scan_diagnostics') or {}
+    pages = []
+    for key, value in diagnostics.items():
+        if not key.startswith('page_') or not key.endswith('_evidence') or not value:
+            continue
+        try:
+            pages.append(int(key.removeprefix('page_').removesuffix('_evidence')))
+        except ValueError:
+            continue
+    return sorted(set(pages))
+
+
+def resolve_observation_evidence(
+    observation: ListingObservation,
+    page_number: int,
+    evidence_dir: str,
+) -> Path:
+    if page_number < 1:
+        raise EvidenceAccessError('page number must be positive')
+    diagnostics = (observation.raw_payload or {}).get('scan_diagnostics') or {}
+    stored = diagnostics.get(f'page_{page_number}_evidence')
+    if not isinstance(stored, str) or not stored.strip():
+        raise EvidenceAccessError('evidence not found')
+
+    root = Path(evidence_dir).resolve()
+    requested = Path(stored)
+    candidate = requested if requested.is_absolute() else root / requested
+    if candidate.suffix.lower() != '.png':
+        raise EvidenceAccessError('invalid evidence file')
+    current = candidate
+    while current != root and current != current.parent:
+        if current.is_symlink():
+            raise EvidenceAccessError('invalid evidence file')
+        current = current.parent
+    try:
+        resolved = candidate.resolve(strict=True)
+        resolved.relative_to(root)
+    except (OSError, ValueError) as exc:
+        raise EvidenceAccessError('invalid evidence path') from exc
+    if not resolved.is_file() or resolved.is_symlink():
+        raise EvidenceAccessError('invalid evidence file')
+    return resolved
+
 
 def cleanup_evidence(evidence_dir: str, retention_days: int) -> int:
     root = Path(evidence_dir).resolve()

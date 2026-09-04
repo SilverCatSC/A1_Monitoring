@@ -214,11 +214,14 @@ def test_absence_requires_two_validated_misses_and_can_recur(tmp_path, monkeypat
         found = _hit(
             'https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-new/?output_type=list'
         )
+        unrelated = _hit(
+            'https://auto.ru/cars/used/sale/mercedes/v_class/9999999999-other/'
+        )
         adapter = FakeAdapter(
             [
                 _result(),
                 _result(),
-                _result(found),
+                _result(unrelated, found),
                 _result(),
                 _result(),
             ]
@@ -234,6 +237,14 @@ def test_absence_requires_two_validated_misses_and_can_recur(tmp_path, monkeypat
         assert session.query(AbsenceEpisode).filter(AbsenceEpisode.open.is_(True)).count() == 1
 
         service.run_full_cycle()
+        found_observation = (
+            session.query(ListingObservation)
+            .filter(ListingObservation.state == ObservationState.FOUND)
+            .one()
+        )
+        assert found_observation.absolute_position == 2
+        assert found_observation.position_in_page == 7
+        assert found_observation.raw_payload['scan_diagnostics'] == {'fixture': True}
         first_episode = session.query(AbsenceEpisode).one()
         assert first_episode.open is False
         assert listing.last_seen_at is not None

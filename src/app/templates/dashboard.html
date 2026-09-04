@@ -24,13 +24,14 @@
     .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .check { display:flex; gap:8px; align-items:center; } .check input { width:auto; }
     .muted { color:var(--muted); } .empty { padding:28px 8px; color:var(--muted); text-align:center; }
     code { font-size:12px; } .ok { color:var(--green); } .danger { color:var(--red); }
+    a { color:var(--blue); } header a { color:#cbd5e1; }
     footer { max-width:1440px; margin:auto; padding:0 24px 30px; color:var(--muted); }
     @media(max-width:900px){ .two{grid-template-columns:1fr} header{align-items:start;flex-direction:column} }
   </style>
 </head>
 <body>
 <header>
-  <div><h1>A1 Search Monitor</h1><p>Видимость объявлений на первых трёх страницах поиска</p></div>
+  <div><h1>A1 Search Monitor</h1><p>Видимость объявлений на первых трёх страницах поиска · <a href="/api/v1/dashboard/listings">объявления</a> · <a href="/api/v1/dashboard/history">история</a></p></div>
   <div>Срез: {{ context.days }} дней · {{ context.generated_at.strftime('%d.%m.%Y %H:%M') }} UTC</div>
 </header>
 <main>
@@ -68,10 +69,10 @@
 
   <section class="two">
     <div class="card"><h2>Статистика по фильтрам</h2><div class="scroll"><table><thead><tr><th>Фильтр</th><th>Найдено</th><th>Стр. 1 / 2 / 3</th><th>Не найдено</th><th>Тех.</th></tr></thead><tbody>
-      {% for row in context.filter_statistics %}<tr><td><strong>{{ row.name }}</strong><br><span class="muted">{{ row.source }}</span></td><td>{{ row.found }}</td><td>{{ row.page_1 }} / {{ row.page_2 }} / {{ row.page_3 }}</td><td>{{ row.absent_confirmed }} <span class="muted">(+{{ row.absent_uncertain }} ожид.)</span></td><td>{{ row.technical_error }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Статистика появится после первого настроенного скана</td></tr>{% endfor %}
+      {% for row in context.filter_statistics %}<tr><td><a href="/api/v1/dashboard/history?source={{ row.source }}"><strong>{{ row.name }}</strong></a><br><span class="muted">{{ row.source }}</span></td><td>{{ row.found }}</td><td>{{ row.page_1 }} / {{ row.page_2 }} / {{ row.page_3 }}</td><td>{{ row.absent_confirmed }} <span class="muted">(+{{ row.absent_uncertain }} ожид.)</span></td><td>{{ row.technical_error }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Статистика появится после первого настроенного скана</td></tr>{% endfor %}
     </tbody></table></div></div>
     <div class="card"><h2>Последние найденные позиции</h2><div class="scroll"><table><thead><tr><th>Автомобиль</th><th>Фильтр</th><th>Страница</th><th>Позиция</th></tr></thead><tbody>
-      {% for item in context.latest_found %}<tr><td>{{ item.listing.vin or item.listing_id }}<br><span class="muted">{{ item.title or '' }}</span></td><td>{{ item.filter.name }}</td><td>{{ item.page_number }}</td><td>{{ item.position_in_page }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Найденных позиций пока нет</td></tr>{% endfor %}
+      {% for item in context.latest_found %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}"><strong>{{ item.listing.vin or item.listing_id }}</strong></a><br>{% if context.latest_found_urls.get(item.id) %}<a href="{{ context.latest_found_urls.get(item.id) }}" target="_blank" rel="noreferrer">{{ item.title or 'Открыть объявление' }}</a>{% else %}<span class="muted">{{ item.title or 'ссылка не сохранена' }}</span>{% endif %}{% for evidence_page in context.latest_found_evidence.get(item.id, []) %}<br><a href="/api/v1/observations/{{ item.id }}/evidence/{{ evidence_page }}" target="_blank">снимок стр. {{ evidence_page }}</a>{% endfor %}</td><td>{{ item.filter.name }}</td><td>{{ item.page_number }}</td><td>{{ item.absolute_position or '—' }}<br><span class="muted">на стр.: {{ item.position_in_page }}</span></td></tr>{% else %}<tr><td colspan="4" class="empty">Найденных позиций пока нет</td></tr>{% endfor %}
     </tbody></table></div></div>
   </section>
 
@@ -81,7 +82,7 @@
 
   <section class="two">
     <div class="card"><h2>Активные авто с неполными ссылками</h2><div class="scroll"><table><thead><tr><th>VIN / авто</th><th>Auto.ru</th><th>Avito</th></tr></thead><tbody>
-      {% for item in context.missing_links %}<tr><td><strong>{{ item.vin or 'VIN не указан' }}</strong><br><span class="muted">{{ item.brand or '' }} {{ item.model or '' }} {{ item.year or '' }}</span></td><td>{{ 'есть' if item.source_auto_ru else 'нет' }}</td><td>{{ 'есть' if item.source_avito else 'нет' }}</td></tr>{% else %}<tr><td colspan="3" class="empty">У активных авто обе ссылки заполнены</td></tr>{% endfor %}
+      {% for item in context.missing_links %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.id }}"><strong>{{ item.vin or 'VIN не указан' }}</strong></a><br><span class="muted">{{ item.brand or '' }} {{ item.model or '' }} {{ item.year or '' }}</span></td><td>{% if context.listing_urls[item.id].auto_ru %}<a href="{{ context.listing_urls[item.id].auto_ru }}" target="_blank" rel="noreferrer">открыть</a>{% else %}нет{% endif %}</td><td>{% if context.listing_urls[item.id].avito %}<a href="{{ context.listing_urls[item.id].avito }}" target="_blank" rel="noreferrer">открыть</a>{% else %}нет{% endif %}</td></tr>{% else %}<tr><td colspan="3" class="empty">У активных авто обе ссылки заполнены</td></tr>{% endfor %}
     </tbody></table></div></div>
     <div class="card"><h2>Подтвердить найденную ссылку</h2><form id="listing-link-form">
       <select name="listing_id" required><option value="">Выберите автомобиль</option>{% for item in context.missing_links %}<option value="{{ item.id }}">{{ item.vin or item.id }} — {{ item.brand or '' }}</option>{% endfor %}</select>

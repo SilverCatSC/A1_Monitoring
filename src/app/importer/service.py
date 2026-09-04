@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.config import settings
 from app.contracts import CANONICAL_FIELDS, SourceRecord
 from app.models import (
+    EngineType,
     ImportFieldDrift,
     Listing,
     SearchFilter,
@@ -19,6 +20,7 @@ from app.models import (
 from app.scraper.base import (
     SearchFilterDefinition,
     detect_filters_in_row,
+    is_marketplace_listing_url,
     is_marketplace_search_url,
 )
 
@@ -230,12 +232,34 @@ class SourceImporter:
                 year = _clean_optional(row.get('year'))
                 listing.year = int(float(year)) if year and year.replace('.', '', 1).isdigit() else None
                 listing.vin = _clean_optional(row.get('vin'))
-                incoming_auto_ru = _clean_optional(
+                raw_auto_ru = _clean_optional(
                     row.get('listing_url_auto_ru') or row.get('source_auto_ru')
                 )
-                incoming_avito = _clean_optional(
+                raw_avito = _clean_optional(
                     row.get('listing_url_avito') or row.get('source_avito')
                 )
+                incoming_auto_ru = (
+                    raw_auto_ru
+                    if is_marketplace_listing_url(EngineType.AUTO_RU, raw_auto_ru)
+                    else None
+                )
+                incoming_avito = (
+                    raw_avito
+                    if is_marketplace_listing_url(EngineType.AVITO, raw_avito)
+                    else None
+                )
+                if raw_auto_ru and incoming_auto_ru is None:
+                    snapshot.notes = (snapshot.notes or '') + ' Rejected invalid Auto.ru URL.'
+                if raw_avito and incoming_avito is None:
+                    snapshot.notes = (snapshot.notes or '') + ' Rejected invalid Avito URL.'
+                if listing.source_auto_ru and not is_marketplace_listing_url(
+                    EngineType.AUTO_RU, listing.source_auto_ru
+                ):
+                    listing.source_auto_ru = None
+                if listing.source_avito and not is_marketplace_listing_url(
+                    EngineType.AVITO, listing.source_avito
+                ):
+                    listing.source_avito = None
                 # An empty contractor cell is ambiguous and must not erase a link
                 # that a manager already confirmed. A non-empty source value remains
                 # authoritative and updates the current registry.

@@ -155,8 +155,8 @@ def test_importer_updates_existing_listing_links(db_modules):
             {
                 'brand': 'Mercedes-Benz V-Class',
                 'vin': 'W1VVNLTZ5S4556796',
-                'listing_url_auto_ru': 'https://auto.ru/old/123-old/',
-                'listing_url_avito': 'https://www.avito.ru/old_456',
+                'listing_url_auto_ru': 'https://auto.ru/cars/used/sale/brand/model/1234567890-old/',
+                'listing_url_avito': 'https://www.avito.ru/moskva/avtomobili/old_1234567890',
                 'source_status': 'Актуально',
             }
         )
@@ -164,8 +164,8 @@ def test_importer_updates_existing_listing_links(db_modules):
             {
                 'brand': 'Mercedes-Benz V-Class',
                 'vin': 'W1VVNLTZ5S4556796',
-                'listing_url_auto_ru': 'https://auto.ru/new/789-new/',
-                'listing_url_avito': 'https://www.avito.ru/new_999',
+                'listing_url_auto_ru': 'https://auto.ru/cars/used/sale/brand/model/2234567890-new/',
+                'listing_url_avito': 'https://www.avito.ru/moskva/avtomobili/new_2234567890',
                 'source_status': 'Актуально',
             }
         )
@@ -174,8 +174,8 @@ def test_importer_updates_existing_listing_links(db_modules):
         SourceImporter(session).run(second, source_signature='v2')
 
         listing = session.query(Listing).one()
-        assert listing.source_auto_ru == 'https://auto.ru/new/789-new/'
-        assert listing.source_avito == 'https://www.avito.ru/new_999'
+        assert listing.source_auto_ru.endswith('/2234567890-new/')
+        assert listing.source_avito.endswith('/new_2234567890')
         assert listing.is_active is True
     finally:
         session.close()
@@ -213,6 +213,32 @@ def test_importer_does_not_erase_confirmed_links_with_blank_source_cells(db_modu
         listing = session.query(Listing).one()
         assert listing.source_auto_ru.endswith('/1234567890-a/')
         assert listing.source_avito.endswith('/v_9876543210')
+    finally:
+        session.close()
+
+
+def test_importer_rejects_non_marketplace_listing_urls(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import Listing, SourceImportSnapshot
+
+    session = app_db.SessionLocal()
+    try:
+        rows = _make_rows(
+            {
+                'brand': 'Unsafe URL',
+                'vin': 'W1VVNLTZ5S4556796',
+                'listing_url_auto_ru': 'javascript:alert(1)',
+                'listing_url_avito': 'https://example.com/fake_1234567890',
+            }
+        )
+
+        SourceImporter(session).run(rows, source_signature='invalid-listing-links')
+
+        listing = session.query(Listing).one()
+        assert listing.source_auto_ru is None
+        assert listing.source_avito is None
+        assert 'Rejected invalid Auto.ru URL' in session.query(SourceImportSnapshot).one().notes
     finally:
         session.close()
 

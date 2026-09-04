@@ -8,6 +8,7 @@ from app.models import (
     FeedbackEvent,
     FeedbackStatus,
     Listing,
+    ListingObservation,
     ManagerFeedback,
     SearchFilter,
 )
@@ -44,6 +45,7 @@ class FeedbackService:
         message: str,
         listing_id: str | None = None,
         filter_id: str | None = None,
+        observed_id: str | None = None,
         severity: str = 'medium',
         category: str = 'other',
         manager_name: str | None = None,
@@ -56,6 +58,21 @@ class FeedbackService:
             raise FeedbackValidationError('unsupported severity')
         if category not in ALLOWED_CATEGORIES:
             raise FeedbackValidationError('unsupported category')
+        observation = None
+        if observed_id:
+            observation = (
+                self.db.query(ListingObservation)
+                .filter(ListingObservation.id == observed_id)
+                .one_or_none()
+            )
+            if observation is None:
+                raise FeedbackValidationError('observation not found')
+            if listing_id and listing_id != observation.listing_id:
+                raise FeedbackValidationError('listing does not match observation')
+            if filter_id and filter_id != observation.filter_id:
+                raise FeedbackValidationError('filter does not match observation')
+            listing_id = observation.listing_id
+            filter_id = observation.filter_id
         if listing_id and not self.db.query(Listing).filter(Listing.id == listing_id).first():
             raise FeedbackValidationError('listing not found')
         if filter_id and not self.db.query(SearchFilter).filter(SearchFilter.id == filter_id).first():
@@ -64,6 +81,8 @@ class FeedbackService:
         record = ManagerFeedback(
             listing_id=listing_id,
             filter_id=filter_id,
+            run_id=observation.run_id if observation else None,
+            observed_id=observed_id,
             severity=severity,
             category=category,
             message=clean_message,

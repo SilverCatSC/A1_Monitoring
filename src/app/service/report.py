@@ -21,6 +21,12 @@ from app.models import (
     SearchFilter,
     SourceImportSnapshot,
 )
+from app.scraper.base import is_marketplace_listing_url
+from app.service.evidence import evidence_pages
+
+
+def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
+    return value if is_marketplace_listing_url(source, value) else None
 
 
 def weekend_windows_for_last_days(days: int = 14) -> list[tuple[datetime, datetime]]:
@@ -369,6 +375,20 @@ def dashboard_context(session, days: int = 7) -> dict:
         'last_import': last_import,
         'missing_links': missing_links,
         'latest_found': latest_found,
+        'latest_found_evidence': {
+            observation.id: evidence_pages(observation) for observation in latest_found
+        },
+        'latest_found_urls': {
+            observation.id: _safe_listing_url(observation.source, observation.listing_url)
+            for observation in latest_found
+        },
+        'listing_urls': {
+            listing.id: {
+                'auto_ru': _safe_listing_url(EngineType.AUTO_RU, listing.source_auto_ru),
+                'avito': _safe_listing_url(EngineType.AVITO, listing.source_avito),
+            }
+            for listing in missing_links
+        },
         'filter_statistics': filter_statistics(session, since),
         'open_feedback_count': len(feedback),
         'technical_runs': session.query(ScanRun)
@@ -385,4 +405,217 @@ def dashboard_context(session, days: int = 7) -> dict:
         .order_by(DealerDiscoveryRun.started_at.desc())
         .limit(10)
         .all(),
+    }
+
+
+def observation_history_context(
+    session,
+    *,
+    days: int = 30,
+    source: EngineType | None = None,
+    brand: str | None = None,
+    model: str | None = None,
+    state: ObservationState | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    safe_days = min(max(days, 1), 365)
+    safe_page = max(page, 1)
+    safe_page_size = min(max(page_size, 10), 200)
+    since = datetime.now(UTC) - timedelta(days=safe_days)
+    query = (
+        session.query(ListingObservation)
+        .join(Listing, ListingObservation.listing_id == Listing.id)
+        .join(SearchFilter, ListingObservation.filter_id == SearchFilter.id)
+        .filter(ListingObservation.observed_at >= since)
+    )
+    if source is not None:
+        query = query.filter(ListingObservation.source == source)
+    if brand:
+        query = query.filter(Listing.brand.ilike(brand.strip()))
+    if model:
+        query = query.filter(Listing.model.ilike(model.strip()))
+    if state is not None:
+        query = query.filter(ListingObservation.state == state)
+
+    total = query.count()
+    pages_total = max(1, (total + safe_page_size - 1) // safe_page_size)
+    safe_page = min(safe_page, pages_total)
+    observations = (
+        query.order_by(ListingObservation.observed_at.desc(), ListingObservation.id)
+        .offset((safe_page - 1) * safe_page_size)
+        .limit(safe_page_size)
+        .all()
+    )
+    brand_options = [
+        value
+        for (value,) in session.query(Listing.brand)
+        .filter(Listing.brand.is_not(None), Listing.brand != '')
+        .distinct()
+        .order_by(Listing.brand)
+        .all()
+    ]
+    model_options = [
+        value
+        for (value,) in session.query(Listing.model)
+        .filter(Listing.model.is_not(None), Listing.model != '')
+        .distinct()
+        .order_by(Listing.model)
+        .all()
+    ]
+    return {
+        'days': safe_days,
+        'source': source.value if source else '',
+        'brand': brand or '',
+        'model': model or '',
+        'state': state.value if state else '',
+        'page': safe_page,
+        'page_size': safe_page_size,
+        'pages_total': pages_total,
+        'total': total,
+        'brand_options': brand_options,
+        'model_options': model_options,
+        'states': [item.value for item in ObservationState],
+        'rows': [
+            {
+                'observation': observation,
+                'evidence_pages': evidence_pages(observation),
+                'listing_url': _safe_listing_url(observation.source, observation.listing_url),
+            }
+            for observation in observations
+        ],
+    }
+
+
+def listing_catalog_context(
+    session,
+    *,
+    query_text: str | None = None,
+    brand: str | None = None,
+    platform: EngineType | None = None,
+    page: int = 1,
+    page_size: int = 24,
+) -> dict:
+    safe_page = max(page, 1)
+    safe_page_size = min(max(page_size, 12), 96)
+    query = session.query(Listing).filter(Listing.is_active.is_(True))
+    if query_text:
+        pattern = f'%{query_text.strip()}%'
+        query = query.filter(
+            or_(
+                Listing.vin.ilike(pattern),
+                Listing.brand.ilike(pattern),
+                Listing.model.ilike(pattern),
+            )
+        )
+    if brand:
+        query = query.filter(Listing.brand.ilike(brand.strip()))
+    if platform == EngineType.AUTO_RU:
+        query = query.filter(Listing.source_auto_ru.is_not(None))
+    elif platform == EngineType.AVITO:
+        query = query.filter(Listing.source_avito.is_not(None))
+
+    total = query.count()
+    pages_total = max(1, (total + safe_page_size - 1) // safe_page_size)
+    safe_page = min(safe_page, pages_total)
+    listings = (
+        query.order_by(Listing.brand, Listing.model, Listing.year.desc(), Listing.vin)
+        .offset((safe_page - 1) * safe_page_size)
+        .limit(safe_page_size)
+        .all()
+    )
+    listing_ids = [item.id for item in listings]
+    latest_found: dict[str, ListingObservation] = {}
+    if listing_ids:
+        for observation in (
+            session.query(ListingObservation)
+            .filter(
+                ListingObservation.listing_id.in_(listing_ids),
+                ListingObservation.state == ObservationState.FOUND,
+            )
+            .order_by(ListingObservation.observed_at.desc())
+        ):
+            latest_found.setdefault(observation.listing_id, observation)
+
+    brand_options = [
+        value
+        for (value,) in session.query(Listing.brand)
+        .filter(Listing.is_active.is_(True), Listing.brand.is_not(None), Listing.brand != '')
+        .distinct()
+        .order_by(Listing.brand)
+        .all()
+    ]
+    return {
+        'query': query_text or '',
+        'brand': brand or '',
+        'platform': platform.value if platform else '',
+        'page': safe_page,
+        'pages_total': pages_total,
+        'total': total,
+        'brand_options': brand_options,
+        'cards': [
+            {
+                'listing': listing,
+                'observation': latest_found.get(listing.id),
+                'evidence_pages': evidence_pages(latest_found[listing.id])
+                if listing.id in latest_found
+                else [],
+                'auto_url': _safe_listing_url(EngineType.AUTO_RU, listing.source_auto_ru),
+                'avito_url': _safe_listing_url(EngineType.AVITO, listing.source_avito),
+            }
+            for listing in listings
+        ],
+    }
+
+
+def listing_detail_context(session, listing_id: str, observation_limit: int = 200) -> dict | None:
+    listing = session.get(Listing, listing_id)
+    if listing is None:
+        return None
+    observations = (
+        session.query(ListingObservation)
+        .filter(ListingObservation.listing_id == listing_id)
+        .order_by(ListingObservation.observed_at.desc())
+        .limit(min(max(observation_limit, 10), 500))
+        .all()
+    )
+    episodes = (
+        session.query(AbsenceEpisode)
+        .filter(AbsenceEpisode.listing_id == listing_id)
+        .order_by(AbsenceEpisode.started_at.desc())
+        .all()
+    )
+    feedback = (
+        session.query(ManagerFeedback)
+        .filter(ManagerFeedback.listing_id == listing_id)
+        .order_by(ManagerFeedback.created_at.desc())
+        .all()
+    )
+    link_events = sorted(listing.link_events, key=lambda item: item.created_at, reverse=True)
+    return {
+        'listing': listing,
+        'links': {
+            'auto_ru': _safe_listing_url(EngineType.AUTO_RU, listing.source_auto_ru),
+            'avito': _safe_listing_url(EngineType.AVITO, listing.source_avito),
+        },
+        'observations': [
+            {
+                'observation': observation,
+                'evidence_pages': evidence_pages(observation),
+                'listing_url': _safe_listing_url(observation.source, observation.listing_url),
+            }
+            for observation in observations
+        ],
+        'episodes': episodes,
+        'feedback': feedback,
+        'link_events': link_events,
+        'previews': [
+            {
+                'observation': observation,
+                'evidence_pages': evidence_pages(observation),
+                'listing_url': _safe_listing_url(observation.source, observation.listing_url),
+            }
+            for observation in observations
+            if observation.state == ObservationState.FOUND and observation.listing_url
+        ][:8],
     }

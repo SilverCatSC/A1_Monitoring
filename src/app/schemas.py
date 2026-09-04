@@ -54,6 +54,7 @@ class ListingLinkUpdate(BaseModel):
 class FeedbackCreate(BaseModel):
     listing_id: str | None = None
     filter_id: str | None = None
+    observed_id: str | None = None
     severity: str = 'medium'
     category: str = 'other'
     message: str

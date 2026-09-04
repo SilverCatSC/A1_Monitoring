@@ -276,6 +276,7 @@ class ListingObservation(Base):
     source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
     page_number: Mapped[int] = mapped_column(Integer, nullable=False)
     position_in_page: Mapped[int] = mapped_column(Integer, nullable=False)
+    absolute_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     found: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     state: Mapped[ObservationState] = mapped_column(
         Enum(ObservationState), default=ObservationState.ABSENT_UNCERTAIN

@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -16,9 +16,12 @@ from app.importer.sheet_csv import CsvOrXlsxReader
 from app.models import (
     AbsenceEpisode,
     DealerListingCandidate,
+    EngineType,
     FeedbackStatus,
     Listing,
+    ListingObservation,
     ManagerFeedback,
+    ObservationState,
     SearchFilter,
     SourceImportSnapshot,
 )
@@ -36,11 +39,20 @@ from app.schemas import (
 )
 from app.service.cycle import MonitoringCycleService
 from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
+from app.service.evidence import EvidenceAccessError, resolve_observation_evidence
 from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import MonitorService, ScanAlreadyRunning
-from app.service.report import dashboard_context, kpi_overview, operational_status, weekend_summary
+from app.service.report import (
+    dashboard_context,
+    kpi_overview,
+    listing_catalog_context,
+    listing_detail_context,
+    observation_history_context,
+    operational_status,
+    weekend_summary,
+)
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
@@ -118,6 +130,102 @@ def dashboard_html(request: Request, days: int = 7, db: Session = Depends(get_db
             'context': dashboard_context(db, days=safe_days),
             'auth_enabled': settings.auth_enabled,
         },
+    )
+
+
+@router.get('/dashboard/history', response_class=HTMLResponse)
+def observation_history_html(
+    request: Request,
+    days: int = 30,
+    source: str | None = None,
+    brand: str | None = None,
+    model: str | None = None,
+    state: str | None = None,
+    page: int = 1,
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_source = EngineType(source) if source else None
+        parsed_state = ObservationState(state) if state else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail='unsupported history filter') from exc
+    return templates.TemplateResponse(
+        request=request,
+        name='history.html',
+        context={
+            'context': observation_history_context(
+                db,
+                days=days,
+                source=parsed_source,
+                brand=brand,
+                model=model,
+                state=parsed_state,
+                page=page,
+            ),
+            'auth_enabled': settings.auth_enabled,
+        },
+    )
+
+
+@router.get('/dashboard/listings', response_class=HTMLResponse)
+def listing_catalog_html(
+    request: Request,
+    q: str | None = None,
+    brand: str | None = None,
+    platform: str | None = None,
+    page: int = 1,
+    db: Session = Depends(get_db),
+):
+    try:
+        parsed_platform = EngineType(platform) if platform else None
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail='unsupported platform filter') from exc
+    return templates.TemplateResponse(
+        request=request,
+        name='listing_catalog.html',
+        context={
+            'context': listing_catalog_context(
+                db,
+                query_text=q,
+                brand=brand,
+                platform=parsed_platform,
+                page=page,
+            ),
+            'auth_enabled': settings.auth_enabled,
+        },
+    )
+
+
+@router.get('/dashboard/listings/{listing_id}', response_class=HTMLResponse)
+def listing_detail_html(request: Request, listing_id: str, db: Session = Depends(get_db)):
+    context = listing_detail_context(db, listing_id)
+    if context is None:
+        raise HTTPException(status_code=404, detail='listing not found')
+    return templates.TemplateResponse(
+        request=request,
+        name='listing_detail.html',
+        context={'context': context, 'auth_enabled': settings.auth_enabled},
+    )
+
+
+@router.get('/observations/{observation_id}/evidence/{page_number}')
+def observation_evidence(
+    observation_id: str,
+    page_number: int,
+    db: Session = Depends(get_db),
+):
+    observation = db.get(ListingObservation, observation_id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail='observation not found')
+    try:
+        path = resolve_observation_evidence(observation, page_number, settings.evidence_dir)
+    except EvidenceAccessError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        path,
+        media_type='image/png',
+        filename=path.name,
+        content_disposition_type='inline',
     )
 
 
@@ -312,6 +420,7 @@ def create_feedback(payload: FeedbackCreate, db: Session = Depends(get_db)):
             message=payload.message,
             listing_id=payload.listing_id,
             filter_id=payload.filter_id,
+            observed_id=payload.observed_id,
             severity=payload.severity,
             category=payload.category,
             manager_name=payload.manager_name,
@@ -338,6 +447,8 @@ def list_feedback(status: str | None = None, db: Session = Depends(get_db)):
                 'id': item.id,
                 'listing_id': item.listing_id,
                 'filter_id': item.filter_id,
+                'observed_id': item.observed_id,
+                'run_id': item.run_id,
                 'category': item.category,
                 'severity': item.severity,
                 'message': item.message,
