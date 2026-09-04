@@ -61,6 +61,19 @@
   </tbody></table></div></section>
 
   <section class="two">
+    <div class="card"><h2>Статистика по фильтрам</h2><div class="scroll"><table><thead><tr><th>Фильтр</th><th>Найдено</th><th>Стр. 1 / 2 / 3</th><th>Не найдено</th><th>Тех.</th></tr></thead><tbody>
+      {% for row in context.filter_statistics %}<tr><td><strong>{{ row.name }}</strong><br><span class="muted">{{ row.source }}</span></td><td>{{ row.found }}</td><td>{{ row.page_1 }} / {{ row.page_2 }} / {{ row.page_3 }}</td><td>{{ row.absent_confirmed }} <span class="muted">(+{{ row.absent_uncertain }} ожид.)</span></td><td>{{ row.technical_error }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Статистика появится после первого настроенного скана</td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="card"><h2>Последние найденные позиции</h2><div class="scroll"><table><thead><tr><th>Автомобиль</th><th>Фильтр</th><th>Страница</th><th>Позиция</th></tr></thead><tbody>
+      {% for item in context.latest_found %}<tr><td>{{ item.listing.vin or item.listing_id }}<br><span class="muted">{{ item.title or '' }}</span></td><td>{{ item.filter.name }}</td><td>{{ item.page_number }}</td><td>{{ item.position_in_page }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Найденных позиций пока нет</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  </section>
+
+  <section class="card"><h2>Выходные за последние 14 дней</h2><div class="scroll"><table><thead><tr><th>Дата</th><th>Подтверждённые непоказы</th><th>Эпизоды, затрагивавшие день</th><th>Технические ошибки</th></tr></thead><tbody>
+    {% for row in context.weekend_summary %}<tr><td>{{ row.date }}</td><td>{{ row.confirmed_absence_observations }}</td><td>{{ row.absence_episodes_overlapping }}</td><td>{{ row.technical_errors }}</td></tr>{% else %}<tr><td colspan="4" class="empty">В выбранном периоде нет выходных дней</td></tr>{% endfor %}
+  </tbody></table></div></section>
+
+  <section class="two">
     <div class="card"><h2>Реестр поисковых фильтров</h2><div class="scroll"><table><thead><tr><th>Название</th><th>Площадка</th><th>Авто</th><th>Состояние</th></tr></thead><tbody>
       {% for filter in context.active_filters %}<tr><td><a href="{{ filter.raw_url }}" target="_blank" rel="noreferrer">{{ filter.name }}</a></td><td>{{ filter.source.value }}</td><td>{{ filter.expectations|length }}</td><td><span class="pill SUCCESS">активен</span></td></tr>{% else %}<tr><td colspan="4" class="empty">Нет активных фильтров</td></tr>{% endfor %}
     </tbody></table></div></div>

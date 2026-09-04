@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import re
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlparse
 
@@ -138,6 +140,27 @@ def is_marketplace_search_url(source: EngineType, value: str | None) -> bool:
 
 def _host_matches(host: str, domain: str) -> bool:
     return host == domain or host.endswith(f'.{domain}')
+
+
+async def capture_page_evidence(
+    page: Any,
+    *,
+    source: EngineType,
+    search_url: str,
+    page_number: int,
+    evidence_dir: str,
+) -> str | None:
+    """Capture a viewport screenshot; evidence failure never changes the scan fact."""
+    try:
+        root = Path(evidence_dir)
+        root.mkdir(parents=True, exist_ok=True)
+        url_hash = hashlib.sha256(search_url.encode('utf-8')).hexdigest()[:12]
+        timestamp = datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')
+        path = root / f'{source.value}_{url_hash}_{timestamp}_p{page_number}.png'
+        await page.screenshot(path=str(path), full_page=False)
+        return str(path)
+    except Exception:
+        return None
 
 
 def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:

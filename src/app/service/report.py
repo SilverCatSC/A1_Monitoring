@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from app.models import (
     AbsenceEpisode,
@@ -76,6 +77,90 @@ def weekend_absence(session, days: int = 14) -> dict[str, int]:
     return started
 
 
+def weekend_summary(
+    session, days: int = 14, now: datetime | None = None, timezone_name: str = 'Europe/Moscow'
+) -> list[dict]:
+    timezone = ZoneInfo(timezone_name)
+    current = now or datetime.now(UTC)
+    if current.tzinfo is None:
+        current = current.replace(tzinfo=UTC)
+    local_today = current.astimezone(timezone).date()
+    rows = []
+    for offset in range(days - 1, -1, -1):
+        day = local_today - timedelta(days=offset)
+        if day.weekday() < 5:
+            continue
+        local_start = datetime.combine(day, datetime.min.time(), tzinfo=timezone)
+        local_end = local_start + timedelta(days=1)
+        start = local_start.astimezone(UTC)
+        end = local_end.astimezone(UTC)
+        technical = (
+            session.query(ListingObservation)
+            .filter(
+                ListingObservation.observed_at >= start,
+                ListingObservation.observed_at < end,
+                ListingObservation.state == ObservationState.TECHNICAL_ERROR,
+            )
+            .count()
+        )
+        confirmed = (
+            session.query(ListingObservation)
+            .filter(
+                ListingObservation.observed_at >= start,
+                ListingObservation.observed_at < end,
+                ListingObservation.state == ObservationState.ABSENT_CONFIRMED,
+            )
+            .count()
+        )
+        overlapping = (
+            session.query(AbsenceEpisode)
+            .filter(
+                AbsenceEpisode.started_at < end,
+                (AbsenceEpisode.ended_at.is_(None) | (AbsenceEpisode.ended_at >= start)),
+            )
+            .count()
+        )
+        rows.append(
+            {
+                'date': day.isoformat(),
+                'technical_errors': technical,
+                'confirmed_absence_observations': confirmed,
+                'absence_episodes_overlapping': overlapping,
+            }
+        )
+    return rows
+
+
+def filter_statistics(session, since: datetime) -> list[dict]:
+    aggregates: dict[str, dict] = {}
+    observations = (
+        session.query(ListingObservation)
+        .filter(ListingObservation.observed_at >= since)
+        .order_by(ListingObservation.observed_at.desc())
+        .all()
+    )
+    for item in observations:
+        row = aggregates.setdefault(
+            item.filter_id,
+            {
+                'filter_id': item.filter_id,
+                'name': item.filter.name,
+                'source': item.source.value,
+                'found': 0,
+                'absent_confirmed': 0,
+                'absent_uncertain': 0,
+                'technical_error': 0,
+                'page_1': 0,
+                'page_2': 0,
+                'page_3': 0,
+            },
+        )
+        row[item.state.value] = row.get(item.state.value, 0) + 1
+        if item.state == ObservationState.FOUND and 1 <= item.page_number <= 3:
+            row[f'page_{item.page_number}'] += 1
+    return sorted(aggregates.values(), key=lambda row: (row['source'], row['name']))
+
+
 def dashboard_context(session, days: int = 7) -> dict:
     since = datetime.now(UTC) - timedelta(days=days)
     observation_counts = {
@@ -113,6 +198,21 @@ def dashboard_context(session, days: int = 7) -> dict:
         .order_by(SourceImportSnapshot.started_at.desc())
         .first()
     )
+    latest_found = []
+    found_keys = set()
+    for observation in (
+        session.query(ListingObservation)
+        .filter(ListingObservation.state == ObservationState.FOUND)
+        .order_by(ListingObservation.observed_at.desc())
+        .limit(1000)
+    ):
+        key = (observation.listing_id, observation.filter_id)
+        if key in found_keys:
+            continue
+        found_keys.add(key)
+        latest_found.append(observation)
+        if len(latest_found) >= 200:
+            break
     return {
         'days': days,
         'generated_at': datetime.now(UTC),
@@ -126,9 +226,11 @@ def dashboard_context(session, days: int = 7) -> dict:
         'feedback': feedback,
         'recent_runs': recent_runs,
         'last_import': last_import,
+        'latest_found': latest_found,
+        'filter_statistics': filter_statistics(session, since),
         'open_feedback_count': len(feedback),
         'technical_runs': session.query(ScanRun)
         .filter(ScanRun.started_at >= since, ScanRun.technical_errors > 0)
         .count(),
-        'weekend_absence': weekend_absence(session, days=max(days, 14)),
+        'weekend_summary': weekend_summary(session, days=max(days, 14)),
     }

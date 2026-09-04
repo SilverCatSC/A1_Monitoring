@@ -31,8 +31,13 @@ def test_cycle_imports_before_scan(monkeypatch):
     monkeypatch.setattr(cycle_module, 'CsvOrXlsxReader', Reader)
     monkeypatch.setattr(cycle_module, 'SourceImporter', Importer)
     monkeypatch.setattr(cycle_module, 'MonitorService', Monitor)
+    monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_: 3)
 
     result = cycle_module.MonitoringCycleService('db').run()
 
     assert [event[0] for event in events] == ['reader', 'read', 'import', 'scan']
-    assert result == {'import': {'rows_valid': 1}, 'scan': {'runs': 2}}
+    assert result == {
+        'import': {'rows_valid': 1},
+        'scan': {'runs': 2},
+        'evidence_removed': 3,
+    }

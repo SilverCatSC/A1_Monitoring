@@ -10,7 +10,7 @@ from playwright.async_api import Browser, Page, async_playwright
 
 from app.config import settings
 from app.models import EngineType
-from app.scraper.base import ListingHit, ScanResult, classify_result_page
+from app.scraper.base import ListingHit, ScanResult, capture_page_evidence, classify_result_page
 
 
 class AvitoAdapter:
@@ -47,6 +47,15 @@ class AvitoAdapter:
                         await page.mouse.wheel(0, 1600)
                         await asyncio.sleep(0.9)
                         html = await page.content()
+                        evidence_path = await capture_page_evidence(
+                            page,
+                            source=self.source,
+                            search_url=search_url,
+                            page_number=page_number,
+                            evidence_dir=settings.evidence_dir,
+                        )
+                        if evidence_path:
+                            diagnostics[f'page_{page_number}_evidence'] = evidence_path
                         parsed = self._extract(html, page_number)
                         page_state, reason = classify_result_page(html, len(parsed))
                         diagnostics[f'page_{page_number}'] = len(parsed)

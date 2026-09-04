@@ -62,6 +62,9 @@ async def probe(url: str, timeout_seconds: int) -> None:
             'visible_text_sample': soup.get_text(' ', strip=True)[:1200],
             'candidate_links': links,
             'sale_links': sale_links,
+            'vin_candidates': sorted(
+                set(re.findall(r'\b[A-HJ-NPR-Z0-9]{17}\b', html.upper()))
+            )[:30],
         }
         print(json.dumps(payload, ensure_ascii=False, indent=2))
         await browser.close()

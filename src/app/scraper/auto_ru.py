@@ -14,6 +14,7 @@ from app.scraper.base import (
     ListingHit,
     ScanResult,
     canonical_listing_key,
+    capture_page_evidence,
     classify_result_page,
 )
 
@@ -51,6 +52,15 @@ class AutoRuAdapter:
                         await page.mouse.wheel(0, 1600)
                         await asyncio.sleep(0.7)
                         html = await page.content()
+                        evidence_path = await capture_page_evidence(
+                            page,
+                            source=self.source,
+                            search_url=search_url,
+                            page_number=page_number,
+                            evidence_dir=settings.evidence_dir,
+                        )
+                        if evidence_path:
+                            diagnostics[f'page_{page_number}_evidence'] = evidence_path
                         parsed = self._extract(html, page_number)
                         page_state, reason = classify_result_page(html, len(parsed))
                         diagnostics[f'page_{page_number}'] = len(parsed)
