@@ -1,61 +1,83 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-: "${PROJECT_DIR:=$(cd "$(dirname "$0")/.." && pwd)}"
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$PROJECT_DIR"
 
-DB_PATH="${PROJECT_DIR}/.stage_smoke.db"
-TMP_CSV="/tmp/a1_stage_smoke.csv"
-TMP_LOG="/tmp/a1_stage_smoke.log"
-VENV_DIR=".tmp_smoke_env"
+set -a
+source .env
+set +a
 
-for p in "$DB_PATH" "$TMP_CSV" "$TMP_LOG"; do
-  if [ -f "$p" ]; then
-    rm -f "$p"
-  fi
-done
+if [[ "${APP_ENV:-}" != "stage" ]]; then
+  echo "This smoke test is intentionally limited to APP_ENV=stage." >&2
+  exit 1
+fi
+if command -v docker-compose >/dev/null 2>&1; then
+  COMPOSE=(docker-compose)
+elif docker compose version >/dev/null 2>&1; then
+  COMPOSE=(docker compose)
+else
+  echo "Compose command not found." >&2
+  exit 1
+fi
 
-: "${DB_DIR:=./artifacts}"
-mkdir -p "$DB_DIR"
+BASE_URL="http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1"
+HEALTH_JSON="$(curl --fail --silent --show-error "$BASE_URL/health")"
+READY_JSON="$(curl --fail --silent --show-error "$BASE_URL/ready")"
+IMPORT_JSON="$(curl --fail --silent --show-error --request POST "$BASE_URL/import")"
+STATUS_JSON="$(curl --fail --silent --show-error "$BASE_URL/system/status")"
+DASHBOARD_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard")"
 
-cat > "$TMP_CSV" <<'CSV'
-brand,model,vin,year
-Nissan,Note,TESTVIN1234567890,2020
-CSV
+HEALTH_JSON="$HEALTH_JSON" READY_JSON="$READY_JSON" IMPORT_JSON="$IMPORT_JSON" \
+STATUS_JSON="$STATUS_JSON" python3 - <<'PY'
+import json
+import os
 
-export DATABASE_DSN="sqlite:///$DB_PATH"
-export EVIDENCE_DIR="$DB_DIR"
-
-python3.12 -m venv "$VENV_DIR"
-source "$VENV_DIR/bin/activate"
-python -m pip install -q -e ".[dev]"
-
-python -m app.cli init
-python -m app.cli import-source --path "$TMP_CSV"
-python -m app.cli run-cycle
-
-python -m app.cli serve > "$TMP_LOG" 2>&1 &
-PID=$!
-sleep 4
-python3.12 - <<'PY'
-import urllib.request
-
-urls = [
-    "http://127.0.0.1:8000/api/v1/health",
-    "http://127.0.0.1:8000/api/v1/dashboard/kpi",
-]
-for u in urls:
-    with urllib.request.urlopen(u, timeout=5) as resp:
-        if resp.status != 200:
-            raise SystemExit(f"bad status for {u}: {resp.status}")
-        if not resp.read():
-            raise SystemExit(f"empty response for {u}")
-print("SMOKE_OK")
+health = json.loads(os.environ['HEALTH_JSON'])
+ready = json.loads(os.environ['READY_JSON'])
+imported = json.loads(os.environ['IMPORT_JSON'])
+status = json.loads(os.environ['STATUS_JSON'])
+assert health['status'] == 'ok'
+assert ready == {
+    'status': 'ready',
+    'database': 'ok',
+    'environment': 'stage',
+    'authentication': 'disabled',
+}
+assert imported['rows_total'] == 130
+assert imported['rows_valid'] == 106
+assert imported['rows_invalid'] == 24
+assert status['import']['state'] == 'healthy'
+assert {row['source'] for row in status['sources']} == {'auto_ru', 'avito'}
+assert all(row['state'] == 'not_configured' for row in status['sources'])
+print('HTTP_AND_SOURCE_OK')
 PY
 
-kill "$PID" || true
-wait "$PID" || true
+if [[ "$DASHBOARD_HTML" != *"Здоровье системы"* ]] \
+  || [[ "$DASHBOARD_HTML" != *"Мониторинг ещё не настроен"* ]]; then
+  echo "Dashboard does not expose required operational state." >&2
+  exit 1
+fi
 
-rm -f "$DB_PATH" "$TMP_CSV" "$TMP_LOG"
-rm -rf "$VENV_DIR"
-deactivate
+APP_PORT_BINDING="$("${COMPOSE[@]}" port app 8000)"
+DB_PORT_BINDING="$("${COMPOSE[@]}" port db 5432)"
+if [[ "$APP_PORT_BINDING" != 127.0.0.1:* ]] || [[ "$DB_PORT_BINDING" != 127.0.0.1:* ]]; then
+  echo "Stage ports are not loopback-only: app=$APP_PORT_BINDING db=$DB_PORT_BINDING" >&2
+  exit 1
+fi
+
+MIGRATION="$("${COMPOSE[@]}" exec -T app alembic current)"
+if [[ "$MIGRATION" != *"20260904_0001"* ]]; then
+  echo "Unexpected migration state: $MIGRATION" >&2
+  exit 1
+fi
+
+./scripts/backup_now.sh
+./scripts/restore_test.sh
+
+if "${COMPOSE[@]}" logs --tail=200 app | grep -q 'Traceback (most recent call last)'; then
+  echo "Application log contains a traceback." >&2
+  exit 1
+fi
+
+echo "STAGE_SMOKE_OK"

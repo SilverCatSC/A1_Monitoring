@@ -4,12 +4,11 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
-source .venv/bin/activate 2>/dev/null || true
-
-if [ -n "${SOURCE_CSV_PATH:-}" ]; then
-  python -m app.cli import-source --path "$SOURCE_CSV_PATH"
+if [ -f .venv312/bin/activate ]; then
+  source .venv312/bin/activate
+elif [ -f .venv/bin/activate ]; then
+  source .venv/bin/activate
 fi
 
-python -m app.cli scan
-echo "[run_once] scan cycle finished"
-
+python -m app.cli run-cycle
+echo "[run_once] import and scan cycle finished"
