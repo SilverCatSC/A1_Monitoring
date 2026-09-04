@@ -139,7 +139,10 @@ def filter_statistics(session, since: datetime) -> list[dict]:
     aggregates: dict[str, dict] = {}
     observations = (
         session.query(ListingObservation)
-        .filter(ListingObservation.observed_at >= since)
+        .filter(
+            ListingObservation.observed_at >= since,
+            ListingObservation.filter.has(active=True),
+        )
         .order_by(ListingObservation.observed_at.desc())
         .all()
     )
@@ -285,6 +288,7 @@ def dashboard_context(session, days: int = 7) -> dict:
         .filter(
             ListingObservation.observed_at >= since,
             ListingObservation.state == state,
+            ListingObservation.filter.has(active=True),
         )
         .count()
         for state in ObservationState
@@ -292,7 +296,10 @@ def dashboard_context(session, days: int = 7) -> dict:
     recent_runs = session.query(ScanRun).order_by(ScanRun.started_at.desc()).limit(20).all()
     open_absences = (
         session.query(AbsenceEpisode)
+        .join(SearchFilter, AbsenceEpisode.filter_id == SearchFilter.id)
+        .join(Listing, AbsenceEpisode.listing_id == Listing.id)
         .filter(AbsenceEpisode.open.is_(True))
+        .filter(SearchFilter.active.is_(True), Listing.is_active.is_(True))
         .order_by(AbsenceEpisode.started_at.desc())
         .limit(200)
         .all()
@@ -329,7 +336,10 @@ def dashboard_context(session, days: int = 7) -> dict:
     found_keys = set()
     for observation in (
         session.query(ListingObservation)
-        .filter(ListingObservation.state == ObservationState.FOUND)
+        .filter(
+            ListingObservation.state == ObservationState.FOUND,
+            ListingObservation.filter.has(active=True),
+        )
         .order_by(ListingObservation.observed_at.desc())
         .limit(1000)
     ):
