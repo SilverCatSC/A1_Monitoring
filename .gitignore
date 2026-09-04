@@ -1,0 +1,34 @@
+# Python and runtime artifacts
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+*.log
+.pytest_cache/
+.venv*/
+.tmp_smoke_env/
+
+# Environment
+.env
+!.env.example
+
+# Database artifacts
+db.sqlite3
+a1_monitor.db
+*.db
+
+# Playwright and chromium cache
+.cache/
+playwright/
+
+# Local reports and snapshots
+artifacts/
+evidence/
+
+# Temporary test sources
+tmp_test_source.csv
+
+# IDE
+.idea/
+.vscode/
