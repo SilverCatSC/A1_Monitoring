@@ -34,7 +34,7 @@ services:
     ports:
       - "127.0.0.1:${APP_BIND_PORT:-8000}:8000"
     command: >
-      /bin/sh -c "python -m app.cli init && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+      /bin/sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
       - evidence:/app/artifacts
 
