@@ -90,7 +90,7 @@ def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
     path = unquote(parsed.path).rstrip('/').lower()
 
     if source == EngineType.AUTO_RU:
-        if not host.endswith('auto.ru'):
+        if not _host_matches(host, 'auto.ru'):
             return None
         numeric_ids = re.findall(r'(?<!\d)(\d{5,})(?!\d)', path)
         if numeric_ids:
@@ -98,7 +98,7 @@ def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
         return f'auto_ru:url:{host}{path}' if path else None
 
     if source == EngineType.AVITO:
-        if not host.endswith('avito.ru'):
+        if not _host_matches(host, 'avito.ru'):
             return None
         match = re.search(r'_(\d{5,})(?:$|/)', path)
         if match:
@@ -109,6 +109,35 @@ def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
         return f'avito:url:{host}{path}' if path else None
 
     return None
+
+
+def is_marketplace_search_url(source: EngineType, value: str | None) -> bool:
+    raw = str(value or '').strip()
+    if not raw.startswith(('http://', 'https://')):
+        return False
+    parsed = urlparse(raw)
+    host = (parsed.hostname or '').lower().removeprefix('www.')
+    path = unquote(parsed.path).rstrip('/').lower()
+
+    if source == EngineType.AUTO_RU:
+        if not _host_matches(host, 'auto.ru') or '/diler/' in path:
+            return False
+        if canonical_listing_key(source, raw) and re.search(r'/sale/', path):
+            return False
+        return '/cars/' in path or '/lcv/' in path
+
+    if source == EngineType.AVITO:
+        if not _host_matches(host, 'avito.ru'):
+            return False
+        if re.search(r'_\d{5,}(?:$|/)', path):
+            return False
+        return '/brands/' in path or '/avtomobili' in path
+
+    return False
+
+
+def _host_matches(host: str, domain: str) -> bool:
+    return host == domain or host.endswith(f'.{domain}')
 
 
 def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:
@@ -123,7 +152,7 @@ def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:
             return
         if url.startswith('/'):
             return
-        if not url.startswith('http'):
+        if not url.startswith('http') or not is_marketplace_search_url(source, url):
             return
         normalized = url.lower().rstrip('/')
         if normalized in seen_urls:
@@ -139,12 +168,12 @@ def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:
             )
         )
 
-    for col in ('search_url_auto_ru', 'dealer_url_auto_ru', 'auto_filter', 'auto_filters', 'auto_filter_url'):
+    for col in ('search_url_auto_ru', 'auto_filter', 'auto_filters', 'auto_filter_url'):
         value = row.get(col)
         if value and str(value).strip().startswith('http'):
             _push_filter(EngineType.AUTO_RU, col, value, {'source': col})
 
-    for col in ('search_url_avito', 'dealer_url_avito', 'avito_filter', 'avito_filters', 'avito_filter_url'):
+    for col in ('search_url_avito', 'avito_filter', 'avito_filters', 'avito_filter_url'):
         value = row.get(col)
         if value and str(value).strip().startswith('http'):
             _push_filter(EngineType.AVITO, col, value, {'source': col})
@@ -177,9 +206,9 @@ def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:
             continue
         parsed = urlparse(candidate)
         host = (parsed.hostname or '').lower()
-        if host.endswith('auto.ru') or host.endswith('auto.drom.ru'):
+        if _host_matches(host, 'auto.ru'):
             _push_filter(EngineType.AUTO_RU, raw_key, candidate, {'source': raw_key, 'detected': True})
-        elif host.endswith('avito.ru'):
+        elif _host_matches(host, 'avito.ru'):
             _push_filter(EngineType.AVITO, raw_key, candidate, {'source': raw_key, 'detected': True})
 
     return filters

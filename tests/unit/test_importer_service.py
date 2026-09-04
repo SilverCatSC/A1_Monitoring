@@ -139,7 +139,7 @@ def test_importer_detects_filter_urls_from_unknown_columns(db_modules):
         assert len(filters) >= 2
         assert any(item.source.value == 'auto_ru' for item in filters)
         assert any(item.source.value == 'avito' for item in filters)
-        assert session.query(VehicleFilterExpectation).count() == 3
+        assert session.query(VehicleFilterExpectation).count() == 2
     finally:
         session.close()
 

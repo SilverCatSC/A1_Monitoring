@@ -19,6 +19,7 @@ from app.scraper.base import (
     ScanResult,
     canonical_listing_key,
     classify_result_page,
+    is_marketplace_search_url,
 )
 from app.service.monitor import MonitorService
 
@@ -110,6 +111,23 @@ def test_result_page_classification_fails_closed():
     assert classify_result_page('<h1>По вашему запросу ничего не найдено</h1>', 0)[0] == 'empty'
     assert classify_result_page('<main>new unknown markup</main>', 0)[0] == 'unrecognized'
     assert classify_result_page('<article>car</article>', 1)[0] == 'results'
+
+
+def test_filter_url_validation_does_not_confuse_a1auto_or_listing_pages():
+    assert not is_marketplace_search_url(
+        EngineType.AUTO_RU, 'https://a1auto.ru/cars-for-sale/v-businessjet.html'
+    )
+    assert not is_marketplace_search_url(
+        EngineType.AUTO_RU,
+        'https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-car/',
+    )
+    assert is_marketplace_search_url(
+        EngineType.AUTO_RU, 'https://auto.ru/moskva/cars/mercedes/v_class/used/'
+    )
+    assert is_marketplace_search_url(
+        EngineType.AVITO,
+        'https://www.avito.ru/brands/a1auto/items/all/avtomobili?s=profile_search_show_all',
+    )
 
 
 def test_incomplete_scan_records_technical_error_not_absence(tmp_path, monkeypatch):

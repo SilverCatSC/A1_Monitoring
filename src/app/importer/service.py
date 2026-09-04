@@ -15,7 +15,11 @@ from app.models import (
     SourceImportSnapshot,
     VehicleFilterExpectation,
 )
-from app.scraper.base import SearchFilterDefinition, detect_filters_in_row
+from app.scraper.base import (
+    SearchFilterDefinition,
+    detect_filters_in_row,
+    is_marketplace_search_url,
+)
 
 
 class SourceImportError(RuntimeError):
@@ -254,6 +258,12 @@ class SourceImporter:
                                 source_hint=row.get('source_hint'),
                             )
                         )
+
+            # Older importer versions could mistake a1auto.ru vehicle pages for
+            # auto.ru search filters. Preserve their history but remove them from runs.
+            for existing_filter in self.db.query(SearchFilter).filter(SearchFilter.active.is_(True)):
+                if not is_marketplace_search_url(existing_filter.source, existing_filter.raw_url):
+                    existing_filter.active = False
 
             snapshot.finished_at = _utcnow()
             snapshot.valid_rows = valid
