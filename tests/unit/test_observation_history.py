@@ -149,7 +149,60 @@ def test_history_and_listing_templates_escape_imported_content(tmp_path):
         assert 'Auto.ru ↗' in catalog_html
         assert '44 990 000 ₽' in catalog_html
         assert 'V-VIP' in catalog_html
+        assert 'стр. 2' in catalog_html
         assert detail['previews'][0]['observation'].id == 'observation-auto'
+        assert detail['page_statistics']['overall']['found_total'] == 1
+        assert detail['page_statistics']['overall']['page_counts'] == {1: 0, 2: 1, 3: 0}
+        assert detail['page_statistics']['overall']['page_shares'][2] == 100.0
+        assert detail['page_statistics']['by_filter'][0]['filter_name'] == 'Auto history'
+        assert 'Статистика страниц за всю историю' in detail_html
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_listing_page_statistics_keep_history_per_filter(tmp_path):
+    session, engine = _session(tmp_path)
+    try:
+        listing = _seed(session)
+        now = datetime.now(UTC)
+        session.add_all(
+            [
+                ListingObservation(
+                    run_id='run-auto',
+                    listing_id=listing.id,
+                    filter_id='filter-auto',
+                    source=EngineType.AUTO_RU,
+                    page_number=1,
+                    position_in_page=4,
+                    absolute_position=4,
+                    found=True,
+                    state=ObservationState.FOUND,
+                    observed_at=now + timedelta(seconds=1),
+                ),
+                ListingObservation(
+                    run_id='run-auto',
+                    listing_id=listing.id,
+                    filter_id='filter-auto',
+                    source=EngineType.AUTO_RU,
+                    page_number=3,
+                    position_in_page=5,
+                    absolute_position=65,
+                    found=True,
+                    state=ObservationState.FOUND,
+                    observed_at=now + timedelta(seconds=2),
+                ),
+            ]
+        )
+        session.commit()
+
+        statistics = listing_detail_context(session, listing.id)['page_statistics']
+
+        assert statistics['overall']['found_total'] == 3
+        assert statistics['overall']['page_counts'] == {1: 1, 2: 1, 3: 1}
+        assert statistics['overall']['page_shares'] == {1: 33.3, 2: 33.3, 3: 33.3}
+        assert statistics['overall']['latest'].page_number == 3
+        assert statistics['by_filter'][0]['page_counts'] == {1: 1, 2: 1, 3: 1}
     finally:
         session.close()
         engine.dispose()

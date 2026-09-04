@@ -27,7 +27,7 @@
       {% for row in context.rows %}{% set item = row.observation %}<tr>
         <td>{{ item.observed_at.strftime('%d.%m.%Y %H:%M') }}</td>
         <td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}"><strong>{{ item.listing.vin or item.listing_id }}</strong></a><br><span class="muted">{{ item.listing.brand or '' }} {{ item.listing.model or '' }}</span></td>
-        <td>{% if row.listing_url %}<a href="{{ row.listing_url }}" target="_blank" rel="noreferrer"><strong>{{ item.title or 'Открыть объявление' }}</strong></a>{% else %}<span class="muted">ссылка не сохранена</span>{% endif %}{% if item.price_hint %}<br>{{ '{:,.0f}'.format(item.price_hint).replace(',', ' ') }} ₽{% endif %}</td>
+        <td>{% if row.listing_url %}<a href="{{ row.listing_url }}" target="_blank" rel="noreferrer"><strong>{{ item.title or 'Открыть объявление' }}</strong></a>{% else %}<span class="muted">ссылка не сохранена</span>{% endif %}{% set price = item.price_hint or item.listing.price_hint %}<br>{% if price %}{{ '{:,.0f}'.format(price).replace(',', ' ') }} ₽{% else %}<span class="muted">Цена не указана</span>{% endif %}</td>
         <td>{{ item.source.value }}<br><span class="muted">{{ item.filter.name }}</span></td>
         <td>{{ item.scan_run.network_profile }}</td>
         <td><span class="pill {{ item.state.value }}">{{ item.state.value }}</span></td>

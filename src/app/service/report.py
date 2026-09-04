@@ -29,6 +29,49 @@ def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
     return value if is_marketplace_listing_url(source, value) else None
 
 
+def _page_statistics(observations: list[ListingObservation]) -> dict:
+    def summarize(rows: list[ListingObservation]) -> dict:
+        page_counts = {
+            page: sum(1 for item in rows if item.page_number == page) for page in (1, 2, 3)
+        }
+        total = len(rows)
+        absolute_positions = [
+            item.absolute_position for item in rows if item.absolute_position is not None
+        ]
+        latest = rows[0] if rows else None
+        return {
+            'found_total': total,
+            'page_counts': page_counts,
+            'page_shares': {
+                page: round(page_counts[page] * 100 / total, 1) if total else 0
+                for page in (1, 2, 3)
+            },
+            'average_absolute_position': round(
+                sum(absolute_positions) / len(absolute_positions), 1
+            )
+            if absolute_positions
+            else None,
+            'latest': latest,
+        }
+
+    grouped: dict[str, list[ListingObservation]] = {}
+    for observation in observations:
+        grouped.setdefault(observation.filter_id, []).append(observation)
+    by_filter = []
+    for rows in grouped.values():
+        row = summarize(rows)
+        row.update(
+            {
+                'filter_id': rows[0].filter_id,
+                'filter_name': rows[0].filter.name,
+                'source': rows[0].source.value,
+            }
+        )
+        by_filter.append(row)
+    by_filter.sort(key=lambda row: (row['source'], row['filter_name']))
+    return {'overall': summarize(observations), 'by_filter': by_filter}
+
+
 def weekend_windows_for_last_days(days: int = 14) -> list[tuple[datetime, datetime]]:
     now = datetime.now(UTC)
     start = now - timedelta(days=days)
@@ -579,6 +622,15 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         .limit(min(max(observation_limit, 10), 500))
         .all()
     )
+    found_observations = (
+        session.query(ListingObservation)
+        .filter(
+            ListingObservation.listing_id == listing_id,
+            ListingObservation.state == ObservationState.FOUND,
+        )
+        .order_by(ListingObservation.observed_at.desc())
+        .all()
+    )
     episodes = (
         session.query(AbsenceEpisode)
         .filter(AbsenceEpisode.listing_id == listing_id)
@@ -609,6 +661,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         'episodes': episodes,
         'feedback': feedback,
         'link_events': link_events,
+        'page_statistics': _page_statistics(found_observations),
         'previews': [
             {
                 'observation': observation,
