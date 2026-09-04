@@ -40,7 +40,7 @@
 - Backup восстановлен в изолированную тестовую БД; контрольные количества совпали.
 - Stage smoke проверяет readiness, импорт, status, dashboard, migration, порты,
   backup, restore и отсутствие traceback.
-- Suite: 46 тестов; Ruff и `git diff --check` зелёные.
+- Suite: 49 тестов; Ruff и `git diff --check` зелёные.
 - Caddy cloud override подготовлен для HTTPS.
 
 ## Важная поправка к живым сетевым проверкам

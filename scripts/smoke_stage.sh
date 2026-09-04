@@ -67,7 +67,7 @@ if [[ "$APP_PORT_BINDING" != 127.0.0.1:* ]] || [[ "$DB_PORT_BINDING" != 127.0.0.
 fi
 
 MIGRATION="$("${COMPOSE[@]}" exec -T app alembic current)"
-if [[ "$MIGRATION" != *"20260904_0001"* ]]; then
+if [[ "$MIGRATION" != *"20260904_0003"* ]]; then
   echo "Unexpected migration state: $MIGRATION" >&2
   exit 1
 fi
