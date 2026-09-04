@@ -24,6 +24,7 @@ class Settings(BaseSettings):
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')
     run_every_minutes: int = Field(default=30, alias='RUN_EVERY_MINUTES', ge=1)
     report_retention_days: int = Field(default=90, alias='REPORT_RETENTION_DAYS', ge=1)
+    import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
     app_version: str = '0.2.0'
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60

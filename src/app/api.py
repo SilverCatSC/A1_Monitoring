@@ -19,11 +19,13 @@ from app.schemas import (
     HealthResponse,
     ImportResponse,
     KPIResponse,
+    TriggerCycleResponse,
     TriggerScanResponse,
 )
+from app.service.cycle import MonitoringCycleService
 from app.service.feedback import FeedbackService
 from app.service.filters import FilterRegistryService, FilterValidationError
-from app.service.monitor import MonitorService
+from app.service.monitor import MonitorService, ScanAlreadyRunning
 from app.service.report import kpi_overview
 
 router = APIRouter()
@@ -118,9 +120,25 @@ def trigger_scan(db: Session = Depends(get_db)):
     started_at = datetime.datetime.utcnow()
     try:
         summary = service.run_full_cycle()
+    except ScanAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc)) from exc
     return TriggerScanResponse(status='ok', started_at=started_at, summary=summary)
+
+
+@router.post('/cycle', response_model=TriggerCycleResponse)
+def trigger_cycle(db: Session = Depends(get_db)):
+    started_at = datetime.datetime.utcnow()
+    try:
+        summary = MonitoringCycleService(db).run()
+    except ScanAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except SourceImportError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+    return TriggerCycleResponse(status='ok', started_at=started_at, summary=summary)
 
 
 @router.post('/import', response_model=ImportResponse)

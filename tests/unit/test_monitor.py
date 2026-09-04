@@ -1,5 +1,6 @@
 from datetime import UTC, datetime
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
@@ -144,6 +145,20 @@ def test_incomplete_scan_records_technical_error_not_absence(tmp_path, monkeypat
         assert summary['technical_errors'] == 1
         assert observation.scan_run.status == ScanRunStatus.FAILED
     finally:
+        session.close()
+        engine.dispose()
+
+
+def test_overlapping_scan_is_rejected(tmp_path):
+    import app.service.monitor as monitor_module
+
+    session, engine = _session(tmp_path)
+    monitor_module._local_scan_lock.acquire()
+    try:
+        with pytest.raises(monitor_module.ScanAlreadyRunning):
+            MonitorService(session).run_full_cycle()
+    finally:
+        monitor_module._local_scan_lock.release()
         session.close()
         engine.dispose()
 

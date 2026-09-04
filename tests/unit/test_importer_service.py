@@ -206,3 +206,58 @@ def test_importer_rejects_multi_vin_row_but_accepts_valid_rows(db_modules):
         assert 'multiple_vin' in (snapshot.notes or '')
     finally:
         session.close()
+
+
+def test_importer_quarantines_large_valid_row_drop(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter, SourceImportError
+    from app.models import Listing, SourceImportSnapshot
+
+    session = app_db.SessionLocal()
+    try:
+        baseline = _make_rows(
+            *[
+                {
+                    'brand': f'Car {index}',
+                    'vin': f'VALIDVIN{index:09d}',
+                    'source_status': 'Актуально',
+                }
+                for index in range(10)
+            ]
+        )
+        SourceImporter(session).run(baseline, source_signature='baseline')
+
+        with pytest.raises(SourceImportError):
+            SourceImporter(session).run(baseline[:2], source_signature='truncated')
+
+        assert session.query(Listing).filter(Listing.is_active.is_(True)).count() == 10
+        latest = session.query(SourceImportSnapshot).order_by(SourceImportSnapshot.started_at.desc()).first()
+        assert latest.blocked_by_schema_drift is True
+        assert 'last-good registry preserved' in (latest.notes or '')
+    finally:
+        session.close()
+
+
+def test_importer_deactivates_vehicle_absent_from_healthy_snapshot(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import Listing
+
+    session = app_db.SessionLocal()
+    try:
+        first = _make_rows(
+            {'brand': 'A', 'vin': 'W1VVNLTZ5S4556796', 'source_status': 'Актуально'},
+            {'brand': 'B', 'vin': 'X89183511M1GB1114', 'source_status': 'Актуально'},
+            {'brand': 'C', 'vin': 'W1V44781313871282', 'source_status': 'Актуально'},
+        )
+        second = _make_rows(
+            {'brand': 'A', 'vin': 'W1VVNLTZ5S4556796', 'source_status': 'Актуально'},
+            {'brand': 'B', 'vin': 'X89183511M1GB1114', 'source_status': 'Актуально'},
+        )
+        SourceImporter(session).run(first, source_signature='full')
+        SourceImporter(session).run(second, source_signature='healthy-next')
+
+        removed = session.query(Listing).filter(Listing.vin == 'W1V44781313871282').one()
+        assert removed.is_active is False
+    finally:
+        session.close()

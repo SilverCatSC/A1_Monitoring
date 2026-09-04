@@ -19,6 +19,12 @@ class TriggerScanResponse(BaseModel):
     summary: dict[str, int]
 
 
+class TriggerCycleResponse(BaseModel):
+    status: str
+    started_at: datetime
+    summary: dict
+
+
 class ImportResponse(BaseModel):
     rows_total: int
     rows_valid: int

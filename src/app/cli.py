@@ -6,6 +6,7 @@ from app.config import settings
 from app.db import get_db_context, init_db
 from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
+from app.service.cycle import MonitoringCycleService
 from app.service.monitor import MonitorService
 
 
@@ -41,8 +42,10 @@ def main() -> None:
             uvicorn.run(app, host='0.0.0.0', port=8000)
             return
         with get_db_context() as db:
-            if args.command in {'scan', 'run-cycle'}:
+            if args.command == 'scan':
                 MonitorService(db).run_full_cycle()
+            elif args.command == 'run-cycle':
+                MonitoringCycleService(db).run()
         return
 
     if args.command == 'import-source':

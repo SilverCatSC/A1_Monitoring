@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 from datetime import UTC, datetime
 
-from sqlalchemy import and_
+from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -20,6 +21,14 @@ from app.models import (
 from app.scraper.auto_ru import AutoRuAdapter
 from app.scraper.avito import AvitoAdapter
 from app.scraper.base import ListingHit, ScanResult, canonical_listing_key
+
+
+class ScanAlreadyRunning(RuntimeError):
+    pass
+
+
+_local_scan_lock = threading.Lock()
+_POSTGRES_SCAN_LOCK_KEY = 4_101_001
 
 
 class MonitorService:
@@ -136,6 +145,31 @@ class MonitorService:
             )
 
     def run_full_cycle(self) -> dict[str, int]:
+        postgres = self.db.bind is not None and self.db.bind.dialect.name == 'postgresql'
+        acquired = False
+        if postgres:
+            acquired = bool(
+                self.db.execute(
+                    text('SELECT pg_try_advisory_lock(:key)'),
+                    {'key': _POSTGRES_SCAN_LOCK_KEY},
+                ).scalar()
+            )
+        else:
+            acquired = _local_scan_lock.acquire(blocking=False)
+        if not acquired:
+            raise ScanAlreadyRunning('another scan cycle is already running')
+        try:
+            return self._run_full_cycle()
+        finally:
+            if postgres:
+                self.db.execute(
+                    text('SELECT pg_advisory_unlock(:key)'),
+                    {'key': _POSTGRES_SCAN_LOCK_KEY},
+                )
+            else:
+                _local_scan_lock.release()
+
+    def _run_full_cycle(self) -> dict[str, int]:
         started = datetime.now(UTC)
         summary = {
             'filters_scanned': 0,

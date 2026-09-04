@@ -6,7 +6,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 
 from app.config import settings
 from app.db import get_db_context
-from app.service.monitor import MonitorService
+from app.service.cycle import MonitoringCycleService
 
 
 def start_scheduler() -> None:
@@ -14,13 +14,13 @@ def start_scheduler() -> None:
 
     def run_scan_job():
         with get_db_context() as db:
-            MonitorService(db).run_full_cycle()
+            MonitoringCycleService(db).run()
 
     scheduler.add_job(
         run_scan_job,
         'interval',
         minutes=settings.scan_interval_minutes,
-        id='monitor_cycle',
+        id='import_and_monitor_cycle',
         replace_existing=True,
         next_run_time=datetime.now(tz=timezone.utc),
     )

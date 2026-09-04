@@ -7,6 +7,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.contracts import CANONICAL_FIELDS, SourceRecord
 from app.models import (
     ImportFieldDrift,
@@ -99,6 +100,7 @@ class SourceImporter:
         required_missing: list[str] = []
         invalid_data: list[str] = []
         seen_vins: set[str] = set()
+        present_signatures: set[str] = set()
         optional_unknown_allowed = {
             'source_status',
             'status',
@@ -130,6 +132,11 @@ class SourceImporter:
                 required_missing.append(f'row:{item.row_number}')
 
             vin = str(row.get('vin') or '').strip().upper()
+            vin_candidates = set(re.findall(r'\b[A-HJ-NPR-Z0-9]{17}\b', vin))
+            present_signatures.update(
+                hashlib.sha256(f'vin|{candidate}'.encode()).hexdigest()
+                for candidate in vin_candidates
+            )
             if _has_multiple_vins(vin):
                 invalid_data.append(f'row:{item.row_number}:multiple_vin')
                 missing += 1
@@ -147,7 +154,29 @@ class SourceImporter:
                 continue
 
             parsed_rows.append((row, _coerce_filters(row), signature))
+            present_signatures.add(signature)
             valid += 1
+
+        previous_snapshot = (
+            self.db.query(SourceImportSnapshot)
+            .filter(
+                SourceImportSnapshot.id != snapshot.id,
+                SourceImportSnapshot.finished_at.is_not(None),
+                SourceImportSnapshot.blocked_by_schema_drift.is_(False),
+            )
+            .order_by(SourceImportSnapshot.started_at.desc())
+            .first()
+        )
+        if (
+            previous_snapshot is not None
+            and previous_snapshot.valid_rows >= 10
+            and valid < previous_snapshot.valid_rows * settings.import_min_valid_ratio
+        ):
+            drifted = True
+            snapshot.notes = (snapshot.notes or '') + (
+                f' Valid-row count fell from {previous_snapshot.valid_rows} to {valid}; '
+                'last-good registry preserved.'
+            )
 
         if not has_anchor:
             drifted = True
@@ -264,6 +293,12 @@ class SourceImporter:
             for existing_filter in self.db.query(SearchFilter).filter(SearchFilter.active.is_(True)):
                 if not is_marketplace_search_url(existing_filter.source, existing_filter.raw_url):
                     existing_filter.active = False
+
+            if present_signatures:
+                self.db.query(Listing).filter(
+                    Listing.is_active.is_(True),
+                    Listing.vehicle_signature.not_in(present_signatures),
+                ).update({Listing.is_active: False}, synchronize_session=False)
 
             snapshot.finished_at = _utcnow()
             snapshot.valid_rows = valid
