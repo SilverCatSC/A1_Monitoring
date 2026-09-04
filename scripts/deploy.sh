@@ -39,4 +39,19 @@ fi
 echo "Using compose command: $COMPOSE_CMD"
 $COMPOSE_CMD build
 $COMPOSE_CMD up -d
-echo "Deploy started. Check: http://localhost:8000/api/v1/health"
+
+APP_BIND_PORT="${APP_BIND_PORT:-8000}"
+BASE_URL="http://127.0.0.1:${APP_BIND_PORT}/api/v1"
+for attempt in $(seq 1 30); do
+  if curl --fail --silent "${BASE_URL}/health" >/dev/null \
+    && curl --fail --silent "${BASE_URL}/ready" >/dev/null; then
+    echo "Deploy verified: ${BASE_URL}/health"
+    exit 0
+  fi
+  sleep 2
+done
+
+echo "Deploy failed readiness gate. Container status:" >&2
+$COMPOSE_CMD ps >&2
+$COMPOSE_CMD logs --tail=100 app >&2
+exit 1
