@@ -20,6 +20,7 @@ from app.scraper.base import (
     ScanResult,
     canonical_listing_key,
     classify_result_page,
+    is_marketplace_listing_url,
     is_marketplace_search_url,
 )
 from app.service.monitor import MonitorService
@@ -128,6 +129,10 @@ def test_filter_url_validation_does_not_confuse_a1auto_or_listing_pages():
     assert is_marketplace_search_url(
         EngineType.AVITO,
         'https://www.avito.ru/brands/a1auto/items/all/avtomobili?s=profile_search_show_all',
+    )
+    assert is_marketplace_listing_url(
+        EngineType.AUTO_RU,
+        'https://auto.ru/cars/new/group/mercedes/vle/25032437/25069598/1133252498-car/',
     )
 
 

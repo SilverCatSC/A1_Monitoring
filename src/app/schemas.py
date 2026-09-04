@@ -44,6 +44,13 @@ class FilterStateChange(BaseModel):
     active: bool
 
 
+class ListingLinkUpdate(BaseModel):
+    source: EngineType
+    url: str
+    actor: str
+    reason: str
+
+
 class FeedbackCreate(BaseModel):
     listing_id: str | None = None
     filter_id: str | None = None

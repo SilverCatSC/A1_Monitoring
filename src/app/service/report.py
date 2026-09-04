@@ -3,6 +3,8 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+from sqlalchemy import or_
+
 from app.models import (
     AbsenceEpisode,
     FeedbackStatus,
@@ -198,6 +200,16 @@ def dashboard_context(session, days: int = 7) -> dict:
         .order_by(SourceImportSnapshot.started_at.desc())
         .first()
     )
+    missing_links = (
+        session.query(Listing)
+        .filter(
+            Listing.is_active.is_(True),
+            or_(Listing.source_auto_ru.is_(None), Listing.source_avito.is_(None)),
+        )
+        .order_by(Listing.brand, Listing.model, Listing.vin)
+        .limit(200)
+        .all()
+    )
     latest_found = []
     found_keys = set()
     for observation in (
@@ -226,6 +238,7 @@ def dashboard_context(session, days: int = 7) -> dict:
         'feedback': feedback,
         'recent_runs': recent_runs,
         'last_import': last_import,
+        'missing_links': missing_links,
         'latest_found': latest_found,
         'filter_statistics': filter_statistics(session, since),
         'open_feedback_count': len(feedback),

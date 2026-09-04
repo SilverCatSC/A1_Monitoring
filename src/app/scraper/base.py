@@ -138,6 +138,19 @@ def is_marketplace_search_url(source: EngineType, value: str | None) -> bool:
     return False
 
 
+def is_marketplace_listing_url(source: EngineType, value: str | None) -> bool:
+    raw = str(value or '').strip()
+    key = canonical_listing_key(source, raw)
+    if not key or ':url:' in key:
+        return False
+    path = unquote(urlparse(raw).path).lower()
+    if source == EngineType.AUTO_RU:
+        return '/sale/' in path or '/cars/new/group/' in path
+    if source == EngineType.AVITO:
+        return bool(re.search(r'_\d{5,}(?:$|/)', path.rstrip('/')))
+    return False
+
+
 def _host_matches(host: str, domain: str) -> bool:
     return host == domain or host.endswith(f'.{domain}')
 

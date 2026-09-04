@@ -74,6 +74,19 @@
   </tbody></table></div></section>
 
   <section class="two">
+    <div class="card"><h2>Активные авто с неполными ссылками</h2><div class="scroll"><table><thead><tr><th>VIN / авто</th><th>Auto.ru</th><th>Avito</th></tr></thead><tbody>
+      {% for item in context.missing_links %}<tr><td><strong>{{ item.vin or 'VIN не указан' }}</strong><br><span class="muted">{{ item.brand or '' }} {{ item.model or '' }} {{ item.year or '' }}</span></td><td>{{ 'есть' if item.source_auto_ru else 'нет' }}</td><td>{{ 'есть' if item.source_avito else 'нет' }}</td></tr>{% else %}<tr><td colspan="3" class="empty">У активных авто обе ссылки заполнены</td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="card"><h2>Подтвердить найденную ссылку</h2><form id="listing-link-form">
+      <select name="listing_id" required><option value="">Выберите автомобиль</option>{% for item in context.missing_links %}<option value="{{ item.id }}">{{ item.vin or item.id }} — {{ item.brand or '' }}</option>{% endfor %}</select>
+      <div class="row"><select name="source"><option value="auto_ru">Auto.ru</option><option value="avito">Avito</option></select><input name="actor" placeholder="Кто проверил" required></div>
+      <input name="url" type="url" placeholder="Прямая ссылка на объявление" required>
+      <textarea name="reason" placeholder="Откуда получена ссылка и как проверена" required></textarea>
+      <button type="submit">Сохранить с записью в журнал</button><div id="listing-link-result" class="muted"></div>
+    </form></div>
+  </section>
+
+  <section class="two">
     <div class="card"><h2>Реестр поисковых фильтров</h2><div class="scroll"><table><thead><tr><th>Название</th><th>Площадка</th><th>Авто</th><th>Состояние</th></tr></thead><tbody>
       {% for filter in context.active_filters %}<tr><td><a href="{{ filter.raw_url }}" target="_blank" rel="noreferrer">{{ filter.name }}</a></td><td>{{ filter.source.value }}</td><td>{{ filter.expectations|length }}</td><td><span class="pill SUCCESS">активен</span></td></tr>{% else %}<tr><td colspan="4" class="empty">Нет активных фильтров</td></tr>{% endfor %}
     </tbody></table></div></div>
@@ -101,8 +114,9 @@
 </main>
 <footer>Технический сбой не считается отсутствием. Управленческий эпизод открывается после двух валидных непоказов подряд.</footer>
 <script>
-async function send(url, body){const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Ошибка');return d}
+async function send(url, body, method='POST'){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Ошибка');return d}
 document.querySelector('#filter-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#filter-result');out.textContent='Сохранение…';try{const vins=f.get('vins').split(/[\s,;]+/).filter(Boolean);const d=await send('/api/v1/filters',{source:f.get('source'),name:f.get('name'),url:f.get('url'),vins,apply_to_all_active:f.get('all')==='on'});out.textContent=`Готово: назначено ${d.expectations}, VIN не найдены: ${d.missing_vins.length}`;setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
+document.querySelector('#listing-link-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#listing-link-result');out.textContent='Сохранение…';try{await send(`/api/v1/listings/${f.get('listing_id')}/links`,{source:f.get('source'),url:f.get('url'),actor:f.get('actor'),reason:f.get('reason')},'PATCH');out.textContent='Ссылка сохранена и записана в журнал';setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
 document.querySelector('#feedback-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#feedback-result');out.textContent='Отправка…';try{await send('/api/v1/feedback',{manager_name:f.get('manager'),severity:f.get('severity'),category:f.get('category'),listing_id:f.get('listing_id')||null,message:f.get('message'),source:'dashboard'});out.textContent='Замечание принято';e.target.reset();setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
 </script>
 </body>

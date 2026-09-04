@@ -16,6 +16,7 @@ from app.importer.sheet_csv import CsvOrXlsxReader
 from app.models import (
     AbsenceEpisode,
     FeedbackStatus,
+    Listing,
     ManagerFeedback,
     SearchFilter,
     SourceImportSnapshot,
@@ -28,12 +29,14 @@ from app.schemas import (
     HealthResponse,
     ImportResponse,
     KPIResponse,
+    ListingLinkUpdate,
     TriggerCycleResponse,
     TriggerScanResponse,
 )
 from app.service.cycle import MonitoringCycleService
 from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.filters import FilterRegistryService, FilterValidationError
+from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import MonitorService, ScanAlreadyRunning
 from app.service.report import dashboard_context, kpi_overview, weekend_summary
 
@@ -196,6 +199,62 @@ def change_filter_state(
     except FilterValidationError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {'id': entity.id, 'active': entity.active}
+
+
+@router.get('/listings')
+def list_listings(
+    active: bool | None = None,
+    missing_source: str | None = None,
+    limit: int = 200,
+    db: Session = Depends(get_db),
+):
+    query = db.query(Listing)
+    if active is not None:
+        query = query.filter(Listing.is_active == active)
+    if missing_source == 'auto_ru':
+        query = query.filter(Listing.source_auto_ru.is_(None))
+    elif missing_source == 'avito':
+        query = query.filter(Listing.source_avito.is_(None))
+    elif missing_source is not None:
+        raise HTTPException(status_code=422, detail='missing_source must be auto_ru or avito')
+    rows = query.order_by(Listing.brand, Listing.model, Listing.vin).limit(min(max(limit, 1), 1000)).all()
+    return {
+        'listings': [
+            {
+                'id': item.id,
+                'vin': item.vin,
+                'brand': item.brand,
+                'model': item.model,
+                'year': item.year,
+                'active': item.is_active,
+                'auto_ru_url': item.source_auto_ru,
+                'avito_url': item.source_avito,
+            }
+            for item in rows
+        ]
+    }
+
+
+@router.patch('/listings/{listing_id}/links')
+def update_listing_link(
+    listing_id: str, payload: ListingLinkUpdate, db: Session = Depends(get_db)
+):
+    try:
+        listing = ListingRegistryService(db).update_link(
+            listing_id,
+            source=payload.source,
+            url=payload.url,
+            actor=payload.actor,
+            reason=payload.reason,
+        )
+    except ListingValidationError as exc:
+        code = 404 if str(exc) == 'listing not found' else 422
+        raise HTTPException(status_code=code, detail=str(exc)) from exc
+    return {
+        'id': listing.id,
+        'auto_ru_url': listing.source_auto_ru,
+        'avito_url': listing.source_avito,
+    }
 
 
 @router.post('/feedback')

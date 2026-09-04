@@ -155,6 +155,26 @@ class Listing(Base):
     observations: Mapped[list['ListingObservation']] = relationship(
         'ListingObservation', back_populates='listing'
     )
+    link_events: Mapped[list['ListingLinkEvent']] = relationship(
+        'ListingLinkEvent', back_populates='listing', cascade='all, delete-orphan'
+    )
+
+
+class ListingLinkEvent(Base):
+    __tablename__ = 'listing_link_events'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    listing_id: Mapped[str] = mapped_column(ForeignKey('listings.id'), index=True)
+    source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
+    old_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    new_url: Mapped[str] = mapped_column(Text, nullable=False)
+    actor: Mapped[str] = mapped_column(String, nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    listing: Mapped[Listing] = relationship('Listing', back_populates='link_events')
 
 
 class VehicleFilterExpectation(Base):
