@@ -81,10 +81,16 @@ class DealerDiscoveryService:
                     record.candidates_found = len(result.hits)
                     record.error = result.error
                     record.diagnostics = result.diagnostics
+                    self._apply_observed_hits(
+                        source,
+                        dealer_url,
+                        result.hits,
+                        started,
+                        deactivate_missing=result.complete,
+                    )
+                    summary['candidates'] += len(result.hits)
                     if result.complete:
-                        self._apply_complete_snapshot(source, dealer_url, result.hits, started)
                         summary['complete'] += 1
-                        summary['candidates'] += len(result.hits)
                     else:
                         summary['failed'] += 1
                 except Exception as exc:
@@ -94,12 +100,15 @@ class DealerDiscoveryService:
                 self.db.commit()
         return summary
 
-    def _apply_complete_snapshot(self, source, dealer_url, hits, observed_at) -> None:
-        self.db.query(DealerListingCandidate).filter(
-            DealerListingCandidate.source == source,
-            DealerListingCandidate.dealer_url == dealer_url,
-            DealerListingCandidate.active.is_(True),
-        ).update({'active': False}, synchronize_session=False)
+    def _apply_observed_hits(
+        self, source, dealer_url, hits, observed_at, *, deactivate_missing: bool
+    ) -> None:
+        if deactivate_missing:
+            self.db.query(DealerListingCandidate).filter(
+                DealerListingCandidate.source == source,
+                DealerListingCandidate.dealer_url == dealer_url,
+                DealerListingCandidate.active.is_(True),
+            ).update({'active': False}, synchronize_session=False)
         for hit in hits:
             key = canonical_listing_key(source, hit.url)
             if not key:

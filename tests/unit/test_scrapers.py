@@ -36,6 +36,22 @@ def test_auto_ru_deduplicates_multiple_links_for_same_listing():
     assert len(AutoRuAdapter()._extract(html, page_number=1)) == 1
 
 
+def test_auto_ru_extracts_lcv_dealer_listing_paths():
+    html = '''
+    <div class="ListingItemUniversal-AbCdE">
+      <a href="https://auto.ru/lcv/used/sale/mercedes/sprinter/1132284604-9b053bf0/">
+        Mercedes-Benz Sprinter
+      </a>
+      <span>18 500 000 ₽</span>
+    </div>
+    '''
+    hits = AutoRuAdapter()._extract(html, page_number=1)
+
+    assert len(hits) == 1
+    assert hits[0].url.endswith('/1132284604-9b053bf0/')
+    assert hits[0].price == 18_500_000
+
+
 def test_avito_extracts_known_article_markup():
     html = '''
     <div data-marker="catalog-serp">

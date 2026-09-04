@@ -101,7 +101,8 @@ class AutoRuAdapter:
         seen: set[str] = set()
         links = soup.select(
             'a.ListingItemTitle__link[href*="/cars/"][href*="/sale/"], '
-            'a[href*="/cars/used/sale/"], a[href*="/cars/new/sale/"]'
+            'a[href*="/cars/used/sale/"], a[href*="/cars/new/sale/"], '
+            'a[href*="/lcv/used/sale/"], a[href*="/lcv/new/sale/"]'
         )
         for link in links:
             if not link.get('href'):

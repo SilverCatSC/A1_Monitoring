@@ -101,6 +101,33 @@ def test_incomplete_dealer_snapshot_does_not_deactivate_last_good_catalog(
         engine.dispose()
 
 
+def test_partial_dealer_snapshot_keeps_observed_new_candidates(tmp_path, monkeypatch):
+    engine = create_engine(f'sqlite:///{tmp_path / "dealer-partial.db"}')
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    url = 'https://auto.ru/diler/cars/all/a1_avto_moskva/'
+    listing_url = 'https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-a/'
+    monkeypatch.setattr('app.service.dealer_discovery.settings.dealer_auto_urls', url)
+    monkeypatch.setattr('app.service.dealer_discovery.settings.dealer_avito_urls', '')
+    try:
+        service = DealerDiscoveryService(
+            session,
+            auto_adapter=FakeAdapter(
+                _result(_hit(listing_url), complete=False, error='page 2 uncertain')
+            ),
+            avito_adapter=FakeAdapter(_result()),
+        )
+
+        summary = service.run()
+
+        assert summary['failed'] == 1
+        assert summary['candidates'] == 1
+        assert session.query(DealerListingCandidate).one().active is True
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_overlapping_dealer_discovery_is_rejected(tmp_path):
     import app.service.dealer_discovery as discovery_module
 
