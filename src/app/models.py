@@ -11,11 +11,13 @@ from sqlalchemy import (
     Enum,
     Float,
     ForeignKey,
+    Index,
     Integer,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -247,7 +249,17 @@ class AbsenceEpisode(Base):
 
     listing: Mapped[Listing] = relationship('Listing')
 
-    __table_args__ = (UniqueConstraint('listing_id', 'filter_id', 'source', 'open', name='uq_open_absence'),)
+    __table_args__ = (
+        Index(
+            'uq_open_absence_active',
+            'listing_id',
+            'filter_id',
+            'source',
+            unique=True,
+            postgresql_where=text('open IS TRUE'),
+            sqlite_where=text('open = 1'),
+        ),
+    )
 
 
 class ManagerFeedback(Base):

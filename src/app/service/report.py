@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from app.models import AbsenceEpisode, ListingObservation, ScanRun, ScanRunStatus
+from app.models import AbsenceEpisode, ListingObservation, ObservationState, ScanRun, ScanRunStatus
 
 
 def weekend_windows_for_last_days(days: int = 14) -> list[tuple[datetime, datetime]]:
@@ -31,7 +31,12 @@ def kpi_overview(session, days: int = 7) -> dict[str, int | float]:
     )
     missed = (
         session.query(ListingObservation)
-        .filter(ListingObservation.observed_at >= since, ListingObservation.found.is_(False))
+        .filter(
+            ListingObservation.observed_at >= since,
+            ListingObservation.state.in_(
+                [ObservationState.ABSENT_UNCERTAIN, ObservationState.ABSENT_CONFIRMED]
+            ),
+        )
         .count()
     )
     success_runs = (

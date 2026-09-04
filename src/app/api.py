@@ -4,6 +4,7 @@ import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Response
 from fastapi.responses import HTMLResponse
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.config import settings
@@ -29,8 +30,12 @@ def health():
 
 
 @router.get('/ready')
-def ready():
-    return {'status': 'ready'}
+def ready(db: Session = Depends(get_db)):
+    try:
+        db.execute(text('SELECT 1'))
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail='database unavailable') from exc
+    return {'status': 'ready', 'database': 'ok'}
 
 
 @router.get('/dashboard/kpi')

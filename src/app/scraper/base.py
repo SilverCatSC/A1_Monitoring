@@ -4,7 +4,9 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
+
+from bs4 import BeautifulSoup
 
 from app.models import EngineType
 
@@ -37,6 +39,76 @@ class ScanResult:
     hits: list[ListingHit]
     diagnostics: dict[str, Any]
     scanned_at: datetime
+    requested_pages: int = 0
+    complete: bool = True
+    exhausted: bool = False
+    error: str | None = None
+
+
+BLOCK_PAGE_MARKERS = (
+    'подтвердите, что вы не робот',
+    'доступ ограничен',
+    'проверка браузера',
+    'access denied',
+    'verify you are human',
+    'cf-chl-',
+    'showcaptcha',
+)
+
+EMPTY_PAGE_MARKERS = (
+    'ничего не найдено',
+    'объявлений не найдено',
+    'по вашему запросу ничего',
+    'нет подходящих объявлений',
+    'items-not-found',
+    'search-no-results',
+)
+
+
+def classify_result_page(html: str, card_count: int) -> tuple[str, str | None]:
+    """Classify a result page without turning parser failures into false absences."""
+    visible_text = BeautifulSoup(html, 'html.parser').get_text(' ', strip=True).lower()
+    lower_html = html.lower()
+    for marker in BLOCK_PAGE_MARKERS:
+        if marker in visible_text or marker in lower_html:
+            return 'blocked', marker
+    if card_count > 0:
+        return 'results', None
+    for marker in EMPTY_PAGE_MARKERS:
+        if marker in visible_text or marker in lower_html:
+            return 'empty', marker
+    return 'unrecognized', 'no listing cards and no explicit empty-result marker'
+
+
+def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
+    """Return a stable marketplace listing key and discard tracking query parameters."""
+    raw = str(value or '').strip()
+    if not raw:
+        return None
+    parsed = urlparse(raw if '://' in raw else f'https://{raw.lstrip("/")}')
+    host = (parsed.hostname or '').lower().removeprefix('www.')
+    path = unquote(parsed.path).rstrip('/').lower()
+
+    if source == EngineType.AUTO_RU:
+        if not host.endswith('auto.ru'):
+            return None
+        numeric_ids = re.findall(r'(?<!\d)(\d{5,})(?!\d)', path)
+        if numeric_ids:
+            return f'auto_ru:{numeric_ids[-1]}'
+        return f'auto_ru:url:{host}{path}' if path else None
+
+    if source == EngineType.AVITO:
+        if not host.endswith('avito.ru'):
+            return None
+        match = re.search(r'_(\d{5,})(?:$|/)', path)
+        if match:
+            return f'avito:{match.group(1)}'
+        numeric_ids = re.findall(r'(?<!\d)(\d{5,})(?!\d)', path)
+        if numeric_ids:
+            return f'avito:{numeric_ids[-1]}'
+        return f'avito:url:{host}{path}' if path else None
+
+    return None
 
 
 def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:

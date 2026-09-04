@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 from urllib.parse import urlencode
 
 from bs4 import BeautifulSoup
@@ -9,7 +9,7 @@ from playwright.async_api import Browser, Page, async_playwright
 
 from app.config import settings
 from app.models import EngineType
-from app.scraper.base import ListingHit, ScanResult
+from app.scraper.base import ListingHit, ScanResult, classify_result_page
 
 
 class AutoRuAdapter:
@@ -19,9 +19,11 @@ class AutoRuAdapter:
         self.request_timeout = request_timeout
 
     async def scan_filter(self, search_url: str, max_pages: int = 3) -> ScanResult:
-        start = datetime.utcnow()
+        start = datetime.now(UTC)
         hits: list[ListingHit] = []
         pages_scanned = 0
+        exhausted = False
+        error: str | None = None
         diagnostics: dict[str, int | str] = {'engine': 'auto_ru', 'start_url': search_url}
         async with async_playwright() as p:
             browser: Browser = await p.chromium.launch(headless=settings.playwright_headless)
@@ -32,15 +34,36 @@ class AutoRuAdapter:
                 for page_number in range(1, max_pages + 1):
                     url = _page_url(search_url, page_number)
                     diagnostics[f'page_{page_number}'] = 0
-                    await page.goto(url, timeout=self.request_timeout * 1000)
-                    await page.wait_for_load_state('networkidle')
-                    html = await page.content()
-                    parsed = self._extract(html, page_number)
-                    diagnostics[f'page_{page_number}'] = len(parsed)
-                    hits.extend(parsed)
-                    pages_scanned += 1
-                    await page.mouse.wheel(0, 1200)
-                    await asyncio.sleep(0.5)
+                    try:
+                        response = await page.goto(
+                            url,
+                            timeout=self.request_timeout * 1000,
+                            wait_until='domcontentloaded',
+                        )
+                        if response is not None and response.status >= 400:
+                            raise RuntimeError(f'HTTP {response.status}')
+                        await page.mouse.wheel(0, 1600)
+                        await asyncio.sleep(0.7)
+                        html = await page.content()
+                        parsed = self._extract(html, page_number)
+                        page_state, reason = classify_result_page(html, len(parsed))
+                        diagnostics[f'page_{page_number}'] = len(parsed)
+                        diagnostics[f'page_{page_number}_state'] = page_state
+                        pages_scanned += 1
+                        if page_state == 'blocked':
+                            error = f'blocked page {page_number}: {reason}'
+                            break
+                        if page_state == 'unrecognized':
+                            error = f'parser uncertainty on page {page_number}: {reason}'
+                            break
+                        if page_state == 'empty':
+                            exhausted = True
+                            break
+                        hits.extend(parsed)
+                    except Exception as exc:
+                        error = f'page {page_number}: {type(exc).__name__}: {exc}'
+                        diagnostics[f'page_{page_number}_state'] = 'technical_error'
+                        break
             finally:
                 await browser.close()
 
@@ -50,6 +73,10 @@ class AutoRuAdapter:
             hits=hits,
             diagnostics=diagnostics,
             scanned_at=start,
+            requested_pages=max_pages,
+            complete=error is None and (pages_scanned == max_pages or exhausted),
+            exhausted=exhausted,
+            error=error,
         )
 
     def _extract(self, html: str, page_number: int) -> list[ListingHit]:

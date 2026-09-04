@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import and_
 from sqlalchemy.orm import Session
@@ -10,7 +10,6 @@ from app.config import settings
 from app.models import (
     AbsenceEpisode,
     EngineType,
-    Listing,
     ListingObservation,
     ObservationState,
     ScanRun,
@@ -20,139 +19,284 @@ from app.models import (
 )
 from app.scraper.auto_ru import AutoRuAdapter
 from app.scraper.avito import AvitoAdapter
+from app.scraper.base import ListingHit, ScanResult, canonical_listing_key
 
 
 class MonitorService:
-    def __init__(self, db: Session):
+    def __init__(self, db: Session, auto_adapter=None, avito_adapter=None):
         self.db = db
-        self.auto_adapter = AutoRuAdapter(request_timeout=settings.request_timeout_seconds)
-        self.avito_adapter = AvitoAdapter(request_timeout=settings.request_timeout_seconds)
+        self.auto_adapter = auto_adapter or AutoRuAdapter(
+            request_timeout=settings.request_timeout_seconds
+        )
+        self.avito_adapter = avito_adapter or AvitoAdapter(
+            request_timeout=settings.request_timeout_seconds
+        )
 
-    def _active_filters(self, source: EngineType):
+    def _active_filters(self, source: EngineType) -> list[SearchFilter]:
         return (
             self.db.query(SearchFilter)
             .filter(SearchFilter.source == source, SearchFilter.active.is_(True))
             .all()
         )
 
-    def _all_expectations(self, filter_id: str):
+    def _all_expectations(self, filter_id: str) -> list[VehicleFilterExpectation]:
         return (
             self.db.query(VehicleFilterExpectation)
             .filter(VehicleFilterExpectation.filter_id == filter_id)
             .all()
         )
 
-    def _record_observation(self, run, listing_id: str, filter_id: str, hit, source: EngineType, found: bool):
-        state = ObservationState.FOUND if found else ObservationState.ABSENT_CONFIRMED
+    def _record_observation(
+        self,
+        run: ScanRun,
+        listing_id: str,
+        filter_id: str,
+        source: EngineType,
+        state: ObservationState,
+        hit: ListingHit | None = None,
+        diagnostics: dict | None = None,
+    ) -> None:
+        found = state == ObservationState.FOUND
+        raw_payload = dict(hit.raw) if hit else {}
+        if diagnostics:
+            raw_payload['scan_diagnostics'] = diagnostics
+        if hit:
+            raw_payload['canonical_listing_key'] = canonical_listing_key(source, hit.url)
+
         self.db.add(
             ListingObservation(
                 run_id=run.id,
                 listing_id=listing_id,
                 filter_id=filter_id,
                 source=source,
-                page_number=hit.page_number if found else 0,
-                position_in_page=hit.position if found else 0,
+                page_number=hit.page_number if hit else 0,
+                position_in_page=hit.position if hit else 0,
                 found=found,
                 state=state,
-                listing_url=hit.url if found else None,
-                title=hit.title if found else None,
-                price_hint=hit.price,
-                matched_by='url_contains' if found else None,
-                raw_payload=hit.raw,
+                listing_url=hit.url if hit else None,
+                title=hit.title if hit else None,
+                price_hint=hit.price if hit else None,
+                matched_by='marketplace_listing_id' if hit else None,
+                raw_payload=raw_payload,
+                observed_at=datetime.now(UTC),
             )
         )
 
+    def _previous_miss_streak(
+        self, listing_id: str, filter_id: str, source: EngineType
+    ) -> tuple[int, datetime | None]:
+        rows = (
+            self.db.query(ListingObservation)
+            .filter(
+                ListingObservation.listing_id == listing_id,
+                ListingObservation.filter_id == filter_id,
+                ListingObservation.source == source,
+            )
+            .order_by(ListingObservation.observed_at.desc(), ListingObservation.id.desc())
+            .limit(50)
+            .all()
+        )
+        count = 0
+        earliest = None
+        for row in rows:
+            if row.state == ObservationState.FOUND:
+                break
+            if row.state in {
+                ObservationState.ABSENT_UNCERTAIN,
+                ObservationState.ABSENT_CONFIRMED,
+            }:
+                count += 1
+                earliest = row.observed_at
+            elif row.state == ObservationState.TECHNICAL_ERROR:
+                # A technical failure neither proves absence nor resets a validated miss streak.
+                continue
+            else:
+                break
+        return count, earliest
+
+    def _record_technical_filter_failure(
+        self,
+        run: ScanRun,
+        filter_entity: SearchFilter,
+        source: EngineType,
+        expectations: list[VehicleFilterExpectation],
+        error: str,
+        diagnostics: dict | None = None,
+    ) -> None:
+        run.technical_errors += 1
+        run.notes = (run.notes or '') + f'[{filter_entity.id}] {error}\n'
+        for expectation in expectations:
+            self._record_observation(
+                run,
+                expectation.listing_id,
+                filter_entity.id,
+                source,
+                ObservationState.TECHNICAL_ERROR,
+                diagnostics={'error': error, **(diagnostics or {})},
+            )
+
     def run_full_cycle(self) -> dict[str, int]:
-        started = datetime.utcnow()
-        summary = {'filters_scanned': 0, 'found': 0, 'missed': 0, 'runs': 0}
+        started = datetime.now(UTC)
+        summary = {
+            'filters_scanned': 0,
+            'found': 0,
+            'missed_confirmed': 0,
+            'missed_uncertain': 0,
+            'technical_errors': 0,
+            'runs': 0,
+        }
+        enabled = set(settings.scan_engines)
 
         for source in [EngineType.AUTO_RU, EngineType.AVITO]:
+            if source.value not in enabled:
+                continue
+            filters = self._active_filters(source)
             scan_run = ScanRun(
                 started_at=started,
                 source=source,
                 status=ScanRunStatus.IN_PROGRESS,
-                filters_total=len(self._active_filters(source)),
+                filters_total=len(filters),
                 notes=None,
             )
             self.db.add(scan_run)
             self.db.flush()
             summary['runs'] += 1
 
-            filters = self._active_filters(source)
-            adapter = self.auto_adapter if source == EngineType.AUTO_RU else self.avito_adapter
+            if not filters:
+                scan_run.technical_errors = 1
+                scan_run.notes = 'No active filters configured; no visibility conclusion was made.\n'
 
+            adapter = self.auto_adapter if source == EngineType.AUTO_RU else self.avito_adapter
             for filter_entity in filters:
                 summary['filters_scanned'] += 1
+                expectations = self._all_expectations(filter_entity.id)
                 if not filter_entity.raw_url:
+                    self._record_technical_filter_failure(
+                        scan_run,
+                        filter_entity,
+                        source,
+                        expectations,
+                        'filter has no URL',
+                    )
                     continue
                 try:
-                    scan_result = asyncio.get_event_loop().run_until_complete(
-                        adapter.scan_filter(filter_entity.raw_url or '', settings.scan_pages_limit)
+                    scan_result: ScanResult = asyncio.run(
+                        adapter.scan_filter(filter_entity.raw_url, settings.scan_pages_limit)
                     )
-                except Exception as exc:  # broad for safety in first phase
-                    scan_run.technical_errors += 1
-                    run_note = str(exc)
-                    scan_run.notes = (scan_run.notes or '') + f'[{filter_entity.id}] {run_note}\n'
+                except Exception as exc:  # adapter boundary: preserve an auditable technical result
+                    self._record_technical_filter_failure(
+                        scan_run,
+                        filter_entity,
+                        source,
+                        expectations,
+                        f'{type(exc).__name__}: {exc}',
+                    )
                     continue
 
                 scan_run.pages_scanned = max(scan_run.pages_scanned, scan_result.page_count)
-                scan_run.filters_ok += 1
-                expected_links = self._all_expectations(filter_entity.id)
-                expected_by_id = {exp.listing_id: exp for exp in expected_links}
-                found_ids = set()
+                if not scan_result.complete:
+                    self._record_technical_filter_failure(
+                        scan_run,
+                        filter_entity,
+                        source,
+                        expectations,
+                        scan_result.error or 'incomplete page traversal',
+                        scan_result.diagnostics,
+                    )
+                    continue
 
+                scan_run.filters_ok += 1
+                expected_by_key: dict[str, VehicleFilterExpectation] = {}
+                for expectation in expectations:
+                    direct_url = (
+                        expectation.listing.source_auto_ru
+                        if source == EngineType.AUTO_RU
+                        else expectation.listing.source_avito
+                    )
+                    key = canonical_listing_key(source, direct_url)
+                    if key:
+                        expected_by_key[key] = expectation
+
+                found_ids: set[str] = set()
                 for hit in scan_result.hits:
-                    listing = self.db.query(Listing).filter(Listing.source_auto_ru == hit.url).one_or_none()
-                    if listing is None:
-                        listing = self.db.query(Listing).filter(Listing.source_avito == hit.url).one_or_none()
-                    if listing is None:
-                        listing = self.db.query(Listing).filter(Listing.direct_url == hit.url).one_or_none()
-                    if listing is None:
+                    key = canonical_listing_key(source, hit.url)
+                    expectation = expected_by_key.get(key or '')
+                    if expectation is None or expectation.listing_id in found_ids:
                         continue
-                    if listing.id not in expected_by_id:
-                        continue
-                    found_ids.add(listing.id)
-                    self._record_observation(scan_run, listing.id, filter_entity.id, hit, source, True)
-                    listing.last_seen_at = datetime.utcnow()
+                    found_ids.add(expectation.listing_id)
+                    self._record_observation(
+                        scan_run,
+                        expectation.listing_id,
+                        filter_entity.id,
+                        source,
+                        ObservationState.FOUND,
+                        hit=hit,
+                    )
+                    expectation.listing.last_seen_at = datetime.now(UTC)
+                    self._close_absence(
+                        scan_run, expectation.listing_id, filter_entity.id, source
+                    )
                     summary['found'] += 1
 
-                for expectation in expected_links:
-                    if expectation.listing_id not in found_ids:
-                        self._record_observation(
+                for expectation in expectations:
+                    if expectation.listing_id in found_ids:
+                        continue
+                    previous_misses, first_missing_at = self._previous_miss_streak(
+                        expectation.listing_id, filter_entity.id, source
+                    )
+                    miss_count = previous_misses + 1
+                    confirmed = miss_count >= settings.min_confirmed_absence_runs
+                    state = (
+                        ObservationState.ABSENT_CONFIRMED
+                        if confirmed
+                        else ObservationState.ABSENT_UNCERTAIN
+                    )
+                    self._record_observation(
+                        scan_run,
+                        expectation.listing_id,
+                        filter_entity.id,
+                        source,
+                        state,
+                        diagnostics=scan_result.diagnostics,
+                    )
+                    if confirmed:
+                        self._upsert_absence(
                             scan_run,
                             expectation.listing_id,
                             filter_entity.id,
-                            type(
-                                'placeholder',
-                                (),
-                                {
-                                    'page_number': 0,
-                                    'position': 0,
-                                    'price': None,
-                                    'title': None,
-                                    'url': None,
-                                    'raw': {},
-                                },
-                            ),
                             source,
-                            False,
+                            miss_count,
+                            first_missing_at or scan_run.started_at,
                         )
-                        summary['missed'] += 1
-                        self._upsert_absence(scan_run, expectation.listing_id, filter_entity.id, source)
+                        summary['missed_confirmed'] += 1
                     else:
-                        self._close_absence(scan_run, expectation.listing_id, filter_entity.id, source)
+                        summary['missed_uncertain'] += 1
 
-            scan_run.completed_at = datetime.utcnow()
-            scan_run.finished_at = datetime.utcnow()
-            scan_run.status = (
-                ScanRunStatus.SUCCESS if scan_run.technical_errors == 0 else ScanRunStatus.PARTIAL
-            )
+            scan_run.completed_at = datetime.now(UTC)
+            scan_run.finished_at = datetime.now(UTC)
+            if scan_run.filters_total == 0:
+                scan_run.status = ScanRunStatus.FAILED
+            elif scan_run.filters_ok == scan_run.filters_total:
+                scan_run.status = ScanRunStatus.SUCCESS
+            elif scan_run.filters_ok == 0:
+                scan_run.status = ScanRunStatus.FAILED
+            else:
+                scan_run.status = ScanRunStatus.PARTIAL
+            summary['technical_errors'] += scan_run.technical_errors
             self.db.flush()
 
         self.db.commit()
         return summary
 
-    def _upsert_absence(self, run: ScanRun, listing_id: str, filter_id: str, source: EngineType) -> None:
+    def _upsert_absence(
+        self,
+        run: ScanRun,
+        listing_id: str,
+        filter_id: str,
+        source: EngineType,
+        miss_count: int,
+        started_at: datetime,
+    ) -> None:
         open_episode = (
             self.db.query(AbsenceEpisode)
             .filter(
@@ -171,21 +315,23 @@ class MonitorService:
                     listing_id=listing_id,
                     filter_id=filter_id,
                     source=source,
-                    consecutive_misses=1,
-                    observed_count=1,
+                    consecutive_misses=miss_count,
+                    observed_count=miss_count,
                     last_missing_run_id=run.id,
-                    started_at=run.started_at,
+                    started_at=started_at,
+                    notes='confirmed_absence',
                 )
             )
             return
 
-        open_episode.consecutive_misses += 1
+        open_episode.consecutive_misses = miss_count
         open_episode.observed_count += 1
         open_episode.last_missing_run_id = run.id
-        if open_episode.consecutive_misses >= settings.min_confirmed_absence_runs:
-            open_episode.notes = 'confirmed_absence_candidate'
+        open_episode.notes = 'confirmed_absence'
 
-    def _close_absence(self, run: ScanRun, listing_id: str, filter_id: str, source: EngineType) -> None:
+    def _close_absence(
+        self, run: ScanRun, listing_id: str, filter_id: str, source: EngineType
+    ) -> None:
         open_episode = (
             self.db.query(AbsenceEpisode)
             .filter(

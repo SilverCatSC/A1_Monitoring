@@ -20,6 +20,21 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False
 
 def init_db() -> None:
     Base.metadata.create_all(bind=engine)
+    _apply_compatibility_migrations()
+
+
+def _apply_compatibility_migrations() -> None:
+    """Keep early installations safe until versioned Alembic migrations are introduced."""
+    if engine.dialect.name != 'postgresql':
+        return
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            'ALTER TABLE absence_episodes DROP CONSTRAINT IF EXISTS uq_open_absence'
+        )
+        connection.exec_driver_sql(
+            'CREATE UNIQUE INDEX IF NOT EXISTS uq_open_absence_active '
+            'ON absence_episodes (listing_id, filter_id, source) WHERE open IS TRUE'
+        )
 
 
 def get_db() -> Generator[Session, None, None]:
