@@ -230,12 +230,19 @@ class SourceImporter:
                 year = _clean_optional(row.get('year'))
                 listing.year = int(float(year)) if year and year.replace('.', '', 1).isdigit() else None
                 listing.vin = _clean_optional(row.get('vin'))
-                listing.source_auto_ru = _clean_optional(
+                incoming_auto_ru = _clean_optional(
                     row.get('listing_url_auto_ru') or row.get('source_auto_ru')
                 )
-                listing.source_avito = _clean_optional(
+                incoming_avito = _clean_optional(
                     row.get('listing_url_avito') or row.get('source_avito')
                 )
+                # An empty contractor cell is ambiguous and must not erase a link
+                # that a manager already confirmed. A non-empty source value remains
+                # authoritative and updates the current registry.
+                if incoming_auto_ru or not listing.source_auto_ru:
+                    listing.source_auto_ru = incoming_auto_ru
+                if incoming_avito or not listing.source_avito:
+                    listing.source_avito = incoming_avito
                 listing.dealer_auto_ru = _clean_optional(row.get('dealer_url_auto_ru'))
                 listing.dealer_avito = _clean_optional(row.get('dealer_url_avito'))
                 listing.direct_url = _clean_optional(row.get('listing_url') or row.get('direct_url'))

@@ -9,7 +9,7 @@ from app.db import get_db_context
 from app.service.cycle import MonitoringCycleService
 
 
-def start_scheduler() -> None:
+def start_scheduler() -> BackgroundScheduler:
     scheduler = BackgroundScheduler(timezone=settings.app_tz)
 
     def run_scan_job():
@@ -25,3 +25,4 @@ def start_scheduler() -> None:
         next_run_time=datetime.now(tz=timezone.utc),
     )
     scheduler.start()
+    return scheduler

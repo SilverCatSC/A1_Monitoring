@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
 
@@ -9,7 +11,26 @@ from app.db import init_db
 from app.scheduler import start_scheduler
 from app.security import valid_basic_authorization, validate_security_configuration
 
-app = FastAPI(title='A1 Search Monitor')
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    validate_security_configuration(
+        environment=settings.app_env,
+        enabled=settings.auth_enabled,
+        username=settings.admin_username,
+        password=settings.admin_password,
+        network_profile=settings.network_profile,
+    )
+    init_db()
+    scheduler = start_scheduler() if settings.app_env in {'stage', 'production'} else None
+    try:
+        yield
+    finally:
+        if scheduler is not None:
+            scheduler.shutdown(wait=False)
+
+
+app = FastAPI(title='A1 Search Monitor', lifespan=lifespan)
 
 
 @app.middleware('http')
@@ -29,20 +50,6 @@ async def basic_auth(request, call_next):
                 headers={'WWW-Authenticate': 'Basic realm="A1 Search Monitor"'},
             )
     return await call_next(request)
-
-
-@app.on_event('startup')
-def on_startup():
-    validate_security_configuration(
-        environment=settings.app_env,
-        enabled=settings.auth_enabled,
-        username=settings.admin_username,
-        password=settings.admin_password,
-        network_profile=settings.network_profile,
-    )
-    init_db()
-    if settings.app_env in {'stage', 'production'}:
-        start_scheduler()
 
 
 app.include_router(router, prefix='/api/v1')

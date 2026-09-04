@@ -2,7 +2,14 @@ import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.models import Base, EngineType, Listing, ListingLinkEvent
+from app.models import (
+    Base,
+    EngineType,
+    Listing,
+    ListingLinkEvent,
+    SearchFilter,
+    VehicleFilterExpectation,
+)
 from app.service.listings import ListingRegistryService, ListingValidationError
 
 
@@ -66,6 +73,45 @@ def test_listing_link_update_rejects_search_or_wrong_domain(tmp_path):
                 reason='wrong host',
             )
         assert session.query(ListingLinkEvent).count() == 0
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_link_update_immediately_refreshes_all_active_filter(tmp_path):
+    session, engine = _session(tmp_path)
+    try:
+        listing = Listing(
+            vehicle_signature='W1VVNLTZ5S4556796',
+            vin='W1VVNLTZ5S4556796',
+            is_active=True,
+        )
+        search_filter = SearchFilter(
+            source=EngineType.AUTO_RU,
+            external_key='all-active',
+            name='All active',
+            raw_url='https://auto.ru/moskva/cars/all/',
+            raw_criteria={
+                'managed_by': 'filter_registry',
+                'assignment_mode': 'all_active',
+            },
+            active=True,
+        )
+        session.add_all([listing, search_filter])
+        session.commit()
+        assert session.query(VehicleFilterExpectation).count() == 0
+
+        ListingRegistryService(session).update_link(
+            listing.id,
+            source=EngineType.AUTO_RU,
+            url='https://auto.ru/cars/used/sale/mercedes/v_klasse/1132311022-car/',
+            actor='Анна',
+            reason='Сверено по карточке дилера',
+        )
+
+        expectation = session.query(VehicleFilterExpectation).one()
+        assert expectation.filter_id == search_filter.id
+        assert expectation.listing_id == listing.id
     finally:
         session.close()
         engine.dispose()

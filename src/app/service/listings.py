@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 
 from app.models import EngineType, Listing, ListingLinkEvent
 from app.scraper.base import is_marketplace_listing_url
+from app.service.filters import FilterRegistryService
 
 
 class ListingValidationError(ValueError):
@@ -47,5 +48,6 @@ class ListingRegistryService:
                 reason=clean_reason,
             )
         )
-        self.db.commit()
+        self.db.flush()
+        FilterRegistryService(self.db).refresh_managed_assignments()
         return listing

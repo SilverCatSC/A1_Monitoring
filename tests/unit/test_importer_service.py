@@ -181,6 +181,42 @@ def test_importer_updates_existing_listing_links(db_modules):
         session.close()
 
 
+def test_importer_does_not_erase_confirmed_links_with_blank_source_cells(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import Listing
+
+    session = app_db.SessionLocal()
+    try:
+        initial = _make_rows(
+            {
+                'brand': 'Mercedes-Benz V-Class',
+                'vin': 'W1VVNLTZ5S4556796',
+                'listing_url_auto_ru': 'https://auto.ru/cars/used/sale/mercedes/v/1234567890-a/',
+                'listing_url_avito': 'https://www.avito.ru/moskva/avtomobili/v_9876543210',
+                'source_status': 'Актуально',
+            }
+        )
+        blank_next = _make_rows(
+            {
+                'brand': 'Mercedes-Benz V-Class',
+                'vin': 'W1VVNLTZ5S4556796',
+                'listing_url_auto_ru': '',
+                'listing_url_avito': '',
+                'source_status': 'Актуально',
+            }
+        )
+
+        SourceImporter(session).run(initial, source_signature='with-links')
+        SourceImporter(session).run(blank_next, source_signature='blank-links')
+
+        listing = session.query(Listing).one()
+        assert listing.source_auto_ru.endswith('/1234567890-a/')
+        assert listing.source_avito.endswith('/v_9876543210')
+    finally:
+        session.close()
+
+
 def test_importer_rejects_multi_vin_row_but_accepts_valid_rows(db_modules):
     app_db, _ = db_modules
     from app.importer.service import SourceImporter
