@@ -40,12 +40,18 @@ from app.schemas import (
 from app.service.cycle import MonitoringCycleService
 from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
 from app.service.evidence import EvidenceAccessError, resolve_observation_evidence
-from app.service.feedback import FeedbackService, FeedbackValidationError
+from app.service.feedback import (
+    ALLOWED_CATEGORIES,
+    ALLOWED_SEVERITIES,
+    FeedbackService,
+    FeedbackValidationError,
+)
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import MonitorService, ScanAlreadyRunning, ScanConfigurationError
 from app.service.report import (
     dashboard_context,
+    feedback_queue_context,
     kpi_overview,
     latest_scan_runs_status,
     listing_catalog_context,
@@ -135,6 +141,38 @@ def dashboard_html(request: Request, days: int = 7, db: Session = Depends(get_db
         name='dashboard.html',
         context={
             'context': dashboard_context(db, days=safe_days),
+            'auth_enabled': settings.auth_enabled,
+        },
+    )
+
+
+@router.get('/dashboard/feedback', response_class=HTMLResponse)
+def feedback_queue_html(
+    request: Request,
+    status: str = 'open',
+    severity: str | None = None,
+    category: str | None = None,
+    page: int = 1,
+    db: Session = Depends(get_db),
+):
+    allowed_statuses = {'open', 'all', *(item.value for item in FeedbackStatus)}
+    if status not in allowed_statuses:
+        raise HTTPException(status_code=422, detail='unsupported feedback status')
+    if severity and severity not in ALLOWED_SEVERITIES:
+        raise HTTPException(status_code=422, detail='unsupported feedback severity')
+    if category and category not in ALLOWED_CATEGORIES:
+        raise HTTPException(status_code=422, detail='unsupported feedback category')
+    return templates.TemplateResponse(
+        request=request,
+        name='feedback.html',
+        context={
+            'context': feedback_queue_context(
+                db,
+                status=status,
+                severity=severity,
+                category=category,
+                page=page,
+            ),
             'auth_enabled': settings.auth_enabled,
         },
     )

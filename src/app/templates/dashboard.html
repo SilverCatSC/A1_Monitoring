@@ -31,7 +31,7 @@
 </head>
 <body>
 <header>
-  <div><h1>A1 Search Monitor</h1><p>Видимость объявлений на первых трёх страницах поиска · <a href="/api/v1/dashboard/listings">объявления</a> · <a href="/api/v1/dashboard/history">история</a></p></div>
+  <div><h1>A1 Search Monitor</h1><p>Видимость объявлений на первых трёх страницах поиска · <a href="/api/v1/dashboard/listings">объявления</a> · <a href="/api/v1/dashboard/history">история</a> · <a href="/api/v1/dashboard/feedback">ошибки объявлений</a></p></div>
   <div>Срез: {{ context.days }} дней · {{ context.generated_at.strftime('%d.%m.%Y %H:%M') }} UTC</div>
 </header>
 <main>
@@ -47,7 +47,7 @@
     <div class="card metric"><div class="label">Найдено</div><div class="value ok">{{ context.observation_counts.get('found',0) }}</div></div>
     <div class="card metric"><div class="label">Непоказы</div><div class="value danger">{{ context.open_absences|length }}</div><div class="muted">подтверждённые эпизоды</div></div>
     <div class="card metric"><div class="label">Тех. сбои</div><div class="value">{{ context.observation_counts.get('technical_error',0) }}</div></div>
-    <div class="card metric"><div class="label">Обратная связь</div><div class="value">{{ context.open_feedback_count }}</div><div class="muted">в работе</div></div>
+    <div class="card metric"><div class="label">Обратная связь</div><div class="value"><a href="/api/v1/dashboard/feedback">{{ context.open_feedback_count }}</a></div><div class="muted">в работе</div></div>
   </section>
 
   <section class="card"><h2>Здоровье системы</h2><p><span class="pill {{ context.operational_status.overall }}">{{ context.operational_status.overall }}</span> <span class="muted">ожидаемый интервал {{ context.operational_status.expected_interval_minutes }} мин. + допуск {{ context.operational_status.grace_minutes }} мин.</span></p><div class="scroll"><table><thead><tr><th>Контур</th><th>Состояние</th><th>Последнее событие</th><th>Пояснение</th></tr></thead><tbody>

@@ -23,6 +23,7 @@ from app.models import (
 )
 from app.scraper.base import is_marketplace_listing_url
 from app.service.evidence import evidence_pages
+from app.service.feedback import ALLOWED_CATEGORIES, ALLOWED_SEVERITIES, ALLOWED_TRANSITIONS
 from app.service.filters import FilterRegistryService
 
 
@@ -524,6 +525,85 @@ def dashboard_context(session, days: int = 7) -> dict:
         .order_by(DealerDiscoveryRun.started_at.desc())
         .limit(10)
         .all(),
+    }
+
+
+def feedback_queue_context(
+    session,
+    *,
+    status: str = 'open',
+    severity: str | None = None,
+    category: str | None = None,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    safe_page = max(page, 1)
+    safe_page_size = min(max(page_size, 10), 100)
+    query = session.query(ManagerFeedback)
+    if status == 'open':
+        query = query.filter(ManagerFeedback.status != FeedbackStatus.CONFIRMED)
+    elif status != 'all':
+        query = query.filter(ManagerFeedback.status == FeedbackStatus(status))
+    if severity:
+        query = query.filter(ManagerFeedback.severity == severity)
+    if category:
+        query = query.filter(ManagerFeedback.category == category)
+
+    total = query.count()
+    pages_total = max(1, (total + safe_page_size - 1) // safe_page_size)
+    safe_page = min(safe_page, pages_total)
+    tickets = (
+        query.order_by(ManagerFeedback.created_at.desc(), ManagerFeedback.id)
+        .offset((safe_page - 1) * safe_page_size)
+        .limit(safe_page_size)
+        .all()
+    )
+    filter_ids = {item.filter_id for item in tickets if item.filter_id}
+    observation_ids = {item.observed_id for item in tickets if item.observed_id}
+    filters = (
+        {item.id: item for item in session.query(SearchFilter).filter(SearchFilter.id.in_(filter_ids)).all()}
+        if filter_ids
+        else {}
+    )
+    observations = (
+        {
+            item.id: item
+            for item in session.query(ListingObservation)
+            .filter(ListingObservation.id.in_(observation_ids))
+            .all()
+        }
+        if observation_ids
+        else {}
+    )
+    status_counts = {
+        item.value: session.query(ManagerFeedback).filter(ManagerFeedback.status == item).count()
+        for item in FeedbackStatus
+    }
+    return {
+        'status': status,
+        'severity': severity or '',
+        'category': category or '',
+        'page': safe_page,
+        'page_size': safe_page_size,
+        'pages_total': pages_total,
+        'total': total,
+        'status_counts': status_counts,
+        'statuses': [item.value for item in FeedbackStatus],
+        'severities': sorted(ALLOWED_SEVERITIES),
+        'categories': sorted(ALLOWED_CATEGORIES),
+        'rows': [
+            {
+                'ticket': ticket,
+                'filter': filters.get(ticket.filter_id),
+                'observation': observations.get(ticket.observed_id),
+                'events': sorted(ticket.events, key=lambda item: (item.created_at, item.id)),
+                'allowed_next': [
+                    item.value
+                    for item in sorted(ALLOWED_TRANSITIONS[ticket.status], key=lambda item: item.value)
+                ],
+            }
+            for ticket in tickets
+        ],
     }
 
 

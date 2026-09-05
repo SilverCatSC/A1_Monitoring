@@ -38,7 +38,7 @@ class Settings(BaseSettings):
     dealer_avito_urls: str = Field(default='', alias='DEALER_AVITO_URLS')
     dealer_pages_limit: int = Field(default=3, alias='DEALER_PAGES_LIMIT', ge=1, le=10)
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
-    app_version: str = '0.3.1'
+    app_version: str = '0.4.0'
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60
 

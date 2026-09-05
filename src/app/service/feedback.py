@@ -61,9 +61,7 @@ class FeedbackService:
         observation = None
         if observed_id:
             observation = (
-                self.db.query(ListingObservation)
-                .filter(ListingObservation.id == observed_id)
-                .one_or_none()
+                self.db.query(ListingObservation).filter(ListingObservation.id == observed_id).one_or_none()
             )
             if observation is None:
                 raise FeedbackValidationError('observation not found')
@@ -121,17 +119,21 @@ class FeedbackService:
         except ValueError as exc:
             raise FeedbackValidationError('unsupported feedback status') from exc
         if target not in ALLOWED_TRANSITIONS[item.status]:
-            raise FeedbackValidationError(
-                f'transition {item.status.value} -> {target.value} is not allowed'
-            )
+            raise FeedbackValidationError(f'transition {item.status.value} -> {target.value} is not allowed')
         clean_actor = actor.strip()
         if not clean_actor:
             raise FeedbackValidationError('actor is required')
+        clean_note = (note or '').strip() or None
+        next_assignee = assignee.strip() if assignee is not None else item.assignee
+        if target == FeedbackStatus.ASSIGNED and not next_assignee:
+            raise FeedbackValidationError('assignee is required for assigned status')
+        if target == FeedbackStatus.CONFIRMED and not clean_note:
+            raise FeedbackValidationError('confirmation note is required')
 
         previous = item.status
         item.status = target
         if assignee is not None:
-            item.assignee = assignee.strip() or None
+            item.assignee = next_assignee or None
         if target == FeedbackStatus.CONFIRMED:
             item.closed_at = datetime.now(UTC)
         elif item.closed_at is not None:
@@ -142,7 +144,7 @@ class FeedbackService:
                 from_status=previous.value,
                 to_status=target.value,
                 actor=clean_actor,
-                note=(note or '').strip() or None,
+                note=clean_note,
             )
         )
         self.db.commit()

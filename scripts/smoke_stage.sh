@@ -31,6 +31,7 @@ CATALOG_STATUS_JSON="$(curl --fail --silent --show-error "$BASE_URL/filters/cata
 DASHBOARD_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard")"
 CATALOG_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/listings")"
 HISTORY_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/history")"
+FEEDBACK_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/feedback")"
 LISTINGS_JSON="$(curl --fail --silent --show-error "$BASE_URL/listings?active=true&limit=1")"
 LISTING_ID="$(printf '%s' "$LISTINGS_JSON" | python3 -c 'import json, sys; print(json.load(sys.stdin)["listings"][0]["id"])')"
 DETAIL_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/listings/$LISTING_ID")"
@@ -84,6 +85,7 @@ fi
 if [[ "$CATALOG_HTML" != *"Объявления компании"* ]] \
   || [[ "$CATALOG_HTML" != *"Auto.ru ↗"* ]] \
   || [[ "$HISTORY_HTML" != *"История наблюдений"* ]] \
+  || [[ "$FEEDBACK_HTML" != *"Очередь проверки и подтверждения исправлений"* ]] \
   || [[ "$DETAIL_HTML" != *"Сообщить о неточности"* ]]; then
   echo "Report drill-down is incomplete." >&2
   exit 1

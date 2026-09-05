@@ -51,7 +51,7 @@ HTML-отчёт + JSON API + operational status
 
 - реальный импорт: 130 строк, 106 валидных, 24 диагностических;
 - в реестре 34 активных автомобиля, 78 ссылок Auto.ru и 76 ссылок Avito;
-- unit/integration suite: 70 тестов;
+- unit/integration suite: 71 тест;
 - stage smoke включает readiness, импорт, отчёт, миграцию, loopback-порты,
   backup и изолированный restore;
 - восстановление подтвердило совпадение количества объявлений и снимков;
@@ -173,6 +173,7 @@ URL должен быть страницей поисковой выдачи, а
 - `GET /api/v1/dashboard` — рабочий HTML-отчёт;
 - `GET /api/v1/dashboard/listings` — карточки объявлений и прямые ссылки;
 - `GET /api/v1/dashboard/history` — фильтруемая история наблюдений;
+- `GET /api/v1/dashboard/feedback` — очередь ошибок и проверка исправлений;
 - `GET /api/v1/dashboard/listings/{id}` — история и замечания по автомобилю;
 - `GET /api/v1/observations/{id}/evidence/{page}` — сохранённый PNG выдачи;
 - `POST /api/v1/import` — импорт источника;
