@@ -52,8 +52,8 @@ def _seed(session):
         name='Avito history',
         raw_url='https://www.avito.ru/moskva/avtomobili',
     )
-    auto_run = ScanRun(id='run-auto', source=EngineType.AUTO_RU)
-    avito_run = ScanRun(id='run-avito', source=EngineType.AVITO)
+    auto_run = ScanRun(id='run-auto', source=EngineType.AUTO_RU, network_profile='cloud_no_vpn')
+    avito_run = ScanRun(id='run-avito', source=EngineType.AVITO, network_profile='cloud_no_vpn')
     session.add_all([listing, auto_filter, avito_filter, auto_run, avito_run])
     session.flush()
     now = datetime.now(UTC)
@@ -73,9 +73,7 @@ def _seed(session):
                 title='<img src=x onerror=alert(1)>',
                 listing_url='https://auto.ru/cars/used/sale/brand/model/1234567890-test/',
                 observed_at=now,
-                raw_payload={
-                    'scan_diagnostics': {'page_2_evidence': '/app/artifacts/proof.png'}
-                },
+                raw_payload={'scan_diagnostics': {'page_2_evidence': '/app/artifacts/proof.png'}},
             ),
             ListingObservation(
                 id='observation-avito',

@@ -11,6 +11,7 @@ from app.models import (
     Listing,
     ListingObservation,
     ObservationState,
+    ScanRun,
     ScanRunStatus,
     SearchFilter,
     VehicleFilterExpectation,
@@ -23,7 +24,12 @@ from app.scraper.base import (
     is_marketplace_listing_url,
     is_marketplace_search_url,
 )
-from app.service.monitor import MonitorService
+from app.service.monitor import MonitorService, ScanConfigurationError
+
+
+@pytest.fixture(autouse=True)
+def _trusted_network_profile(monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.network_profile', 'local_no_vpn')
 
 
 class FakeAdapter:
@@ -82,9 +88,7 @@ def _seed(session):
     )
     session.add_all([listing, search_filter])
     session.flush()
-    session.add(
-        VehicleFilterExpectation(filter_id=search_filter.id, listing_id=listing.id)
-    )
+    session.add(VehicleFilterExpectation(filter_id=search_filter.id, listing_id=listing.id))
     session.commit()
     return listing, search_filter
 
@@ -123,9 +127,7 @@ def test_filter_url_validation_does_not_confuse_a1auto_or_listing_pages():
         EngineType.AUTO_RU,
         'https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-car/',
     )
-    assert is_marketplace_search_url(
-        EngineType.AUTO_RU, 'https://auto.ru/moskva/cars/mercedes/v_class/used/'
-    )
+    assert is_marketplace_search_url(EngineType.AUTO_RU, 'https://auto.ru/moskva/cars/mercedes/v_class/used/')
     assert is_marketplace_search_url(
         EngineType.AVITO,
         'https://www.avito.ru/brands/a1auto/items/all/avtomobili?s=profile_search_show_all',
@@ -154,9 +156,7 @@ def test_incomplete_scan_records_technical_error_not_absence(tmp_path, monkeypat
         engine.dispose()
 
 
-def test_inactive_expectations_are_ignored_and_missing_url_fails_closed(
-    tmp_path, monkeypatch
-):
+def test_inactive_expectations_are_ignored_and_missing_url_fails_closed(tmp_path, monkeypatch):
     monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
     session, engine = _session(tmp_path)
     try:
@@ -170,14 +170,10 @@ def test_inactive_expectations_are_ignored_and_missing_url_fails_closed(
         )
         session.add(inactive)
         session.flush()
-        session.add(
-            VehicleFilterExpectation(filter_id=search_filter.id, listing_id=inactive.id)
-        )
+        session.add(VehicleFilterExpectation(filter_id=search_filter.id, listing_id=inactive.id))
         session.commit()
 
-        summary = MonitorService(
-            session, auto_adapter=FakeAdapter([_result()])
-        ).run_full_cycle()
+        summary = MonitorService(session, auto_adapter=FakeAdapter([_result()])).run_full_cycle()
 
         observations = session.query(ListingObservation).all()
         assert len(observations) == 1
@@ -206,17 +202,74 @@ def test_overlapping_scan_is_rejected(tmp_path):
         engine.dispose()
 
 
-def test_absence_requires_two_validated_misses_and_can_recur(tmp_path, monkeypatch):
+def test_untrusted_network_profile_is_rejected_without_audit_rows(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.network_profile', 'local_vpn')
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+
+        with pytest.raises(ScanConfigurationError, match='current=local_vpn'):
+            MonitorService(session, auto_adapter=FakeAdapter([])).run_full_cycle()
+
+        assert session.query(ScanRun).count() == 0
+        assert session.query(ListingObservation).count() == 0
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_local_no_vpn_misses_never_open_production_episode(tmp_path, monkeypatch):
     monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
     session, engine = _session(tmp_path)
     try:
+        _seed(session)
+        service = MonitorService(session, auto_adapter=FakeAdapter([_result(), _result()]))
+
+        first = service.run_full_cycle()
+        second = service.run_full_cycle()
+
+        assert first['missed_uncertain'] == 1
+        assert second['missed_uncertain'] == 1
+        assert second['missed_confirmed'] == 0
+        assert session.query(AbsenceEpisode).count() == 0
+        assert {item.state for item in session.query(ListingObservation).all()} == {
+            ObservationState.ABSENT_UNCERTAIN
+        }
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_cloud_absence_streak_does_not_reuse_local_run(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+        service = MonitorService(session, auto_adapter=FakeAdapter([_result(), _result(), _result()]))
+
+        service.run_full_cycle()
+        monkeypatch.setattr('app.service.monitor.settings.network_profile', 'cloud_no_vpn')
+        first_cloud = service.run_full_cycle()
+        second_cloud = service.run_full_cycle()
+
+        assert first_cloud['missed_uncertain'] == 1
+        assert first_cloud['missed_confirmed'] == 0
+        assert second_cloud['missed_confirmed'] == 1
+        episode = session.query(AbsenceEpisode).one()
+        assert episode.consecutive_misses == 2
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_absence_requires_two_validated_misses_and_can_recur(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    monkeypatch.setattr('app.service.monitor.settings.network_profile', 'cloud_no_vpn')
+    session, engine = _session(tmp_path)
+    try:
         listing, _ = _seed(session)
-        found = _hit(
-            'https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-new/?output_type=list'
-        )
-        unrelated = _hit(
-            'https://auto.ru/cars/used/sale/mercedes/v_class/9999999999-other/'
-        )
+        found = _hit('https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-new/?output_type=list')
+        unrelated = _hit('https://auto.ru/cars/used/sale/mercedes/v_class/9999999999-other/')
         adapter = FakeAdapter(
             [
                 _result(),
@@ -238,9 +291,7 @@ def test_absence_requires_two_validated_misses_and_can_recur(tmp_path, monkeypat
 
         service.run_full_cycle()
         found_observation = (
-            session.query(ListingObservation)
-            .filter(ListingObservation.state == ObservationState.FOUND)
-            .one()
+            session.query(ListingObservation).filter(ListingObservation.state == ObservationState.FOUND).one()
         )
         assert found_observation.absolute_position == 2
         assert found_observation.position_in_page == 7

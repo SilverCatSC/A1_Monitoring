@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 
-from app.config import settings
+from app.config import BUSINESS_TRUSTED_NETWORK_PROFILES, settings
 from app.models import (
     AbsenceEpisode,
     DealerDiscoveryRun,
@@ -30,26 +30,25 @@ def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
     return value if is_marketplace_listing_url(source, value) else None
 
 
+def _trusted_observation_clause():
+    return ListingObservation.scan_run.has(
+        ScanRun.network_profile.in_(tuple(BUSINESS_TRUSTED_NETWORK_PROFILES))
+    )
+
+
 def _page_statistics(observations: list[ListingObservation]) -> dict:
     def summarize(rows: list[ListingObservation]) -> dict:
-        page_counts = {
-            page: sum(1 for item in rows if item.page_number == page) for page in (1, 2, 3)
-        }
+        page_counts = {page: sum(1 for item in rows if item.page_number == page) for page in (1, 2, 3)}
         total = len(rows)
-        absolute_positions = [
-            item.absolute_position for item in rows if item.absolute_position is not None
-        ]
+        absolute_positions = [item.absolute_position for item in rows if item.absolute_position is not None]
         latest = rows[0] if rows else None
         return {
             'found_total': total,
             'page_counts': page_counts,
             'page_shares': {
-                page: round(page_counts[page] * 100 / total, 1) if total else 0
-                for page in (1, 2, 3)
+                page: round(page_counts[page] * 100 / total, 1) if total else 0 for page in (1, 2, 3)
             },
-            'average_absolute_position': round(
-                sum(absolute_positions) / len(absolute_positions), 1
-            )
+            'average_absolute_position': round(sum(absolute_positions) / len(absolute_positions), 1)
             if absolute_positions
             else None,
             'latest': latest,
@@ -94,7 +93,11 @@ def kpi_overview(session, days: int = 7) -> dict[str, int | float]:
     since = datetime.now(UTC) - timedelta(days=days)
     found = (
         session.query(ListingObservation)
-        .filter(ListingObservation.observed_at >= since, ListingObservation.found.is_(True))
+        .filter(
+            ListingObservation.observed_at >= since,
+            ListingObservation.found.is_(True),
+            _trusted_observation_clause(),
+        )
         .count()
     )
     missed = (
@@ -104,12 +107,17 @@ def kpi_overview(session, days: int = 7) -> dict[str, int | float]:
             ListingObservation.state.in_(
                 [ObservationState.ABSENT_UNCERTAIN, ObservationState.ABSENT_CONFIRMED]
             ),
+            _trusted_observation_clause(),
         )
         .count()
     )
     success_runs = (
         session.query(ScanRun)
-        .filter(ScanRun.started_at >= since, ScanRun.status == ScanRunStatus.SUCCESS)
+        .filter(
+            ScanRun.started_at >= since,
+            ScanRun.status == ScanRunStatus.SUCCESS,
+            ScanRun.network_profile.in_(tuple(BUSINESS_TRUSTED_NETWORK_PROFILES)),
+        )
         .count()
     )
     return {
@@ -194,6 +202,7 @@ def filter_statistics(session, since: datetime) -> list[dict]:
         .filter(
             ListingObservation.observed_at >= since,
             ListingObservation.filter.has(active=True),
+            _trusted_observation_clause(),
         )
         .order_by(ListingObservation.observed_at.desc())
         .all()
@@ -241,11 +250,7 @@ def operational_status(
     overdue_after = timedelta(minutes=interval + grace_minutes)
     sources = enabled_sources if enabled_sources is not None else settings.scan_engines
 
-    last_import = (
-        session.query(SourceImportSnapshot)
-        .order_by(SourceImportSnapshot.started_at.desc())
-        .first()
-    )
+    last_import = session.query(SourceImportSnapshot).order_by(SourceImportSnapshot.started_at.desc()).first()
     import_time = _as_utc(last_import.finished_at if last_import else None)
     if last_import is None:
         import_state = 'never_run'
@@ -282,7 +287,10 @@ def operational_status(
         )
         last_run = (
             session.query(ScanRun)
-            .filter(ScanRun.source == source)
+            .filter(
+                ScanRun.source == source,
+                ScanRun.network_profile.in_(tuple(BUSINESS_TRUSTED_NETWORK_PROFILES)),
+            )
             .order_by(ScanRun.started_at.desc())
             .first()
         )
@@ -373,9 +381,7 @@ def latest_scan_runs_status(session) -> dict:
                 if isinstance(value, str) and value.strip():
                     evidence_references.add(value)
                     try:
-                        evidence_page_numbers.add(
-                            int(key.removeprefix('page_').removesuffix('_evidence'))
-                        )
+                        evidence_page_numbers.add(int(key.removeprefix('page_').removesuffix('_evidence')))
                     except ValueError:
                         continue
         rows.append(
@@ -412,6 +418,7 @@ def dashboard_context(session, days: int = 7) -> dict:
             ListingObservation.observed_at >= since,
             ListingObservation.state == state,
             ListingObservation.filter.has(active=True),
+            _trusted_observation_clause(),
         )
         .count()
         for state in ObservationState
@@ -440,11 +447,7 @@ def dashboard_context(session, days: int = 7) -> dict:
         .limit(100)
         .all()
     )
-    last_import = (
-        session.query(SourceImportSnapshot)
-        .order_by(SourceImportSnapshot.started_at.desc())
-        .first()
-    )
+    last_import = session.query(SourceImportSnapshot).order_by(SourceImportSnapshot.started_at.desc()).first()
     missing_links = (
         session.query(Listing)
         .filter(
@@ -462,6 +465,7 @@ def dashboard_context(session, days: int = 7) -> dict:
         .filter(
             ListingObservation.state == ObservationState.FOUND,
             ListingObservation.filter.has(active=True),
+            _trusted_observation_clause(),
         )
         .order_by(ListingObservation.observed_at.desc())
         .limit(1000)
@@ -482,9 +486,7 @@ def dashboard_context(session, days: int = 7) -> dict:
         'auto_links': session.query(Listing).filter(Listing.source_auto_ru.is_not(None)).count(),
         'avito_links': session.query(Listing).filter(Listing.source_avito.is_not(None)).count(),
         'active_filters': active_filters,
-        'canonical_filter_catalog': FilterRegistryService(
-            session
-        ).canonical_catalog_status(),
+        'canonical_filter_catalog': FilterRegistryService(session).canonical_catalog_status(),
         'observation_counts': observation_counts,
         'open_absences': open_absences,
         'feedback': feedback,
@@ -649,6 +651,7 @@ def listing_catalog_context(
             .filter(
                 ListingObservation.listing_id.in_(listing_ids),
                 ListingObservation.state == ObservationState.FOUND,
+                _trusted_observation_clause(),
             )
             .order_by(ListingObservation.observed_at.desc())
         ):
@@ -701,6 +704,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         .filter(
             ListingObservation.listing_id == listing_id,
             ListingObservation.state == ObservationState.FOUND,
+            _trusted_observation_clause(),
         )
         .order_by(ListingObservation.observed_at.desc())
         .all()
@@ -743,6 +747,8 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
                 'listing_url': _safe_listing_url(observation.source, observation.listing_url),
             }
             for observation in observations
-            if observation.state == ObservationState.FOUND and observation.listing_url
+            if observation.state == ObservationState.FOUND
+            and observation.listing_url
+            and observation.scan_run.network_profile in BUSINESS_TRUSTED_NETWORK_PROFILES
         ][:8],
     }

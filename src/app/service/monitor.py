@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, text
 from sqlalchemy.orm import Session
 
-from app.config import settings
+from app.config import PRODUCTION_NETWORK_PROFILE, SCAN_ALLOWED_NETWORK_PROFILES, settings
 from app.models import (
     AbsenceEpisode,
     EngineType,
@@ -27,6 +27,10 @@ class ScanAlreadyRunning(RuntimeError):
     pass
 
 
+class ScanConfigurationError(RuntimeError):
+    pass
+
+
 _local_scan_lock = threading.Lock()
 _POSTGRES_SCAN_LOCK_KEY = 4_101_001
 
@@ -34,12 +38,8 @@ _POSTGRES_SCAN_LOCK_KEY = 4_101_001
 class MonitorService:
     def __init__(self, db: Session, auto_adapter=None, avito_adapter=None):
         self.db = db
-        self.auto_adapter = auto_adapter or AutoRuAdapter(
-            request_timeout=settings.request_timeout_seconds
-        )
-        self.avito_adapter = avito_adapter or AvitoAdapter(
-            request_timeout=settings.request_timeout_seconds
-        )
+        self.auto_adapter = auto_adapter or AutoRuAdapter(request_timeout=settings.request_timeout_seconds)
+        self.avito_adapter = avito_adapter or AvitoAdapter(request_timeout=settings.request_timeout_seconds)
 
     def _active_filters(self, source: EngineType) -> list[SearchFilter]:
         return (
@@ -96,7 +96,11 @@ class MonitorService:
         )
 
     def _previous_miss_streak(
-        self, listing_id: str, filter_id: str, source: EngineType
+        self,
+        listing_id: str,
+        filter_id: str,
+        source: EngineType,
+        network_profile: str,
     ) -> tuple[int, datetime | None]:
         rows = (
             self.db.query(ListingObservation)
@@ -104,6 +108,7 @@ class MonitorService:
                 ListingObservation.listing_id == listing_id,
                 ListingObservation.filter_id == filter_id,
                 ListingObservation.source == source,
+                ListingObservation.scan_run.has(network_profile=network_profile),
             )
             .order_by(ListingObservation.observed_at.desc(), ListingObservation.id.desc())
             .limit(50)
@@ -149,6 +154,11 @@ class MonitorService:
             )
 
     def run_full_cycle(self) -> dict[str, int]:
+        if settings.network_profile not in SCAN_ALLOWED_NETWORK_PROFILES:
+            allowed = ', '.join(sorted(SCAN_ALLOWED_NETWORK_PROFILES))
+            raise ScanConfigurationError(
+                f'scan requires one of [{allowed}]; current={settings.network_profile}'
+            )
         postgres = self.db.bind is not None and self.db.bind.dialect.name == 'postgresql'
         acquired = False
         if postgres:
@@ -264,9 +274,7 @@ class MonitorService:
                             filter_entity.id,
                             source,
                             ObservationState.TECHNICAL_ERROR,
-                            diagnostics={
-                                'error': 'active listing has no valid direct marketplace URL'
-                            },
+                            diagnostics={'error': 'active listing has no valid direct marketplace URL'},
                         )
                 if unmatchable_ids:
                     scan_run.technical_errors += 1
@@ -293,23 +301,30 @@ class MonitorService:
                         absolute_position=absolute_position,
                     )
                     expectation.listing.last_seen_at = datetime.now(UTC)
-                    self._close_absence(
-                        scan_run, expectation.listing_id, filter_entity.id, source
-                    )
+                    if scan_run.network_profile == PRODUCTION_NETWORK_PROFILE:
+                        self._close_absence(scan_run, expectation.listing_id, filter_entity.id, source)
                     summary['found'] += 1
 
                 for expectation in expectations:
                     if expectation.listing_id in found_ids or expectation.listing_id in unmatchable_ids:
                         continue
-                    previous_misses, first_missing_at = self._previous_miss_streak(
-                        expectation.listing_id, filter_entity.id, source
-                    )
-                    miss_count = previous_misses + 1
-                    confirmed = miss_count >= settings.min_confirmed_absence_runs
+                    if scan_run.network_profile == PRODUCTION_NETWORK_PROFILE:
+                        previous_misses, first_missing_at = self._previous_miss_streak(
+                            expectation.listing_id,
+                            filter_entity.id,
+                            source,
+                            scan_run.network_profile,
+                        )
+                        miss_count = previous_misses + 1
+                        confirmed = miss_count >= settings.min_confirmed_absence_runs
+                    else:
+                        # A local no-VPN run proves reachability, but it must not open or
+                        # extend a production business incident.
+                        first_missing_at = None
+                        miss_count = 1
+                        confirmed = False
                     state = (
-                        ObservationState.ABSENT_CONFIRMED
-                        if confirmed
-                        else ObservationState.ABSENT_UNCERTAIN
+                        ObservationState.ABSENT_CONFIRMED if confirmed else ObservationState.ABSENT_UNCERTAIN
                     )
                     self._record_observation(
                         scan_run,
@@ -389,9 +404,7 @@ class MonitorService:
         open_episode.last_missing_run_id = run.id
         open_episode.notes = 'confirmed_absence'
 
-    def _close_absence(
-        self, run: ScanRun, listing_id: str, filter_id: str, source: EngineType
-    ) -> None:
+    def _close_absence(self, run: ScanRun, listing_id: str, filter_id: str, source: EngineType) -> None:
         open_episode = (
             self.db.query(AbsenceEpisode)
             .filter(

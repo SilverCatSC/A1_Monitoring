@@ -44,6 +44,8 @@ curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
 
 При `NETWORK_PROFILE=local_vpn|unknown`, неполном каталоге или отсутствии
 ожиданий live-gate обязан завершиться `LIVE_ACCEPTANCE_BLOCKED` до POST `/scan`.
+Сам API повторяет сетевой gate и возвращает HTTP 422 до создания `ScanRun`, если
+клиент попытается вызвать `/scan` или `/cycle` напрямую.
 
 Cloud:
 

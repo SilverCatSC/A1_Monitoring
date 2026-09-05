@@ -6,6 +6,10 @@ from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_no_vpn', 'cloud_no_vpn'})
+BUSINESS_TRUSTED_NETWORK_PROFILES = SCAN_ALLOWED_NETWORK_PROFILES
+PRODUCTION_NETWORK_PROFILE = 'cloud_no_vpn'
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file='.env', extra='ignore')
@@ -34,7 +38,7 @@ class Settings(BaseSettings):
     dealer_avito_urls: str = Field(default='', alias='DEALER_AVITO_URLS')
     dealer_pages_limit: int = Field(default=3, alias='DEALER_PAGES_LIMIT', ge=1, le=10)
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
-    app_version: str = '0.3.0'
+    app_version: str = '0.3.1'
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60
 

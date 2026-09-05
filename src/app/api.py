@@ -43,7 +43,7 @@ from app.service.evidence import EvidenceAccessError, resolve_observation_eviden
 from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
-from app.service.monitor import MonitorService, ScanAlreadyRunning
+from app.service.monitor import MonitorService, ScanAlreadyRunning, ScanConfigurationError
 from app.service.report import (
     dashboard_context,
     kpi_overview,
@@ -242,6 +242,8 @@ def trigger_scan(db: Session = Depends(get_db)):
     started_at = datetime.datetime.now(datetime.UTC)
     try:
         summary = service.run_full_cycle()
+    except ScanConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ScanAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except Exception as exc:
@@ -254,6 +256,8 @@ def trigger_cycle(db: Session = Depends(get_db)):
     started_at = datetime.datetime.now(datetime.UTC)
     try:
         summary = MonitoringCycleService(db).run()
+    except ScanConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ScanAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except SourceImportError as exc:
@@ -272,9 +276,7 @@ def discover_dealer_listings(db: Session = Depends(get_db)):
 
 
 @router.get('/dealer/candidates')
-def dealer_candidates(
-    source: str | None = None, active: bool | None = True, db: Session = Depends(get_db)
-):
+def dealer_candidates(source: str | None = None, active: bool | None = True, db: Session = Depends(get_db)):
     query = db.query(DealerListingCandidate)
     if source is not None:
         if source not in {'auto_ru', 'avito'}:
@@ -365,9 +367,7 @@ def upsert_filter(payload: FilterUpsert, db: Session = Depends(get_db)):
 
 
 @router.patch('/filters/{filter_id}')
-def change_filter_state(
-    filter_id: str, payload: FilterStateChange, db: Session = Depends(get_db)
-):
+def change_filter_state(filter_id: str, payload: FilterStateChange, db: Session = Depends(get_db)):
     try:
         entity = FilterRegistryService(db).set_active(filter_id, payload.active)
     except FilterValidationError as exc:
@@ -410,9 +410,7 @@ def list_listings(
 
 
 @router.patch('/listings/{listing_id}/links')
-def update_listing_link(
-    listing_id: str, payload: ListingLinkUpdate, db: Session = Depends(get_db)
-):
+def update_listing_link(listing_id: str, payload: ListingLinkUpdate, db: Session = Depends(get_db)):
     try:
         listing = ListingRegistryService(db).update_link(
             listing_id,
@@ -493,9 +491,7 @@ def list_feedback(status: str | None = None, db: Session = Depends(get_db)):
 
 
 @router.patch('/feedback/{feedback_id}')
-def update_feedback(
-    feedback_id: str, payload: FeedbackUpdate, db: Session = Depends(get_db)
-):
+def update_feedback(feedback_id: str, payload: FeedbackUpdate, db: Session = Depends(get_db)):
     try:
         item = FeedbackService(db).update_status(
             feedback_id,

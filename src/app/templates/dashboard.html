@@ -56,8 +56,8 @@
   </tbody></table></div></section>
 
   <section class="two">
-    <div class="card"><h2>Последние циклы</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка</th><th>Статус</th><th>Фильтры</th><th>Страницы</th><th>Ошибки</th></tr></thead><tbody>
-      {% for run in context.recent_runs %}<tr><td>{{ run.started_at.strftime('%d.%m %H:%M') }}</td><td>{{ run.source.value }}</td><td><span class="pill {{ run.status.name }}">{{ run.status.value }}</span></td><td>{{ run.filters_ok }}/{{ run.filters_total }}</td><td>{{ run.pages_scanned }}</td><td>{{ run.technical_errors }}</td></tr>{% else %}<tr><td colspan="6" class="empty">Циклов пока нет</td></tr>{% endfor %}
+    <div class="card"><h2>Последние циклы</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка / сеть</th><th>Статус</th><th>Фильтры</th><th>Страницы</th><th>Ошибки</th></tr></thead><tbody>
+      {% for run in context.recent_runs %}<tr><td>{{ run.started_at.strftime('%d.%m %H:%M') }}</td><td>{{ run.source.value }}<br><span class="muted">{{ run.network_profile }}</span></td><td><span class="pill {{ run.status.name }}">{{ run.status.value }}</span></td><td>{{ run.filters_ok }}/{{ run.filters_total }}</td><td>{{ run.pages_scanned }}</td><td>{{ run.technical_errors }}</td></tr>{% else %}<tr><td colspan="6" class="empty">Циклов пока нет</td></tr>{% endfor %}
     </tbody></table></div></div>
     <div class="card"><h2>Последний импорт</h2>
       {% if context.last_import %}<p><strong>{{ context.last_import.valid_rows }}</strong> валидных из {{ context.last_import.raw_rows }}</p><p>Отклонено: {{ context.last_import.invalid_rows }}</p><p>Карантин: <strong class="{{ 'danger' if context.last_import.blocked_by_schema_drift else 'ok' }}">{{ 'да' if context.last_import.blocked_by_schema_drift else 'нет' }}</strong></p><p class="muted">{{ context.last_import.finished_at }}</p>{% else %}<div class="empty">Импортов пока нет</div>{% endif %}
