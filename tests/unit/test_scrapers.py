@@ -3,7 +3,7 @@ from app.scraper.avito import AvitoAdapter
 
 
 def test_auto_ru_extracts_current_universal_listing_markup():
-    html = '''
+    html = """
     <div class="ListingItemUniversal-AbCdE">
       <div class="ListingItemUniversal__body-X">
         <div class="ListingItemTitle">
@@ -15,7 +15,7 @@ def test_auto_ru_extracts_current_universal_listing_markup():
         <span>15 900 000 ₽</span>
       </div>
     </div>
-    '''
+    """
     hits = AutoRuAdapter()._extract(html, page_number=2)
 
     assert len(hits) == 1
@@ -27,24 +27,24 @@ def test_auto_ru_extracts_current_universal_listing_markup():
 
 
 def test_auto_ru_deduplicates_multiple_links_for_same_listing():
-    html = '''
+    html = """
     <div class="ListingItemUniversal-AbCdE">
       <a href="https://auto.ru/cars/used/sale/bmw/x5/1134019078-a/">BMW X5</a>
       <a href="https://auto.ru/cars/used/sale/bmw/x5/1134019078-b/?gallery=1">Фото</a>
     </div>
-    '''
+    """
     assert len(AutoRuAdapter()._extract(html, page_number=1)) == 1
 
 
 def test_auto_ru_extracts_lcv_dealer_listing_paths():
-    html = '''
+    html = """
     <div class="ListingItemUniversal-AbCdE">
       <a href="https://auto.ru/lcv/used/sale/mercedes/sprinter/1132284604-9b053bf0/">
         Mercedes-Benz Sprinter
       </a>
       <span>18 500 000 ₽</span>
     </div>
-    '''
+    """
     hits = AutoRuAdapter()._extract(html, page_number=1)
 
     assert len(hits) == 1
@@ -52,15 +52,37 @@ def test_auto_ru_extracts_lcv_dealer_listing_paths():
     assert hits[0].price == 18_500_000
 
 
+def test_auto_ru_extracts_current_new_group_offer_paths():
+    html = """
+    <a href="https://auto.ru/moskva/cars/new/group/maextro/s800/24059154-24059158/">
+      Сводная карточка модели
+    </a>
+    <div class="ListingItemUniversal-AbCdE">
+      <a class="Link ListingItemTitle__link ListingItemUniversalSpecs__link-X"
+         href="https://auto.ru/cars/new/group/maextro/s800/24059170/24087222/1133298803-85734ae5/">
+        Maextro S800, 2026
+      </a>
+      <span>27 550 000 ₽</span>
+    </div>
+    """
+
+    hits = AutoRuAdapter()._extract(html, page_number=1)
+
+    assert len(hits) == 1
+    assert hits[0].url.endswith('/1133298803-85734ae5/')
+    assert hits[0].title == 'Maextro S800, 2026'
+    assert hits[0].price == 27_550_000
+
+
 def test_avito_extracts_known_article_markup():
-    html = '''
+    html = """
     <div data-marker="catalog-serp">
       <article data-marker="item" data-item-name="Mercedes-Benz V-Класс">
         <a href="/moskva/avtomobili/mercedes-benz_v-klass_9876543210">Открыть</a>
         <span>12 500 000 ₽</span>
       </article>
     </div>
-    '''
+    """
     hits = AvitoAdapter()._extract(html, page_number=3)
     assert len(hits) == 1
     assert hits[0].url.startswith('https://www.avito.ru/')

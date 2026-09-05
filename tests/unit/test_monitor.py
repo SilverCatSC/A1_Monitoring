@@ -105,6 +105,13 @@ def test_canonical_listing_key_ignores_slug_and_tracking_query():
     assert left == right == 'auto_ru:1234567890'
     assert (
         canonical_listing_key(
+            EngineType.AUTO_RU,
+            'https://auto.ru/cars/new/group/mercedes/v_klasse/23963640/24913654/1134009355-b7a56183/',
+        )
+        == 'auto_ru:1134009355'
+    )
+    assert (
+        canonical_listing_key(
             EngineType.AVITO,
             'https://www.avito.ru/moskva/avtomobili/mercedes_9876543210?context=H4sIA',
         )
@@ -135,6 +142,10 @@ def test_filter_url_validation_does_not_confuse_a1auto_or_listing_pages():
     assert is_marketplace_listing_url(
         EngineType.AUTO_RU,
         'https://auto.ru/cars/new/group/mercedes/vle/25032437/25069598/1133252498-car/',
+    )
+    assert not is_marketplace_listing_url(
+        EngineType.AUTO_RU,
+        'https://auto.ru/moskva/cars/new/group/maextro/s800/24059154-24059158/',
     )
 
 

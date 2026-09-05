@@ -94,6 +94,10 @@ def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
     if source == EngineType.AUTO_RU:
         if not _host_matches(host, 'auto.ru'):
             return None
+        for segment in reversed(path.split('/')):
+            match = re.match(r'^(\d{5,})(?:-|$)', segment)
+            if match:
+                return f'auto_ru:{match.group(1)}'
         numeric_ids = re.findall(r'(?<!\d)(\d{5,})(?!\d)', path)
         if numeric_ids:
             return f'auto_ru:{numeric_ids[-1]}'
@@ -145,7 +149,11 @@ def is_marketplace_listing_url(source: EngineType, value: str | None) -> bool:
         return False
     path = unquote(urlparse(raw).path).lower()
     if source == EngineType.AUTO_RU:
-        return '/sale/' in path or '/cars/new/group/' in path
+        if '/sale/' in path:
+            return True
+        if '/cars/new/group/' in path:
+            return bool(re.search(r'/\d{9,}-[^/]+/?$', path))
+        return False
     if source == EngineType.AVITO:
         return bool(re.search(r'_\d{5,}(?:$|/)', path.rstrip('/')))
     return False

@@ -16,6 +16,7 @@ from app.scraper.base import (
     canonical_listing_key,
     capture_page_evidence,
     classify_result_page,
+    is_marketplace_listing_url,
 )
 
 
@@ -102,6 +103,7 @@ class AutoRuAdapter:
         links = soup.select(
             'a.ListingItemTitle__link[href*="/cars/"][href*="/sale/"], '
             'a[href*="/cars/used/sale/"], a[href*="/cars/new/sale/"], '
+            'a[href*="/cars/new/group/"], '
             'a[href*="/lcv/used/sale/"], a[href*="/lcv/new/sale/"]'
         )
         for link in links:
@@ -112,6 +114,8 @@ class AutoRuAdapter:
                 raw_url = 'https:' + raw_url
             if raw_url.startswith('/'):
                 raw_url = 'https://auto.ru' + raw_url
+            if not is_marketplace_listing_url(EngineType.AUTO_RU, raw_url):
+                continue
             key = canonical_listing_key(EngineType.AUTO_RU, raw_url)
             if not key or key in seen:
                 continue
@@ -123,10 +127,7 @@ class AutoRuAdapter:
                 if any(
                     class_name == 'ListingItem'
                     or class_name == 'OfferSnippet'
-                    or (
-                        class_name.startswith('ListingItemUniversal-')
-                        and '__' not in class_name
-                    )
+                    or (class_name.startswith('ListingItemUniversal-') and '__' not in class_name)
                     for class_name in classes
                 ):
                     card = ancestor
