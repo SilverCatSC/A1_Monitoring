@@ -47,6 +47,7 @@ from app.service.monitor import MonitorService, ScanAlreadyRunning
 from app.service.report import (
     dashboard_context,
     kpi_overview,
+    latest_scan_runs_status,
     listing_catalog_context,
     listing_detail_context,
     observation_history_context,
@@ -78,6 +79,7 @@ def ready(db: Session = Depends(get_db)):
         'database': 'ok',
         'environment': settings.app_env,
         'authentication': 'enabled' if settings.auth_enabled else 'disabled',
+        'scheduler': 'enabled' if settings.scheduler_enabled else 'disabled',
     }
 
 
@@ -118,6 +120,11 @@ def dashboard_weekends(days: int = 14, db: Session = Depends(get_db)):
 @router.get('/system/status')
 def system_status(db: Session = Depends(get_db)):
     return operational_status(db)
+
+
+@router.get('/status/scans/latest')
+def latest_scan_status(db: Session = Depends(get_db)):
+    return latest_scan_runs_status(db)
 
 
 @router.get('/dashboard', response_class=HTMLResponse)

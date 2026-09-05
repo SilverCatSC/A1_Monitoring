@@ -29,6 +29,7 @@ DB_PASSWORD=<длинный URL-safe пароль>
 APP_BIND_PORT=18000
 DB_BIND_PORT=15433
 DEALER_DISCOVERY_ENABLED=false
+SCHEDULER_ENABLED=false
 ```
 
 Запуск и проверка:
@@ -42,6 +43,10 @@ DEALER_DISCOVERY_ENABLED=false
 
 Локальный stage нельзя публиковать в интернет: auth отключён, а сетевой маршрут
 через VPN не репрезентативен для production без VPN.
+
+`SCHEDULER_ENABLED=false` обязателен для обычного локального stage: приложение не
+должно обращаться к площадкам самостоятельно. `smoke_stage.sh` не выполняет
+marketplace scan.
 
 ## 3. Подготовка production без VPN
 
@@ -103,9 +108,22 @@ curl https://monitor.example.ru/api/v1/ready
 APP_ENV=production
 NETWORK_PROFILE=cloud_no_vpn
 DEALER_DISCOVERY_ENABLED=true
+SCHEDULER_ENABLED=true
 ```
 
 Production с другим профилем намеренно не стартует.
+
+Контрольный live-gate:
+
+```bash
+./scripts/live_acceptance.sh
+```
+
+Для разового теста с локального компьютера без VPN необходимо одновременно
+установить `NETWORK_PROFILE=local_no_vpn` и передать
+`ALLOW_LOCAL_NO_VPN=true`. Это не production-доказательство. Скрипт не считает
+HTTP 200 успехом: он проверяет новый `ScanRun`, полноту фильтров, отсутствие
+technical-наблюдений и наличие скриншотов.
 
 ## 4. Настройка фильтров
 

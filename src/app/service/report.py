@@ -334,6 +334,76 @@ def operational_status(
     }
 
 
+def latest_scan_runs_status(session) -> dict:
+    rows = []
+    for source_name in settings.scan_engines:
+        try:
+            source = EngineType(source_name)
+        except ValueError:
+            rows.append(
+                {
+                    'source': source_name,
+                    'status': 'invalid_configuration',
+                    'reason': 'unknown source in SCAN_ENABLED_ENGINES',
+                }
+            )
+            continue
+        run = (
+            session.query(ScanRun)
+            .filter(ScanRun.source == source)
+            .order_by(ScanRun.started_at.desc(), ScanRun.id.desc())
+            .first()
+        )
+        if run is None:
+            rows.append({'source': source.value, 'status': 'never_run'})
+            continue
+
+        observations = list(run.observations)
+        state_counts = {
+            state.value: sum(observation.state == state for observation in observations)
+            for state in ObservationState
+        }
+        evidence_references: set[str] = set()
+        evidence_page_numbers: set[int] = set()
+        for observation in observations:
+            diagnostics = (observation.raw_payload or {}).get('scan_diagnostics') or {}
+            for key, value in diagnostics.items():
+                if not key.startswith('page_') or not key.endswith('_evidence'):
+                    continue
+                if isinstance(value, str) and value.strip():
+                    evidence_references.add(value)
+                    try:
+                        evidence_page_numbers.add(
+                            int(key.removeprefix('page_').removesuffix('_evidence'))
+                        )
+                    except ValueError:
+                        continue
+        rows.append(
+            {
+                'id': run.id,
+                'source': source.value,
+                'status': run.status.value,
+                'network_profile': run.network_profile,
+                'started_at': run.started_at,
+                'finished_at': run.finished_at,
+                'filters_total': run.filters_total,
+                'filters_ok': run.filters_ok,
+                'pages_scanned': run.pages_scanned,
+                'technical_errors': run.technical_errors,
+                'observations': len(observations),
+                'state_counts': state_counts,
+                'evidence_files': len(evidence_references),
+                'evidence_pages': sorted(evidence_page_numbers),
+                'notes': run.notes,
+            }
+        )
+    return {
+        'requested_pages': settings.scan_pages_limit,
+        'network_profile': settings.network_profile,
+        'runs': rows,
+    }
+
+
 def dashboard_context(session, days: int = 7) -> dict:
     since = datetime.now(UTC) - timedelta(days=days)
     observation_counts = {

@@ -22,7 +22,11 @@ async def lifespan(_app: FastAPI):
         network_profile=settings.network_profile,
     )
     init_db()
-    scheduler = start_scheduler() if settings.app_env in {'stage', 'production'} else None
+    scheduler = (
+        start_scheduler()
+        if settings.scheduler_enabled and settings.app_env in {'stage', 'production'}
+        else None
+    )
     try:
         yield
     finally:

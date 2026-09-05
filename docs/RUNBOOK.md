@@ -34,6 +34,17 @@ git diff --check
 ./scripts/smoke_stage.sh
 ```
 
+Smoke не вызывает `/scan`. Для контролируемой живой приёмки после подтверждения
+no-VPN маршрута:
+
+```bash
+./scripts/live_acceptance.sh
+curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
+```
+
+При `NETWORK_PROFILE=local_vpn|unknown`, неполном каталоге или отсутствии
+ожиданий live-gate обязан завершиться `LIVE_ACCEPTANCE_BLOCKED` до POST `/scan`.
+
 Cloud:
 
 ```bash
@@ -43,7 +54,9 @@ docker-compose \
   up -d --build
 ```
 
-Startup сначала выполняет `alembic upgrade head`, затем запускает web/scheduler.
+Startup сначала выполняет `alembic upgrade head`, затем запускает web. Scheduler
+запускается только при явном `SCHEDULER_ENABLED=true`; локальный stage использует
+`false`.
 
 ## 3. Ручные операции
 

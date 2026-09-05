@@ -58,7 +58,12 @@
 - Backup восстановлен в изолированную тестовую БД; контрольные количества совпали.
 - Stage smoke проверяет readiness, импорт, status, dashboard, migration, порты,
   backup, restore и отсутствие traceback.
-- Suite: 60 тестов; Ruff и `git diff --check` зелёные.
+- Stage scheduler теперь fail-safe отключён; без `SCHEDULER_ENABLED=true` он не
+  выполняет живой цикл при старте приложения.
+- Отдельный `live_acceptance.sh` проверяет сетевой профиль, полноту каталога,
+  новый ScanRun, technical-состояния и screenshot evidence; на текущем stage он
+  ожидаемо заблокирован как `network_profile_local_vpn` до сетевого обращения.
+- Suite: 64 теста; Ruff и `git diff --check` зелёные.
 - Caddy cloud override подготовлен для HTTPS.
 
 ## Важная поправка к живым сетевым проверкам

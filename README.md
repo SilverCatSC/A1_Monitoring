@@ -78,6 +78,7 @@ NETWORK_PROFILE=local_vpn
 AUTH_ENABLED=false
 DB_PASSWORD=<локальный URL-safe пароль>
 DEALER_DISCOVERY_ENABLED=false
+SCHEDULER_ENABLED=false
 ```
 
 Затем:
@@ -112,6 +113,22 @@ docker-compose \
    `APP_ENV=production`. Иначе приложение намеренно откажется стартовать.
 
 Точный порядок и stop-rules описаны в `INSTRUCTION.md` и `docs/RUNBOOK.md`.
+
+## Три разных уровня проверки
+
+```bash
+.venv312/bin/pytest -q                 # логика на изолированных данных
+./scripts/smoke_stage.sh               # HTTP, импорт, UI, БД, backup/restore
+./scripts/live_acceptance.sh           # реальный обход Auto.ru и Avito
+```
+
+`smoke_stage.sh` намеренно не вызывает `/scan` и завершает работу сообщением
+`STAGE_SMOKE_OK_NO_MARKETPLACE_SCAN`. Live acceptance разрешён только при
+`NETWORK_PROFILE=cloud_no_vpn` или при разовом локальном подтверждении
+`NETWORK_PROFILE=local_no_vpn` вместе с `ALLOW_LOCAL_NO_VPN=true`. Он блокируется
+до сетевого обращения при неполном каталоге, фильтре без автомобилей или
+неоднозначном назначении, а после запуска требует `success`, отсутствие
+technical-ошибок, новые наблюдения и screenshot evidence по каждой площадке.
 
 ## Настройка поисковых фильтров
 

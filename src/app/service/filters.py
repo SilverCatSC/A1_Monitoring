@@ -483,6 +483,7 @@ class FilterRegistryService:
         expectations = 0
 
         for definition in CANONICAL_FILTERS:
+            assignment_ids = status['assignments'][definition.key]
             external_key = hashlib.sha256(
                 f'canonical_catalog|{definition.key}'.encode('utf-8')
             ).hexdigest()
@@ -500,23 +501,28 @@ class FilterRegistryService:
                     external_key=external_key,
                     name=definition.name,
                     raw_url=normalize_search_url(definition.url),
-                    active=True,
+                    active=bool(assignment_ids),
                     version=1,
                 )
                 self.db.add(entity)
                 self.db.flush()
                 created += 1
             else:
+                operator_override = (entity.raw_criteria or {}).get(
+                    'operator_active_override'
+                )
                 changed = entity.name != definition.name or entity.raw_url != normalize_search_url(
                     definition.url
                 )
                 entity.name = definition.name
                 entity.raw_url = normalize_search_url(definition.url)
+                if operator_override is None:
+                    entity.active = bool(assignment_ids)
                 if changed:
                     entity.version += 1
                     updated += 1
 
-            entity.raw_criteria = {
+            criteria = {
                 'managed_by': 'canonical_catalog',
                 'assignment_mode': 'rule',
                 'catalog_version': CATALOG_VERSION,
@@ -525,10 +531,15 @@ class FilterRegistryService:
                 'condition': definition.condition,
                 'source_document': 'Инструкция по мониторингу машин.md',
             }
+            if entity.raw_criteria and 'operator_active_override' in entity.raw_criteria:
+                criteria['operator_active_override'] = entity.raw_criteria[
+                    'operator_active_override'
+                ]
+            entity.raw_criteria = criteria
             self.db.query(VehicleFilterExpectation).filter(
                 VehicleFilterExpectation.filter_id == entity.id
             ).delete(synchronize_session=False)
-            for listing_id in status['assignments'][definition.key]:
+            for listing_id in assignment_ids:
                 self.db.add(
                     VehicleFilterExpectation(
                         filter_id=entity.id,
@@ -557,5 +568,9 @@ class FilterRegistryService:
         if entity is None:
             raise FilterValidationError('filter not found')
         entity.active = active
+        criteria = dict(entity.raw_criteria or {})
+        if criteria.get('managed_by') == 'canonical_catalog':
+            criteria['operator_active_override'] = active
+            entity.raw_criteria = criteria
         self.db.commit()
         return entity

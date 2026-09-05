@@ -198,6 +198,14 @@ def test_catalog_has_one_semantic_avito_sprinter_filter_and_preserves_operator_d
     ]
     assert len(avito_sprinter) == 1
 
+    session.add(
+        _listing(
+            'SPRINTERACTIVE001',
+            auto_url='https://auto.ru/lcv/new/sale/mercedes/sprinter/9234567890-a/',
+            avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_sprinter_3.0_at_2026_9234567891',
+        )
+    )
+    session.commit()
     service = FilterRegistryService(session)
     service.sync_canonical_catalog()
     entity = (
@@ -205,9 +213,18 @@ def test_catalog_has_one_semantic_avito_sprinter_filter_and_preserves_operator_d
         .filter(SearchFilter.source == EngineType.AVITO, SearchFilter.name.contains('Sprinter'))
         .one()
     )
-    entity.active = False
-    session.commit()
+    assert entity.active is True
+    service.set_active(entity.id, False)
 
     service.sync_canonical_catalog()
 
     assert entity.active is False
+    assert entity.raw_criteria['operator_active_override'] is False
+
+
+def test_catalog_filter_without_current_expectations_is_inactive(session):
+    service = FilterRegistryService(session)
+    service.sync_canonical_catalog()
+
+    assert session.query(SearchFilter).count() == 16
+    assert session.query(SearchFilter).filter(SearchFilter.active.is_(True)).count() == 0

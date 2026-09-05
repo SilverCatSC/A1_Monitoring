@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     scan_pages_limit: int = Field(default=3, alias='SCAN_PAGES_LIMIT', ge=1, le=10)
     scan_interval_minutes: int = Field(default=360, alias='SCAN_INTERVAL_MINUTES', ge=1)
     scan_enabled_engines: str = Field(default='auto_ru,avito', alias='SCAN_ENABLED_ENGINES')
+    scheduler_enabled: bool = Field(default=False, alias='SCHEDULER_ENABLED')
     playwright_headless: bool = Field(default=True, alias='PLAYWRIGHT_HEADLESS')
     request_timeout_seconds: int = Field(default=25, alias='REQUEST_TIMEOUT_SECONDS', ge=5)
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')

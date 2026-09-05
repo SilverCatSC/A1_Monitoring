@@ -53,6 +53,7 @@ assert ready == {
     'database': 'ok',
     'environment': 'stage',
     'authentication': 'disabled',
+    'scheduler': 'disabled',
 }
 assert imported['rows_total'] == 130
 assert imported['rows_valid'] == 106
@@ -60,7 +61,7 @@ assert imported['rows_invalid'] == 24
 assert status['import']['state'] == 'healthy'
 assert {row['source'] for row in status['sources']} == {'auto_ru', 'avito'}
 active_filters = [row for row in filters if row['active']]
-assert len(active_filters) == 16
+assert len(active_filters) == 15
 assert {row['source'] for row in active_filters} == {'auto_ru', 'avito'}
 assert sum(row['expectations'] for row in active_filters) == 38
 assert catalog['catalog_version'] == 'a1-monitoring-instruction-2026-09-04-v1'
