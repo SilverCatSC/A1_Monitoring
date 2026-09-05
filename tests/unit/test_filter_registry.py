@@ -3,7 +3,11 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Base, EngineType, Listing, SearchFilter, VehicleFilterExpectation
-from app.service.filters import FilterRegistryService, FilterValidationError
+from app.service.filters import (
+    CANONICAL_FILTERS,
+    FilterRegistryService,
+    FilterValidationError,
+)
 
 
 @pytest.fixture
@@ -136,3 +140,74 @@ def test_legacy_managed_filter_without_assignment_mode_is_not_guessed(session):
 
     assert refreshed['managed_filters'] == 0
     assert session.query(VehicleFilterExpectation).count() == 0
+
+
+def test_canonical_catalog_assigns_by_marketplace_family_and_condition(session):
+    listings = [
+        _listing(
+            'NEWVCLASS00000001',
+            auto_url='https://auto.ru/cars/new/group/mercedes/v_klasse/1/2/1234567890-a/',
+        ),
+        _listing(
+            'USEDVCLASS0000001',
+            auto_url='https://auto.ru/cars/used/sale/mercedes/v_klasse/2234567890-b/',
+        ),
+        _listing(
+            'HONGQIHQ900000001',
+            auto_url='https://auto.ru/cars/new/group/hongqi/hq9/1/2/3234567890-c/',
+            avito_url='https://www.avito.ru/moskva/avtomobili/hongqi_hq9_2.0_at_2026_4234567890',
+        ),
+        _listing(
+            'AVITOVCLASS000001',
+            auto_url='https://auto.ru/cars/new/group/mercedes/v_klasse/1/2/5234567890-d/',
+            avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_6234567890',
+        ),
+        _listing(
+            'SPRINTER000000001',
+            auto_url='https://auto.ru/lcv/used/sale/mercedes/sprinter/7234567890-e/',
+            avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_sprinter_3.0_at_2024_9_540_km_8234567890',
+        ),
+    ]
+    session.add_all(listings)
+    session.commit()
+
+    service = FilterRegistryService(session)
+    first = service.sync_canonical_catalog()
+    second = service.sync_canonical_catalog()
+
+    assert first['definitions'] == 16
+    assert first['created'] == 16
+    assert first['expectations'] == 7
+    assert first['unmatched'] == 1
+    assert first['unmatched_rows'][0]['vin'] == 'AVITOVCLASS000001'
+    assert first['unmatched_rows'][0]['source'] == 'avito'
+    assert first['unmatched_rows'][0]['family'] == 'v_class'
+    assert second['created'] == 0
+    assert second['updated'] == 0
+    assert session.query(SearchFilter).count() == 16
+    assert session.query(VehicleFilterExpectation).count() == 7
+
+
+def test_catalog_has_one_semantic_avito_sprinter_filter_and_preserves_operator_disable(
+    session,
+):
+    avito_sprinter = [
+        definition
+        for definition in CANONICAL_FILTERS
+        if definition.source == EngineType.AVITO and definition.family == 'sprinter'
+    ]
+    assert len(avito_sprinter) == 1
+
+    service = FilterRegistryService(session)
+    service.sync_canonical_catalog()
+    entity = (
+        session.query(SearchFilter)
+        .filter(SearchFilter.source == EngineType.AVITO, SearchFilter.name.contains('Sprinter'))
+        .one()
+    )
+    entity.active = False
+    session.commit()
+
+    service.sync_canonical_catalog()
+
+    assert entity.active is False

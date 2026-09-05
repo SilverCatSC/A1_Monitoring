@@ -56,7 +56,9 @@ def main() -> None:
         rows = CsvOrXlsxReader(source_path).read()
         with get_db_context() as db:
             SourceImporter(db).run(rows, source_signature=source_path)
-            FilterRegistryService(db).refresh_managed_assignments()
+            registry = FilterRegistryService(db)
+            registry.refresh_managed_assignments()
+            registry.sync_canonical_catalog()
         return
 
 

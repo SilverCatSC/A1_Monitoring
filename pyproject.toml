@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "a1-search-monitor"
-version = "0.2.0"
+version = "0.3.0"
 description = "Autonomous cloud monitoring stack for used car listing visibility on Avito and Auto.ru"
 readme = "README.md"
 requires-python = ">=3.11"

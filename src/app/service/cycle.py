@@ -28,7 +28,9 @@ class MonitoringCycleService:
         )
         rows = CsvOrXlsxReader(source_path).read()
         imported = SourceImporter(self.db).run(rows, source_signature=source_path)
-        assignments = FilterRegistryService(self.db).refresh_managed_assignments()
+        registry = FilterRegistryService(self.db)
+        assignments = registry.refresh_managed_assignments()
+        canonical_filters = registry.sync_canonical_catalog()
         if settings.dealer_discovery_enabled:
             try:
                 discovery = DealerDiscoveryService(self.db).run()
@@ -40,6 +42,7 @@ class MonitoringCycleService:
         return {
             'import': imported,
             'filter_assignments': assignments,
+            'canonical_filters': canonical_filters,
             'dealer_discovery': discovery,
             'scan': scanned,
             'evidence_removed': evidence_removed,

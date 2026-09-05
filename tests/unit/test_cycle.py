@@ -35,6 +35,10 @@ def test_cycle_imports_before_scan(monkeypatch):
             events.append(('refresh', None))
             return {'managed_filters': 1, 'added': 2}
 
+        def sync_canonical_catalog(self):
+            events.append(('catalog', None))
+            return {'definitions': 16, 'expectations': 7}
+
     class Discovery:
         def __init__(self, db):
             assert db == 'db'
@@ -59,12 +63,14 @@ def test_cycle_imports_before_scan(monkeypatch):
         'read',
         'import',
         'refresh',
+        'catalog',
         'discover',
         'scan',
     ]
     assert result == {
         'import': {'rows_valid': 1},
         'filter_assignments': {'managed_filters': 1, 'added': 2},
+        'canonical_filters': {'definitions': 16, 'expectations': 7},
         'dealer_discovery': {'complete': 2},
         'scan': {'runs': 2},
         'evidence_removed': 3,

@@ -38,10 +38,12 @@
   {% if not auth_enabled %}<div class="notice"><strong>Stage:</strong> аутентификация отключена. Этот экземпляр нельзя публиковать в интернете.</div>{% endif %}
   {% if context.network_profile != 'cloud_no_vpn' %}<div class="notice"><strong>Сетевой профиль {{ context.network_profile }}:</strong> живые результаты этого экземпляра не являются доказательством работы production без VPN.</div>{% endif %}
   {% if not context.active_filters %}<div class="notice"><strong>Мониторинг ещё не настроен:</strong> добавьте утверждённые поисковые URL ниже. До этого система не формирует выводов о видимости.</div>{% endif %}
+  {% if context.canonical_filter_catalog.unmatched %}<div class="notice"><strong>Не назначен канонический фильтр:</strong> {{ context.canonical_filter_catalog.unmatched|length }} связей «автомобиль — площадка». Они не считаются проверенными и перечислены ниже.</div>{% endif %}
 
   <section class="grid">
     <div class="card metric"><div class="label">Активные авто</div><div class="value">{{ context.listings_active }}</div><div class="muted">из {{ context.listings_total }}</div></div>
     <div class="card metric"><div class="label">Фильтры</div><div class="value">{{ context.active_filters|length }}</div></div>
+    <div class="card metric"><div class="label">Назначения</div><div class="value">{{ context.canonical_filter_catalog.expectations }}</div><div class="muted">версия {{ context.canonical_filter_catalog.catalog_version }}</div></div>
     <div class="card metric"><div class="label">Найдено</div><div class="value ok">{{ context.observation_counts.get('found',0) }}</div></div>
     <div class="card metric"><div class="label">Непоказы</div><div class="value danger">{{ context.open_absences|length }}</div><div class="muted">подтверждённые эпизоды</div></div>
     <div class="card metric"><div class="label">Тех. сбои</div><div class="value">{{ context.observation_counts.get('technical_error',0) }}</div></div>
@@ -62,6 +64,10 @@
       <p class="muted">Ссылки: Auto.ru {{ context.auto_links }}, Avito {{ context.avito_links }}</p>
     </div>
   </section>
+
+  <section class="card"><h2>Покрытие каноническими фильтрами</h2><p class="muted">{{ context.canonical_filter_catalog.definitions_by_source.auto_ru }} Auto.ru + {{ context.canonical_filter_catalog.definitions_by_source.avito }} Avito; одинаковые по смыслу URL не дублируются.</p><div class="scroll"><table><thead><tr><th>VIN / автомобиль</th><th>Площадка</th><th>Семейство</th><th>Состояние</th><th>Причина</th></tr></thead><tbody>
+    {% for item in context.canonical_filter_catalog.unmatched %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}">{{ item.vin or item.listing_id }}</a></td><td>{{ item.source }}</td><td>{{ item.family or 'не распознано' }}</td><td>{{ item.condition or 'не определено' }}</td><td>{{ item.reason }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Все объявления с прямыми ссылками назначены фильтрам</td></tr>{% endfor %}
+  </tbody></table></div></section>
 
   <section class="card"><h2>Подтверждённые эпизоды отсутствия</h2><div class="scroll"><table><thead><tr><th>VIN / автомобиль</th><th>Фильтр</th><th>Площадка</th><th>Начало</th><th>Пропусков</th></tr></thead><tbody>
     {% for item in context.open_absences %}<tr><td><strong>{{ item.listing.vin or item.listing_id }}</strong><br><span class="muted">{{ item.listing.brand or '' }} {{ item.listing.model or '' }}</span></td><td>{{ item.filter_id }}</td><td>{{ item.source.value }}</td><td>{{ item.started_at }}</td><td>{{ item.consecutive_misses }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Открытых подтверждённых эпизодов нет</td></tr>{% endfor %}

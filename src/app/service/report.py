@@ -23,6 +23,7 @@ from app.models import (
 )
 from app.scraper.base import is_marketplace_listing_url
 from app.service.evidence import evidence_pages
+from app.service.filters import FilterRegistryService
 
 
 def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
@@ -411,6 +412,9 @@ def dashboard_context(session, days: int = 7) -> dict:
         'auto_links': session.query(Listing).filter(Listing.source_auto_ru.is_not(None)).count(),
         'avito_links': session.query(Listing).filter(Listing.source_avito.is_not(None)).count(),
         'active_filters': active_filters,
+        'canonical_filter_catalog': FilterRegistryService(
+            session
+        ).canonical_catalog_status(),
         'observation_counts': observation_counts,
         'open_absences': open_absences,
         'feedback': feedback,

@@ -26,6 +26,8 @@ HEALTH_JSON="$(curl --fail --silent --show-error "$BASE_URL/health")"
 READY_JSON="$(curl --fail --silent --show-error "$BASE_URL/ready")"
 IMPORT_JSON="$(curl --fail --silent --show-error --request POST "$BASE_URL/import")"
 STATUS_JSON="$(curl --fail --silent --show-error "$BASE_URL/system/status")"
+FILTERS_JSON="$(curl --fail --silent --show-error "$BASE_URL/filters")"
+CATALOG_STATUS_JSON="$(curl --fail --silent --show-error "$BASE_URL/filters/catalog/status")"
 DASHBOARD_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard")"
 CATALOG_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/listings")"
 HISTORY_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/history")"
@@ -34,7 +36,8 @@ LISTING_ID="$(printf '%s' "$LISTINGS_JSON" | python3 -c 'import json, sys; print
 DETAIL_HTML="$(curl --fail --silent --show-error "$BASE_URL/dashboard/listings/$LISTING_ID")"
 
 HEALTH_JSON="$HEALTH_JSON" READY_JSON="$READY_JSON" IMPORT_JSON="$IMPORT_JSON" \
-STATUS_JSON="$STATUS_JSON" python3 - <<'PY'
+STATUS_JSON="$STATUS_JSON" FILTERS_JSON="$FILTERS_JSON" \
+CATALOG_STATUS_JSON="$CATALOG_STATUS_JSON" python3 - <<'PY'
 import json
 import os
 
@@ -42,6 +45,8 @@ health = json.loads(os.environ['HEALTH_JSON'])
 ready = json.loads(os.environ['READY_JSON'])
 imported = json.loads(os.environ['IMPORT_JSON'])
 status = json.loads(os.environ['STATUS_JSON'])
+filters = json.loads(os.environ['FILTERS_JSON'])['filters']
+catalog = json.loads(os.environ['CATALOG_STATUS_JSON'])
 assert health['status'] == 'ok'
 assert ready == {
     'status': 'ready',
@@ -54,12 +59,23 @@ assert imported['rows_valid'] == 106
 assert imported['rows_invalid'] == 24
 assert status['import']['state'] == 'healthy'
 assert {row['source'] for row in status['sources']} == {'auto_ru', 'avito'}
-assert all(row['state'] == 'not_configured' for row in status['sources'])
-print('HTTP_AND_SOURCE_OK')
+active_filters = [row for row in filters if row['active']]
+assert len(active_filters) == 16
+assert {row['source'] for row in active_filters} == {'auto_ru', 'avito'}
+assert sum(row['expectations'] for row in active_filters) == 38
+assert catalog['catalog_version'] == 'a1-monitoring-instruction-2026-09-04-v1'
+assert catalog['definitions_by_source'] == {'auto_ru': 10, 'avito': 6}
+assert catalog['expectations'] == 38
+assert catalog['ambiguous'] == []
+assert len(catalog['unmatched']) == 16
+assert {row['family'] for row in catalog['unmatched']} == {'v_class'}
+assert {row['source'] for row in catalog['unmatched']} == {'avito'}
+print('HTTP_SOURCE_AND_FILTER_CATALOG_OK')
 PY
 
 if [[ "$DASHBOARD_HTML" != *"Здоровье системы"* ]] \
-  || [[ "$DASHBOARD_HTML" != *"Мониторинг ещё не настроен"* ]]; then
+  || [[ "$DASHBOARD_HTML" != *"Покрытие каноническими фильтрами"* ]] \
+  || [[ "$DASHBOARD_HTML" != *"Не назначен канонический фильтр"* ]]; then
   echo "Dashboard does not expose required operational state." >&2
   exit 1
 fi
@@ -93,4 +109,4 @@ if "${COMPOSE[@]}" logs --tail=200 app | grep -q 'Traceback (most recent call la
   exit 1
 fi
 
-echo "STAGE_SMOKE_OK"
+echo "STAGE_SMOKE_OK_NO_MARKETPLACE_SCAN"
