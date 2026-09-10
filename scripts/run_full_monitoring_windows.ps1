@@ -2,6 +2,7 @@
 param(
     [ValidateSet('auto_ru,avito','auto_ru','avito')][string]$Engines = 'auto_ru,avito',
     [ValidateRange(1,10)][int]$Pages = 3,
+    [ValidateSet('light','heavy')][string]$AiProfile = 'light',
     [ValidateRange(1024,65536)][int]$MinFreeMemoryMb = 7500,
     [switch]$AllowSwap
 )
@@ -33,7 +34,7 @@ try {
     Start-Sleep -Seconds 5
     Write-A1MemorySnapshot 'browser_and_docker_stopped' | Out-Null
 
-    & (Join-Path $PSScriptRoot 'start_local_ai_windows.ps1') -MinFreeMemoryMb $MinFreeMemoryMb -AllowSwap:$AllowSwap
+    & (Join-Path $PSScriptRoot 'start_local_ai_windows.ps1') -Profile $AiProfile -MinFreeMemoryMb $MinFreeMemoryMb -AllowSwap:$AllowSwap
     & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ai_review_windows.ps1') -PreparedPacket
     if ($LASTEXITCODE -ne 0) { $overall = 2 }
     & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ouroboros_live_audit_windows.ps1')

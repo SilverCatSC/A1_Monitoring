@@ -13,8 +13,10 @@ def test_monitoring_hermes_profile_is_local_and_has_no_tools() -> None:
     assert "api: http://127.0.0.1:18080/v1" in config
     assert "provider: custom:a1-local" in config
     assert "fallback_providers: []" in config
+    assert "default: Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" in config
+    assert "Qwen3.5-9B-Q4_K_M.gguf" in config
     assert "supports_vision: true" in config
-    assert "context_length: 65536" in config
+    assert "context_length: 32768" in config
     assert "disabled_toolsets:\n    - all" in config
     assert "platform_toolsets:\n  cli: []" in config
 
@@ -25,6 +27,7 @@ def test_ouroboros_internal_llm_profile_is_local_and_has_no_tools() -> None:
     assert "api: http://127.0.0.1:18080/v1" in config
     assert "provider: custom:a1-local" in config
     assert "fallback_providers: []" in config
+    assert "default: Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" in config
     assert "supports_vision: true" in config
     assert "disabled_toolsets:\n    - all" in config
     assert "platform_toolsets:\n  cli: []" in config
@@ -97,10 +100,15 @@ def test_local_model_server_is_low_concurrency_and_multimodal() -> None:
     assert '--reasoning auto' in script
     assert '--reasoning-budget "$AI_MODEL_REASONING_BUDGET"' in script
     assert '--prio -1' not in script
+    assert 'AI_MODEL_REPO=ggml-org/Qwen2.5-VL-3B-Instruct-GGUF' in lock
+    assert 'AI_MODEL_FILE=Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf' in lock
+    assert 'AI_MODEL_MMPROJ_FILE=mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf' in lock
     assert 'AI_MODEL_THREADS=4' in lock
-    assert 'AI_MODEL_CONTEXT=65536' in lock
-    assert 'AI_MODEL_MAX_OUTPUT_TOKENS=768' in lock
-    assert 'AI_MODEL_REASONING_BUDGET=256' in lock
+    assert 'AI_MODEL_CONTEXT=32768' in lock
+    assert 'AI_MODEL_MAX_OUTPUT_TOKENS=512' in lock
+    assert 'AI_MODEL_REASONING_BUDGET=128' in lock
+    assert 'AI_HEAVY_MODEL_REPO=unsloth/Qwen3.5-9B-GGUF' in lock
+    assert 'AI_HEAVY_MODEL_FILE=Qwen3.5-9B-Q4_K_M.gguf' in lock
 
 
 def test_staged_runner_reserves_reasoning_for_final_synthesis() -> None:

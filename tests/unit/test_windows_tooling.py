@@ -68,6 +68,8 @@ def test_windows_full_run_is_sequential_and_memory_guarded():
     assert 'start_local_ai_windows.ps1' in script
     assert 'run_ai_review_windows.ps1' in script
     assert 'run_ouroboros_live_audit_windows.ps1' in script
+    assert "AiProfile = 'light'" in script
+    assert '-Profile $AiProfile' in script
     assert 'MinFreeMemoryMb = 7500' in script
     assert '-AllowSwap:$AllowSwap' in script
 
@@ -77,6 +79,9 @@ def test_windows_ai_server_is_cpu_only_single_slot_and_multimodal():
     script = (root / 'scripts' / 'start_local_ai_windows.ps1').read_text(encoding='utf-8')
 
     assert "'--mmproj', $mmproj" in script
+    assert "Profile = 'light'" in script
+    assert "AI_HEAVY_MODEL_FILE" in script
+    assert 'LOCAL_AI_DIFFERENT_MODEL_WINDOWS' in script
     assert "'-ngl', '0'" in script
     assert "'-np', '1'" in script
     assert 'free RAM' in script
@@ -92,3 +97,12 @@ def test_windows_ai_install_is_pinned_and_local():
     assert "Join-Path $HermesHome 'bin\\uv.exe'" in script
     assert 'ouroboros-ai[mcp]==$($lock.OUROBOROS_VERSION)' in script
     assert 'install_llama_cpp_windows.ps1' in script
+
+
+def test_windows_model_download_supports_light_and_heavy_profiles():
+    root = Path(__file__).resolve().parents[2]
+    script = (root / 'scripts' / 'download_local_model_windows.ps1').read_text(encoding='utf-8')
+
+    assert "Profile = 'light'" in script
+    assert "AI_HEAVY_MODEL_REPO" in script
+    assert "LOCAL_MULTIMODAL_MODEL_READY_WINDOWS profile=$Profile" in script
