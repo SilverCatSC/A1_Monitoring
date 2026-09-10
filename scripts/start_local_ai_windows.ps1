@@ -1,5 +1,8 @@
 [CmdletBinding()]
-param([ValidateRange(1024,65536)][int]$MinFreeMemoryMb = 7500)
+param(
+    [ValidateRange(1024,65536)][int]$MinFreeMemoryMb = 7500,
+    [switch]$AllowSwap
+)
 
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -13,8 +16,11 @@ try {
 } catch {}
 
 $freeMb = Write-A1MemorySnapshot 'before_ai'
-if ($freeMb -lt $MinFreeMemoryMb) {
+if ($freeMb -lt $MinFreeMemoryMb -and -not $AllowSwap) {
     throw "AI start blocked: free RAM ${freeMb} MB, required ${MinFreeMemoryMb} MB. Close applications; do not force swap-heavy execution."
+}
+if ($freeMb -lt $MinFreeMemoryMb -and $AllowSwap) {
+    Write-Warning "AI start continuing with swap: free RAM ${freeMb} MB, recommended ${MinFreeMemoryMb} MB."
 }
 $server = Join-Path $Root 'artifacts\llama_cpp_windows\llama-server.exe'
 $model = Join-Path $Root "artifacts\models\$($lock.AI_MODEL_FILE)"

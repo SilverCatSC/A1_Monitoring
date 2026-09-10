@@ -65,7 +65,12 @@ def test_evidence_resolver_rejects_missing_files_and_symlinks(tmp_path):
     target = tmp_path / 'target.png'
     target.write_bytes(b'png fixture')
     link = tmp_path / 'link.png'
-    link.symlink_to(target)
+    try:
+        link.symlink_to(target)
+    except OSError as exc:
+        if os.name == 'nt' and getattr(exc, 'winerror', None) == 1314:
+            pytest.skip('Windows account cannot create symlinks')
+        raise
     with pytest.raises(EvidenceAccessError, match='invalid evidence file'):
         resolve_observation_evidence(_observation('link.png'), 1, str(tmp_path))
 

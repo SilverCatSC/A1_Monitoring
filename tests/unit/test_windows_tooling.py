@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parents[2]))
 
 from scripts.bitrix_publish import _message, _valid_url
-from scripts.doctor import chrome_available
+from scripts.doctor import chrome_available, compose_available
 from scripts.export_public_report import DIRECT_EVIDENCE_RE, _route_for
 from scripts.local_scan import _chrome_executable
 
@@ -21,12 +21,22 @@ def test_doctor_reports_missing_chrome(monkeypatch):
     assert not chrome_available()
 
 
+def test_doctor_finds_user_docker_desktop_install(monkeypatch):
+    monkeypatch.setattr(sys, 'platform', 'win32')
+    monkeypatch.setattr('scripts.doctor.shutil.which', lambda _name: None)
+    monkeypatch.setattr(Path, 'home', lambda: Path('C:/Users/operator'))
+    expected = 'C:/Users/operator/AppData/Local/Programs/DockerDesktop/resources/bin/docker.exe'
+    monkeypatch.setattr(Path, 'is_file', lambda path: path.as_posix() == expected)
+
+    assert compose_available()
+
+
 def test_windows_chrome_user_install(monkeypatch):
     monkeypatch.setattr(sys, 'platform', 'win32')
     monkeypatch.setenv('LOCALAPPDATA', 'C:/Users/operator/AppData/Local')
-    expected = 'C:/Users/operator/AppData/Local/Google/Chrome/Application/chrome.exe'
-    monkeypatch.setattr(Path, 'is_file', lambda path: str(path) == expected)
-    assert _chrome_executable() == expected
+    expected = Path('C:/Users/operator/AppData/Local/Google/Chrome/Application/chrome.exe')
+    monkeypatch.setattr(Path, 'is_file', lambda path: path.as_posix() == expected.as_posix())
+    assert _chrome_executable() == str(expected)
 
 
 def test_public_routes_are_static_and_relative_free():
@@ -59,6 +69,7 @@ def test_windows_full_run_is_sequential_and_memory_guarded():
     assert 'run_ai_review_windows.ps1' in script
     assert 'run_ouroboros_live_audit_windows.ps1' in script
     assert 'MinFreeMemoryMb = 7500' in script
+    assert '-AllowSwap:$AllowSwap' in script
 
 
 def test_windows_ai_server_is_cpu_only_single_slot_and_multimodal():
@@ -69,6 +80,7 @@ def test_windows_ai_server_is_cpu_only_single_slot_and_multimodal():
     assert "'-ngl', '0'" in script
     assert "'-np', '1'" in script
     assert 'free RAM' in script
+    assert 'AI start continuing with swap' in script
 
 
 def test_windows_ai_install_is_pinned_and_local():
@@ -76,5 +88,7 @@ def test_windows_ai_install_is_pinned_and_local():
     script = (root / 'scripts' / 'install_ai_tools_windows.ps1').read_text(encoding='utf-8')
 
     assert '-Commit $lock.HERMES_COMMIT' in script
+    assert "$HermesHome = Join-Path $Root 'artifacts\\hermes_home'" in script
+    assert "Join-Path $HermesHome 'bin\\uv.exe'" in script
     assert 'ouroboros-ai[mcp]==$($lock.OUROBOROS_VERSION)' in script
     assert 'install_llama_cpp_windows.ps1' in script
