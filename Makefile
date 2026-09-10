@@ -1,53 +1,32 @@
-install:
-	pip install -e .
-
-install-playwright:
-	python -m playwright install chromium
-
-init:
-	python -m app.cli init
-
-run-server:
-	python -m app.cli serve
-
-IMPORT_SOURCE = $(strip $(or $(SOURCE),$(SOURCE_CSV_PATH)))
-
-run-import:
-	@if [ -n "$(IMPORT_SOURCE)" ]; then \
-		python -m app.cli import-source --path "$(IMPORT_SOURCE)"; \
-	else \
-		python -m app.cli import-source; \
-	fi
-
-run-scan:
-	python -m app.cli scan
-
-run-cycle:
-	python -m app.cli run-cycle
-
-scan: run-cycle
-	@:
-
+PYTHON := .venv312/bin/python
+.PHONY: setup setup-full start check test lint doctor scan scan-core watch backup restore-test smoke ui-check public-report bitrix-dry-run
+setup:
+	./scripts/setup.sh
+setup-full:
+	./scripts/install_all_macos.sh
+start:
+	./scripts/start_local.sh
+check: lint test
 test:
-	pip install -q -e .[dev]
-	pytest -q
-
-smoke:
-	./scripts/smoke_stage.sh
-
-DOCKER_COMPOSE ?= docker-compose
-
-build:
-	$(DOCKER_COMPOSE) build
-
-up:
-	$(DOCKER_COMPOSE) up -d
-
-down:
-	$(DOCKER_COMPOSE) down
-
+	$(PYTHON) -m pytest -q
+lint:
+	$(PYTHON) -m ruff check src tests scripts
+doctor:
+	$(PYTHON) scripts/doctor.py --http
+smoke: doctor
+ui-check:
+	$(PYTHON) scripts/check_ui.py
+scan:
+	./scripts/run_full_monitoring_macos.sh
+scan-core:
+	./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+watch:
+	./scripts/local_scan.sh --watch --interval-minutes 360 --pace cautious
 backup:
 	./scripts/backup_now.sh
-
 restore-test:
 	./scripts/restore_test.sh
+public-report:
+	$(PYTHON) scripts/export_public_report.py
+bitrix-dry-run:
+	$(PYTHON) scripts/bitrix_publish.py --report-url https://silvercatsc.github.io/A1_Monitoring/

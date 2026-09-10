@@ -6,9 +6,9 @@ from typing import List
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_no_vpn', 'cloud_no_vpn'})
+SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_browser', 'local_no_vpn', 'cloud_no_vpn'})
 BUSINESS_TRUSTED_NETWORK_PROFILES = SCAN_ALLOWED_NETWORK_PROFILES
-PRODUCTION_NETWORK_PROFILE = 'cloud_no_vpn'
+PRODUCTION_NETWORK_PROFILES = frozenset({'local_browser', 'cloud_no_vpn'})
 
 
 class Settings(BaseSettings):
@@ -24,12 +24,50 @@ class Settings(BaseSettings):
     source_import_source: str = Field(default='csv', alias='SOURCE_IMPORT_SOURCE')
     source_csv_path: str | None = Field(default=None, alias='SOURCE_CSV_PATH')
     source_google_sheet_export_url: str | None = Field(default=None, alias='SOURCE_GOOGLE_SHEET_EXPORT_URL')
+    head_table_google_sheet_export_url: str | None = Field(
+        default=(
+            'https://docs.google.com/spreadsheets/d/'
+            '1s4RSn6oE8CeHzASjGHcQNQK6Hvhje6CUOaFmA3C5UFA/export?format=csv&gid=0'
+        ),
+        alias='HEAD_TABLE_GOOGLE_SHEET_EXPORT_URL',
+    )
+    company_site_catalog_url: str = Field(
+        default='https://a1auto.ru/cars-for-sale/', alias='COMPANY_SITE_CATALOG_URL'
+    )
+    company_site_audit_dir: str = Field(
+        default='./artifacts/company_site_audits', alias='COMPANY_SITE_AUDIT_DIR'
+    )
+    head_table_audit_dir: str = Field(
+        default='./artifacts/head_table_audits', alias='HEAD_TABLE_AUDIT_DIR'
+    )
     scan_pages_limit: int = Field(default=3, alias='SCAN_PAGES_LIMIT', ge=1, le=10)
     scan_interval_minutes: int = Field(default=360, alias='SCAN_INTERVAL_MINUTES', ge=1)
     scan_enabled_engines: str = Field(default='auto_ru,avito', alias='SCAN_ENABLED_ENGINES')
     scheduler_enabled: bool = Field(default=False, alias='SCHEDULER_ENABLED')
     playwright_headless: bool = Field(default=True, alias='PLAYWRIGHT_HEADLESS')
+    browser_cdp_url: str | None = Field(default=None, alias='BROWSER_CDP_URL')
     request_timeout_seconds: int = Field(default=25, alias='REQUEST_TIMEOUT_SECONDS', ge=5)
+    auto_ru_page_delay_seconds: float = Field(
+        default=2.5, alias='AUTO_RU_PAGE_DELAY_SECONDS', ge=0.5, le=30
+    )
+    avito_page_delay_seconds: float = Field(
+        default=2.5, alias='AVITO_PAGE_DELAY_SECONDS', ge=0.5, le=30
+    )
+    scan_page_pause_min_seconds: float = Field(
+        default=0, alias='SCAN_PAGE_PAUSE_MIN_SECONDS', ge=0, le=120
+    )
+    scan_page_pause_max_seconds: float = Field(
+        default=0, alias='SCAN_PAGE_PAUSE_MAX_SECONDS', ge=0, le=120
+    )
+    scan_filter_pause_min_seconds: float = Field(
+        default=0, alias='SCAN_FILTER_PAUSE_MIN_SECONDS', ge=0, le=180
+    )
+    scan_filter_pause_max_seconds: float = Field(
+        default=0, alias='SCAN_FILTER_PAUSE_MAX_SECONDS', ge=0, le=180
+    )
+    target_closed_retry_seconds: float = Field(
+        default=5, alias='TARGET_CLOSED_RETRY_SECONDS', ge=0, le=30
+    )
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')
     run_every_minutes: int = Field(default=30, alias='RUN_EVERY_MINUTES', ge=1)
     report_retention_days: int = Field(default=90, alias='REPORT_RETENTION_DAYS', ge=1)
@@ -37,8 +75,13 @@ class Settings(BaseSettings):
     dealer_auto_urls: str = Field(default='', alias='DEALER_AUTO_URLS')
     dealer_avito_urls: str = Field(default='', alias='DEALER_AVITO_URLS')
     dealer_pages_limit: int = Field(default=3, alias='DEALER_PAGES_LIMIT', ge=1, le=10)
+    seller_preflight_pages: int = Field(default=5, alias='SELLER_PREFLIGHT_PAGES', ge=1, le=10)
+    seller_direct_checks_limit: int = Field(default=5, alias='SELLER_DIRECT_CHECKS_LIMIT', ge=0, le=20)
+    seller_detail_checks_limit: int = Field(
+        default=100, alias='SELLER_DETAIL_CHECKS_LIMIT', ge=0, le=250
+    )
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
-    app_version: str = '0.4.1'
+    app_version: str = '0.9.0'
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60
 
@@ -54,7 +97,7 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_network_profile(cls, value: str) -> str:
         normalized = value.lower().strip()
-        allowed = {'unknown', 'local_vpn', 'local_no_vpn', 'cloud_no_vpn'}
+        allowed = {'unknown', 'local_vpn', 'local_browser', 'local_no_vpn', 'cloud_no_vpn'}
         if normalized not in allowed:
             raise ValueError(f'network_profile must be one of: {", ".join(sorted(allowed))}')
         return normalized
@@ -67,7 +110,15 @@ class Settings(BaseSettings):
         clean = str(value).strip()
         return clean or None
 
-    @field_validator('source_google_sheet_export_url', mode='before')
+    @field_validator('browser_cdp_url', mode='before')
+    @classmethod
+    def _empty_browser_cdp_url_to_none(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        clean = str(value).strip()
+        return clean or None
+
+    @field_validator('source_google_sheet_export_url', 'head_table_google_sheet_export_url', mode='before')
     @classmethod
     def _empty_to_none_for_sheet_url(cls, value: str | None) -> str | None:
         if value is None:

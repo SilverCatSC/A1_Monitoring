@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>{% block title %}Обзор{% endblock %} · A1 Search Monitor</title>
+<link rel="stylesheet" href="/static/app.css"></head>
+<body class="workbench">{% include 'navigation.html' %}
+<main class="app-content" id="main-content">
+{% block content %}{% endblock %}
+<footer class="app-footer">A1 Search Monitor · время Москвы · сохранённые результаты проверок, не показы и клики площадок</footer>
+</main>{% block scripts %}{% endblock %}</body></html>

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
-from app.models import EngineType, Listing, ListingLinkEvent
+from app.models import EngineType, Listing, ListingLinkEvent, ListingLinkOverride
 from app.scraper.base import is_marketplace_listing_url
 from app.service.filters import FilterRegistryService
+from app.service.registry_audit import close_replaced_episodes
 
 
 class ListingValidationError(ValueError):
@@ -37,7 +38,16 @@ class ListingRegistryService:
 
         field = 'source_auto_ru' if source == EngineType.AUTO_RU else 'source_avito'
         old_url = getattr(listing, field)
+        override = self.db.query(ListingLinkOverride).filter_by(listing_id=listing.id, source=source).one_or_none()
+        if override is None:
+            override = ListingLinkOverride(listing_id=listing.id, source=source, last_source_url=old_url)
+            self.db.add(override)
+        override.url, override.actor, override.reason = clean_url, clean_actor, clean_reason
+        if old_url == clean_url:
+            self.db.flush()
+            return listing
         setattr(listing, field, clean_url)
+        close_replaced_episodes(self.db, listing.id, source, old_url, clean_url)
         self.db.add(
             ListingLinkEvent(
                 listing_id=listing.id,

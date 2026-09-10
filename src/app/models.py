@@ -160,6 +160,20 @@ class Listing(Base):
     )
 
 
+class ListingChangeEvent(Base):
+    """Registry changes observed from an import, not the marketplace publication time."""
+
+    __tablename__ = 'listing_change_events'
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    listing_id: Mapped[str] = mapped_column(ForeignKey('listings.id'), index=True)
+    snapshot_id: Mapped[str | None] = mapped_column(ForeignKey('source_import_snapshots.id'), nullable=True)
+    actor: Mapped[str] = mapped_column(String, nullable=False)
+    kind: Mapped[str] = mapped_column(String, nullable=False)
+    changes: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    listing: Mapped[Listing] = relationship('Listing')
+
+
 class ListingLinkEvent(Base):
     __tablename__ = 'listing_link_events'
 
@@ -193,6 +207,38 @@ class DealerDiscoveryRun(Base):
     candidates_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
     diagnostics: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+
+class ListingLinkOverride(Base):
+    """An explicitly confirmed local link; importing a stale Sheet cannot undo it."""
+
+    __tablename__ = 'listing_link_overrides'
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    listing_id: Mapped[str] = mapped_column(ForeignKey('listings.id'), index=True)
+    source: Mapped[EngineType] = mapped_column(Enum(EngineType))
+    url: Mapped[str] = mapped_column(Text)
+    last_source_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    actor: Mapped[str] = mapped_column(String)
+    reason: Mapped[str] = mapped_column(Text)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    __table_args__ = (UniqueConstraint('listing_id', 'source', name='uq_listing_link_override'),)
+
+
+class ListingReconciliation(Base):
+    """Seller-catalogue membership, separate from search visibility and sale status."""
+
+    __tablename__ = 'listing_reconciliations'
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    batch_id: Mapped[str] = mapped_column(String, index=True)
+    listing_id: Mapped[str] = mapped_column(ForeignKey('listings.id'), index=True)
+    source: Mapped[EngineType] = mapped_column(Enum(EngineType))
+    state: Mapped[str] = mapped_column(String, index=True)
+    url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str] = mapped_column(Text)
+    candidates: Mapped[list] = mapped_column(JSON, default=list)
+    details: Mapped[dict] = mapped_column(JSON, default=dict)
+    checked_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    listing: Mapped[Listing] = relationship('Listing')
 
 
 class DealerListingCandidate(Base):

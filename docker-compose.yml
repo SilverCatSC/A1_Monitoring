@@ -31,12 +31,20 @@ services:
       SCAN_PAGES_LIMIT: 3
       SCAN_INTERVAL_MINUTES: 360
       APP_ENV: "${APP_ENV:-stage}"
+      COMPANY_SITE_AUDIT_DIR: /app/company_site_audits
+      HEAD_TABLE_AUDIT_DIR: /app/head_table_audits
     ports:
       - "127.0.0.1:${APP_BIND_PORT:-8000}:8000"
     command: >
       /bin/sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
     volumes:
-      - evidence:/app/artifacts
+      # A local Chrome worker writes screenshots on the host; the dashboard
+      # reads the same files through this bind mount.
+      - ./artifacts/evidence:/app/artifacts
+      # Host-side read-only catalogue audit; it is never written by the web container.
+      - ./artifacts/company_site_audits:/app/company_site_audits:ro
+      # Latest read-only marketing-table snapshot for the sales-facing report.
+      - ./artifacts/head_table_audits:/app/head_table_audits:ro
 
   backup:
     image: postgres:16-alpine
@@ -71,5 +79,4 @@ services:
 
 volumes:
   db_data:
-  evidence:
   db_backups:

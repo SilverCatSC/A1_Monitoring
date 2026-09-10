@@ -170,7 +170,7 @@ def test_importer_detects_filter_urls_from_unknown_columns(db_modules):
 def test_importer_updates_existing_listing_links(db_modules):
     app_db, _ = db_modules
     from app.importer.service import SourceImporter
-    from app.models import Listing
+    from app.models import Listing, ListingChangeEvent, ListingLinkEvent
 
     session = app_db.SessionLocal()
     try:
@@ -200,6 +200,11 @@ def test_importer_updates_existing_listing_links(db_modules):
         assert listing.source_auto_ru.endswith('/2234567890-new/')
         assert listing.source_avito.endswith('/new_2234567890')
         assert listing.is_active is True
+        assert session.query(ListingChangeEvent).count() == 2
+        assert session.query(ListingLinkEvent).count() == 4
+        SourceImporter(session).run(second, source_signature='v2-repeat')
+        assert session.query(ListingChangeEvent).count() == 2
+        assert session.query(ListingLinkEvent).count() == 4
     finally:
         session.close()
 
@@ -238,6 +243,31 @@ def test_importer_does_not_erase_confirmed_links_with_blank_source_cells(db_modu
         assert listing.source_avito.endswith('/v_9876543210')
     finally:
         session.close()
+
+
+def test_confirmed_republication_survives_old_empty_and_conflicting_source_urls(db_modules):
+    from app.importer.service import SourceImporter
+    from app.models import EngineType, Listing, ListingLinkOverride
+    from app.service.listings import ListingRegistryService
+
+    app_db, _ = db_modules
+    old = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1132311022-old/'
+    new = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334954-new/'
+    other = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1134444954-other/'
+    def rows(url):
+        return _make_rows({'brand': 'Mercedes-Benz', 'model': 'V-Class', 'vin': 'W1VVNLTZ5S4556796',
+                           'source_status': 'Актуально', 'listing_url_auto_ru': url})
+    with app_db.SessionLocal() as session:
+        SourceImporter(session).run(rows(old))
+        car = session.query(Listing).one()
+        ListingRegistryService(session).update_link(car.id, source=EngineType.AUTO_RU, url=new,
+                                                   actor='Оператор', reason='Подтверждена перевыкладка')
+        session.commit()
+        for stale in (old, '', new, old, other):
+            SourceImporter(session).run(rows(stale))
+            assert session.query(Listing).one().source_auto_ru == new
+            assert session.query(ListingLinkOverride).one().last_source_url == (stale or None)
+        assert session.query(Listing).count() == 1
 
 
 def test_importer_rejects_non_marketplace_listing_urls(db_modules):

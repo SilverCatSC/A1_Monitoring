@@ -23,9 +23,13 @@ def validate_security_configuration(
         raise SecurityConfigurationError(
             'production requires AUTH_ENABLED=true, ADMIN_USERNAME and ADMIN_PASSWORD of 16+ characters'
         )
-    if environment.lower() == 'production' and network_profile != 'cloud_no_vpn':
+    if environment.lower() == 'production' and network_profile not in {
+        'local_browser',
+        'cloud_no_vpn',
+    }:
         raise SecurityConfigurationError(
-            'production requires NETWORK_PROFILE=cloud_no_vpn after no-VPN connectivity verification'
+            'production requires NETWORK_PROFILE=local_browser or cloud_no_vpn '
+            'after connectivity verification'
         )
 
 

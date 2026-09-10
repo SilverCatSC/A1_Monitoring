@@ -34,12 +34,14 @@ git diff --check
 ./scripts/smoke_stage.sh
 ```
 
-Smoke не вызывает `/scan`. Для контролируемой живой приёмки после подтверждения
-no-VPN маршрута:
+Smoke не вызывает `/scan`. Реальная локальная приёмка выполняется через
+постоянный Chrome-профиль:
 
 ```bash
-./scripts/live_acceptance.sh
+./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+./scripts/local_scan.sh --watch --interval-minutes 360 --pace cautious
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
+curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/progress
 ```
 
 При `NETWORK_PROFILE=local_vpn|unknown`, неполном каталоге или отсутствии
@@ -47,30 +49,31 @@ curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
 Сам API повторяет сетевой gate и возвращает HTTP 422 до создания `ScanRun`, если
 клиент попытается вызвать `/scan` или `/cycle` напрямую.
 
-Cloud:
-
-```bash
-docker-compose \
-  -f docker-compose.yml \
-  -f deploy/cloud/docker-compose.cloud.yml \
-  up -d --build
-```
-
 Startup сначала выполняет `alembic upgrade head`, затем запускает web. Scheduler
-запускается только при явном `SCHEDULER_ENABLED=true`; локальный stage использует
-`false`.
+в web-контейнере остаётся `false`: площадки проверяет только локальный worker.
 
 ## 3. Ручные операции
 
 ```bash
 docker-compose exec -T app python -m app.cli import-source
-docker-compose exec -T app python -m app.cli scan
-docker-compose exec -T app python -m app.cli run-cycle
+./scripts/local_scan.sh --engines auto_ru,avito --pages 3
 ./scripts/backup_now.sh
 ./scripts/restore_test.sh
 ```
 
 Не запускать второй scan/discovery, если первый ещё выполняется: API вернёт 409.
+Текущий прогресс также хранится в `artifacts/evidence/scan_progress.json`; запись
+атомарная, dashboard опрашивает endpoint раз в секунду. После перезапуска worker
+файл перезаписывается новым циклом.
+
+Если все фильтры мгновенно завершаются ошибкой
+`Browser.setDownloadBehavior ... not supported`, проверить `/json/list` Chrome на
+порту 19222. Worker v0.6 сам создаёт `about:blank`, когда управляемых вкладок нет.
+
+Локальный worker v0.6.2 по умолчанию использует `--pace cautious`: паузы
+12–20 секунд между фильтрами и 6–12 секунд перед страницами. Dashboard показывает
+события ожидания до начала паузы. `--pace normal` применять только для короткой
+диагностики, понимая повышенную интенсивность запросов.
 
 ## 4. Диагностические запросы
 
@@ -109,7 +112,7 @@ docker-compose exec -T db psql -U monitor -d a1_search_monitor -c \
 
 ### CAPTCHA / 429 / неизвестный DOM
 
-1. Проверить `network_profile` и среду запуска.
+1. Проверить, что запуск имеет `network_profile=local_browser`.
 2. Не переводить событие в absence вручную.
 3. Открыть screenshot evidence без cookie/token.
 4. Проверить публичную страницу вручную с тем же egress.
@@ -127,7 +130,7 @@ VPN-результат нельзя экстраполировать на produc
 
 1. Проверить `docker-compose ps` и uptime app.
 2. Проверить последние `ScanRun` и `SourceImportSnapshot`.
-3. Убедиться, что предыдущий Playwright процесс не завис.
+3. Убедиться, что локальный Chrome-профиль открыт и предыдущий worker не завис.
 4. Проверить свободное место и DNS/HTTPS к Google Sheets.
 5. После устранения выполнить один `run-cycle` и сверить status.
 
@@ -150,7 +153,7 @@ destructive Alembic downgrade как штатный способ отката.
 Остановить production deploy, если:
 
 - `AUTH_ENABLED=false`;
-- `NETWORK_PROFILE` не `cloud_no_vpn`;
+- рабочий запуск не имеет `NETWORK_PROFILE=local_browser`;
 - домен не имеет валидного HTTPS;
 - PostgreSQL опубликован не на loopback;
 - в git/логах обнаружен секрет;

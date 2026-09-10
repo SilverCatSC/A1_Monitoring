@@ -49,6 +49,7 @@ class ScanResult:
 
 BLOCK_PAGE_MARKERS = (
     'подтвердите, что вы не робот',
+    'подтвердите, что запросы отправляли вы, а не робот',
     'доступ ограничен',
     'проверка браузера',
     'access denied',
@@ -88,6 +89,8 @@ def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
     if not raw:
         return None
     parsed = urlparse(raw if '://' in raw else f'https://{raw.lstrip("/")}')
+    if parsed.scheme not in {'http', 'https'}:
+        return None
     host = (parsed.hostname or '').lower().removeprefix('www.')
     path = unquote(parsed.path).rstrip('/').lower()
 
@@ -117,6 +120,25 @@ def canonical_listing_key(source: EngineType, value: str | None) -> str | None:
     return None
 
 
+def canonical_company_site_key(value: str | None) -> str | None:
+    """Stable A1Auto vehicle-page key; catalogue and non-vehicle pages are excluded."""
+    raw = str(value or '').strip()
+    if not raw:
+        return None
+    parsed = urlparse(raw if '://' in raw else f'https://{raw.lstrip("/")}')
+    if parsed.scheme not in {'http', 'https'}:
+        return None
+    host = (parsed.hostname or '').lower().removeprefix('www.')
+    path = unquote(parsed.path).rstrip('/').lower()
+    if host != 'a1auto.ru' or not path.startswith('/cars-for-sale/') or path == '/cars-for-sale':
+        return None
+    return f'a1_site:{path}'
+
+
+def is_company_site_listing_url(value: str | None) -> bool:
+    return canonical_company_site_key(value) is not None
+
+
 def is_marketplace_search_url(source: EngineType, value: str | None) -> bool:
     raw = str(value or '').strip()
     if not raw.startswith(('http://', 'https://')):
@@ -127,6 +149,8 @@ def is_marketplace_search_url(source: EngineType, value: str | None) -> bool:
 
     if source == EngineType.AUTO_RU:
         if not _host_matches(host, 'auto.ru') or '/diler/' in path:
+            return False
+        if is_marketplace_listing_url(source, raw):
             return False
         if canonical_listing_key(source, raw) and re.search(r'/sale/', path):
             return False
@@ -179,9 +203,66 @@ async def capture_page_evidence(
         timestamp = datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')
         path = root / f'{source.value}_{url_hash}_{timestamp}_p{page_number}.png'
         await page.screenshot(path=str(path), full_page=False)
-        return str(path)
+        # The host worker and web container mount this directory at different
+        # absolute paths, so database records keep a portable relative key.
+        return path.name
     except Exception:
         return None
+
+
+async def capture_listing_card_evidence(
+    page: Any,
+    *,
+    source: EngineType,
+    search_url: str,
+    page_number: int,
+    hit: ListingHit,
+    evidence_dir: str,
+) -> str | None:
+    """Capture the exact result card for one target listing."""
+    key = canonical_listing_key(source, hit.url)
+    if not key or ':url:' in key:
+        return None
+    listing_id = key.rsplit(':', 1)[-1]
+    if source == EngineType.AUTO_RU:
+        ancestor = (
+            "ancestor::*[contains(concat(' ', normalize-space(@class), ' '), "
+            "' ListingItem ') or contains(concat(' ', normalize-space(@class), ' '), "
+            "' OfferSnippet ') or contains(@class, 'ListingItemUniversal-')][1]"
+        )
+    else:
+        ancestor = (
+            "ancestor::*[@data-marker='item' or "
+            "starts-with(@data-marker, 'item_list_with_filters/item') or "
+            "contains(concat(' ', normalize-space(@class), ' '), "
+            "' js-catalog-item-enum ')][1]"
+        )
+    try:
+        anchors = page.locator(f'a[href*="{listing_id}"]')
+        for index in range(await anchors.count()):
+            card = anchors.nth(index).locator(f'xpath={ancestor}')
+            if await card.count() == 0 or not await card.first.is_visible():
+                continue
+            root = Path(evidence_dir)
+            root.mkdir(parents=True, exist_ok=True)
+            url_hash = hashlib.sha256(search_url.encode('utf-8')).hexdigest()[:10]
+            timestamp = datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')
+            path = root / (
+                f'{source.value}_card_{listing_id}_{url_hash}_{timestamp}_p{page_number}.png'
+            )
+            try:
+                await card.first.scroll_into_view_if_needed(timeout=3000)
+                await card.first.screenshot(path=str(path), timeout=3000)
+                hit.raw.pop('card_evidence_error', None)
+                return path.name
+            except Exception as exc:
+                hit.raw['card_evidence_error'] = f'{type(exc).__name__}: {str(exc)[:300]}'
+                continue
+        hit.raw.setdefault('card_evidence_error', 'No visible target card was available in the current DOM')
+    except Exception as exc:
+        hit.raw['card_evidence_error'] = f'{type(exc).__name__}: {str(exc)[:300]}'
+        return None
+    return None
 
 
 def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:

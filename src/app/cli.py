@@ -8,7 +8,6 @@ from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
 from app.service.cycle import MonitoringCycleService
 from app.service.filters import FilterRegistryService
-from app.service.monitor import MonitorService
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -44,7 +43,7 @@ def main() -> None:
             return
         with get_db_context() as db:
             if args.command == 'scan':
-                MonitorService(db).run_full_cycle()
+                MonitoringCycleService(db).run()
             elif args.command == 'run-cycle':
                 MonitoringCycleService(db).run()
         return

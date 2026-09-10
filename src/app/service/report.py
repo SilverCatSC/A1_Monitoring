@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 
-from app.config import BUSINESS_TRUSTED_NETWORK_PROFILES, settings
+from app.config import BUSINESS_TRUSTED_NETWORK_PROFILES, PRODUCTION_NETWORK_PROFILES, settings
 from app.models import (
     AbsenceEpisode,
     DealerDiscoveryRun,
@@ -13,7 +15,9 @@ from app.models import (
     EngineType,
     FeedbackStatus,
     Listing,
+    ListingChangeEvent,
     ListingObservation,
+    ListingReconciliation,
     ManagerFeedback,
     ObservationState,
     ScanRun,
@@ -21,14 +25,94 @@ from app.models import (
     SearchFilter,
     SourceImportSnapshot,
 )
-from app.scraper.base import is_marketplace_listing_url
-from app.service.evidence import evidence_pages
+from app.scraper.base import canonical_listing_key, is_marketplace_listing_url
+from app.service.company_site_report import company_site_audit_context
+from app.service.evidence import evidence_pages, has_card_evidence
 from app.service.feedback import ALLOWED_CATEGORIES, ALLOWED_SEVERITIES, ALLOWED_TRANSITIONS
 from app.service.filters import FilterRegistryService
 
 
 def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
     return value if is_marketplace_listing_url(source, value) else None
+
+
+def _head_records_for_listings(
+    listings: list[Listing],
+) -> tuple[dict[str, dict], list[dict]]:
+    path = Path(settings.head_table_audit_dir) / 'latest.json'
+    try:
+        if not path.is_file() or path.stat().st_size > 5_000_000:
+            return {}, []
+        payload = json.loads(path.read_text(encoding='utf-8'))
+        records = payload.get('records', []) if isinstance(payload, dict) else []
+    except (OSError, ValueError, json.JSONDecodeError):
+        return {}, []
+    by_vin: dict[str, list[dict]] = {}
+    by_url: dict[tuple[EngineType, str], list[dict]] = {}
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        vin = str(record.get('vin') or '').strip().upper()
+        if vin:
+            by_vin.setdefault(vin, []).append(record)
+        for source, field in (
+            (EngineType.AUTO_RU, 'auto_ru_url'),
+            (EngineType.AVITO, 'avito_url'),
+        ):
+            key = canonical_listing_key(source, record.get(field))
+            if key:
+                by_url.setdefault((source, key), []).append(record)
+    result = {}
+    matched_rows: set[int] = set()
+    for listing in listings:
+        matches = list(by_vin.get(str(listing.vin or '').strip().upper(), []))
+        if not matches:
+            for source, url in (
+                (EngineType.AUTO_RU, listing.source_auto_ru),
+                (EngineType.AVITO, listing.source_avito),
+            ):
+                key = canonical_listing_key(source, url)
+                matches.extend(by_url.get((source, key), []) if key else [])
+        unique = {int(record.get('row_number') or 0): record for record in matches}
+        if unique:
+            matched_rows.update(unique)
+            chosen = sorted(unique.values(), key=lambda record: (not bool(record.get('active')), int(record.get('row_number') or 0)))[0]
+            result[listing.id] = {**chosen, 'duplicate_rows': len(unique)}
+    unmatched = [
+        record
+        for record in records
+        if isinstance(record, dict)
+        and record.get('active')
+        and int(record.get('row_number') or 0) not in matched_rows
+    ]
+    return result, unmatched
+
+
+def _filter_unmatched_head_records(
+    records: list[dict],
+    *,
+    query_text: str | None,
+    brand: str | None,
+    platform: EngineType | None,
+) -> list[dict]:
+    result = []
+    for record in records:
+        auto_url = _safe_listing_url(EngineType.AUTO_RU, record.get('auto_ru_url'))
+        avito_url = _safe_listing_url(EngineType.AVITO, record.get('avito_url'))
+        searchable = ' '.join(
+            str(record.get(key) or '')
+            for key in ('vin', 'brand_model', 'configuration', 'status', 'availability')
+        ).casefold()
+        if query_text and query_text.strip().casefold() not in searchable:
+            continue
+        if brand and brand.strip().casefold() not in str(record.get('brand_model') or '').casefold():
+            continue
+        if platform == EngineType.AUTO_RU and not auto_url:
+            continue
+        if platform == EngineType.AVITO and not avito_url:
+            continue
+        result.append({**record, 'auto_ru_url': auto_url, 'avito_url': avito_url})
+    return result
 
 
 def _trusted_observation_clause():
@@ -404,9 +488,13 @@ def latest_scan_runs_status(session) -> dict:
                 'notes': run.notes,
             }
         )
+    latest_worker_run = (
+        session.query(ScanRun).order_by(ScanRun.started_at.desc(), ScanRun.id.desc()).first()
+    )
     return {
         'requested_pages': settings.scan_pages_limit,
         'network_profile': settings.network_profile,
+        'latest_worker_profile': latest_worker_run.network_profile if latest_worker_run else None,
         'runs': rows,
     }
 
@@ -482,6 +570,11 @@ def dashboard_context(session, days: int = 7) -> dict:
         'days': days,
         'generated_at': datetime.now(UTC),
         'network_profile': settings.network_profile,
+        'local_browser_active': any(
+            run.network_profile == 'local_browser' and run.status == ScanRunStatus.SUCCESS
+            for run in recent_runs
+        ),
+        'production_network_profiles': PRODUCTION_NETWORK_PROFILES,
         'listings_total': session.query(Listing).count(),
         'listings_active': session.query(Listing).filter(Listing.is_active.is_(True)).count(),
         'auto_links': session.query(Listing).filter(Listing.source_auto_ru.is_not(None)).count(),
@@ -525,6 +618,9 @@ def dashboard_context(session, days: int = 7) -> dict:
         .order_by(DealerDiscoveryRun.started_at.desc())
         .limit(10)
         .all(),
+        # The A1Auto catalogue is an independent publication check, not a
+        # marketplace-visibility result.  Its audit lives outside the DB.
+        'company_site_audit': company_site_audit_context(),
     }
 
 
@@ -679,6 +775,7 @@ def observation_history_context(
             {
                 'observation': observation,
                 'evidence_pages': evidence_pages(observation),
+                'evidence_kind': 'card' if has_card_evidence(observation) else 'page',
                 'listing_url': _safe_listing_url(observation.source, observation.listing_url),
             }
             for observation in observations
@@ -693,10 +790,17 @@ def listing_catalog_context(
     brand: str | None = None,
     platform: EngineType | None = None,
     page: int = 1,
-    page_size: int = 24,
+    page_size: int = 500,
 ) -> dict:
     safe_page = max(page, 1)
-    safe_page_size = min(max(page_size, 12), 96)
+    safe_page_size = min(max(page_size, 12), 500)
+    all_active_listings = (
+        session.query(Listing)
+        .filter(Listing.is_active.is_(True))
+        .order_by(Listing.brand, Listing.model, Listing.year.desc(), Listing.vin)
+        .all()
+    )
+    head_records, unmatched_head_records = _head_records_for_listings(all_active_listings)
     query = session.query(Listing).filter(Listing.is_active.is_(True))
     if query_text:
         pattern = f'%{query_text.strip()}%'
@@ -724,18 +828,42 @@ def listing_catalog_context(
         .all()
     )
     listing_ids = [item.id for item in listings]
-    latest_found: dict[str, ListingObservation] = {}
+    listings_by_id = {item.id: item for item in listings}
+    latest_any: dict[tuple[str, EngineType], ListingObservation] = {}
+    latest_found: dict[tuple[str, EngineType], ListingObservation] = {}
+    latest_card: dict[tuple[str, EngineType], ListingObservation] = {}
+    latest_reconciliation: dict[tuple[str, EngineType], ListingReconciliation] = {}
     if listing_ids:
         for observation in (
             session.query(ListingObservation)
             .filter(
                 ListingObservation.listing_id.in_(listing_ids),
-                ListingObservation.state == ObservationState.FOUND,
                 _trusted_observation_clause(),
             )
             .order_by(ListingObservation.observed_at.desc())
         ):
-            latest_found.setdefault(observation.listing_id, observation)
+            key = (observation.listing_id, observation.source)
+            listing = listings_by_id[observation.listing_id]
+            current_url = listing.source_auto_ru if observation.source == EngineType.AUTO_RU else listing.source_avito
+            expected_key = (observation.raw_payload or {}).get('expected_listing_key')
+            observed_key = expected_key or canonical_listing_key(observation.source, observation.listing_url)
+            if observed_key != canonical_listing_key(observation.source, current_url):
+                continue
+            latest_any.setdefault(key, observation)
+            if observation.state == ObservationState.FOUND:
+                latest_found.setdefault(key, observation)
+            if observation.state == ObservationState.FOUND and has_card_evidence(observation):
+                latest_card.setdefault(key, observation)
+        for record in (
+            session.query(ListingReconciliation)
+            .filter(ListingReconciliation.listing_id.in_(listing_ids))
+            .order_by(ListingReconciliation.checked_at.desc(), ListingReconciliation.id.desc())
+        ):
+            key = (record.listing_id, record.source)
+            current = listings_by_id[record.listing_id]
+            current_url = current.source_auto_ru if record.source == EngineType.AUTO_RU else current.source_avito
+            if canonical_listing_key(record.source, record.url) == canonical_listing_key(record.source, current_url):
+                latest_reconciliation.setdefault(key, record)
 
     brand_options = [
         value
@@ -745,6 +873,12 @@ def listing_catalog_context(
         .order_by(Listing.brand)
         .all()
     ]
+    filtered_unmatched = _filter_unmatched_head_records(
+        unmatched_head_records,
+        query_text=query_text,
+        brand=brand,
+        platform=platform,
+    )
     return {
         'query': query_text or '',
         'brand': brand or '',
@@ -752,19 +886,134 @@ def listing_catalog_context(
         'page': safe_page,
         'pages_total': pages_total,
         'total': total,
+        'expected_total': total + len(filtered_unmatched),
+        'unmatched_total': len(filtered_unmatched),
+        'unmatched_marketing': filtered_unmatched,
         'brand_options': brand_options,
         'cards': [
-            {
-                'listing': listing,
-                'observation': latest_found.get(listing.id),
-                'evidence_pages': evidence_pages(latest_found[listing.id])
-                if listing.id in latest_found
-                else [],
-                'auto_url': _safe_listing_url(EngineType.AUTO_RU, listing.source_auto_ru),
-                'avito_url': _safe_listing_url(EngineType.AVITO, listing.source_avito),
-            }
+            _listing_catalog_card(
+                listing,
+                latest_any,
+                latest_found,
+                latest_card,
+                latest_reconciliation,
+                head_records.get(listing.id),
+            )
             for listing in listings
         ],
+    }
+
+
+def _listing_catalog_card(
+    listing: Listing,
+    latest_any: dict[tuple[str, EngineType], ListingObservation],
+    latest_found: dict[tuple[str, EngineType], ListingObservation],
+    latest_card: dict[tuple[str, EngineType], ListingObservation],
+    latest_reconciliation: dict[tuple[str, EngineType], ListingReconciliation],
+    marketing: dict | None,
+) -> dict:
+    observations = {
+        source: latest_found.get((listing.id, source))
+        for source in (EngineType.AUTO_RU, EngineType.AVITO)
+    }
+    latest_results = {
+        source: latest_any.get((listing.id, source))
+        for source in (EngineType.AUTO_RU, EngineType.AVITO)
+    }
+    available = [
+        latest_card.get((listing.id, source))
+        for source in (EngineType.AUTO_RU, EngineType.AVITO)
+        if latest_card.get((listing.id, source)) is not None
+    ]
+    for source, observation in observations.items():
+        current_url = listing.source_auto_ru if source == EngineType.AUTO_RU else listing.source_avito
+        if observation and canonical_listing_key(source, observation.listing_url) != canonical_listing_key(source, current_url):
+            observations[source] = None
+    available = [observation for observation in available if canonical_listing_key(observation.source, observation.listing_url)
+                 == canonical_listing_key(observation.source, listing.source_auto_ru if observation.source == EngineType.AUTO_RU else listing.source_avito)]
+    preview = max(available, key=lambda item: item.observed_at) if available else None
+    direct_previews = []
+    for source in (EngineType.AUTO_RU, EngineType.AVITO):
+        reconciliation = latest_reconciliation.get((listing.id, source))
+        direct = (reconciliation.details or {}).get('direct_inspection') if reconciliation else None
+        if reconciliation and isinstance(direct, dict) and direct.get('evidence'):
+            direct_previews.append((reconciliation, direct))
+    direct_preview = max(direct_previews, key=lambda item: item[0].checked_at) if direct_previews else None
+
+    direct_labels = {
+        'active': 'Карточка работает',
+        'sold': 'Автомобиль продан',
+        'unpublished': 'Объявление снято',
+        'closed': 'Объявление закрыто',
+        'removed': 'Есть отметка о снятии или продаже',
+        'redirected': 'Ссылка ведёт на другую страницу',
+        'blocked': 'Площадка запросила проверку',
+        'skipped_after_block': 'Не проверено после блокировки',
+        'http_error': 'Ошибка открытия ссылки',
+        'ambiguous_status_text': 'Статус страницы неоднозначен',
+        'limit_reached': 'Не проверено: защитный лимит',
+        'unknown': 'Статус карточки не распознан',
+    }
+    platforms = {}
+    for source in (EngineType.AUTO_RU, EngineType.AVITO):
+        name = source.value
+        url = listing.source_auto_ru if source == EngineType.AUTO_RU else listing.source_avito
+        found = observations[source]
+        latest = latest_results[source]
+        if found and latest and found.run_id != latest.run_id:
+            found = None
+        reconciliation = latest_reconciliation.get((listing.id, source))
+        direct = (reconciliation.details or {}).get('direct_inspection') if reconciliation else None
+        direct = direct if isinstance(direct, dict) else {}
+        code = direct.get('status_code') or direct.get('state')
+        direct_label = direct_labels.get(code)
+        if not direct_label and not url:
+            direct_label = 'Нет корректной прямой ссылки'
+        elif not direct_label and reconciliation and reconciliation.state == 'missing_link':
+            direct_label = 'Ссылка отсутствует или некорректна'
+        elif not direct_label:
+            direct_label = 'Прямая карточка ещё не проверена'
+        search_state = 'found' if found else latest.state.value if latest else 'not_checked'
+        platforms[name] = {
+            'url': _safe_listing_url(source, url),
+            'observation': found,
+            'search_state': search_state,
+            'search_label': {
+                'found': 'Найдено в поиске',
+                'absent_confirmed': 'Не найдено повторно',
+                'absent_uncertain': 'Не найдено — нужна перепроверка',
+                'filter_mismatch': 'Не соответствует фильтру',
+                'technical_error': 'Поиск проверить не удалось',
+                'not_checked': 'Поиск ещё не проверялся',
+            }.get(search_state, search_state),
+            'reconciliation': reconciliation,
+            'direct': direct,
+            'direct_label': direct_label,
+            'direct_class': (
+                'found'
+                if code == 'active'
+                else 'absent_confirmed'
+                if code in {'removed', 'sold', 'unpublished', 'closed'}
+                else 'technical_error'
+                if code
+                else 'not_checked'
+            ),
+            'proof': f'/api/v1/reconciliations/{reconciliation.id}/evidence'
+            if reconciliation and direct.get('evidence') else None,
+        }
+    return {
+        'listing': listing,
+        'observation': preview,
+        'evidence_pages': evidence_pages(preview) if preview else [],
+        'preview_url': (
+            f'/api/v1/reconciliations/{direct_preview[0].id}/evidence'
+            if direct_preview else
+            f'/api/v1/observations/{preview.id}/evidence/{evidence_pages(preview)[0]}'
+            if preview and evidence_pages(preview) else None
+        ),
+        'preview_kind': 'Прямая карточка' if direct_preview else 'Превью поиска' if preview else None,
+        'marketing': marketing or {},
+        'platforms': platforms,
     }
 
 
@@ -812,6 +1061,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
             {
                 'observation': observation,
                 'evidence_pages': evidence_pages(observation),
+                'evidence_kind': 'card' if has_card_evidence(observation) else 'page',
                 'listing_url': _safe_listing_url(observation.source, observation.listing_url),
             }
             for observation in observations
@@ -819,6 +1069,8 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         'episodes': episodes,
         'feedback': feedback,
         'link_events': link_events,
+        'registry_events': session.query(ListingChangeEvent).filter_by(listing_id=listing_id)
+        .order_by(ListingChangeEvent.created_at.desc()).limit(200).all(),
         'page_statistics': _page_statistics(found_observations),
         'previews': [
             {
@@ -829,6 +1081,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
             for observation in observations
             if observation.state == ObservationState.FOUND
             and observation.listing_url
+            and has_card_evidence(observation)
             and observation.scan_run.network_profile in BUSINESS_TRUSTED_NETWORK_PROFILES
         ][:8],
     }

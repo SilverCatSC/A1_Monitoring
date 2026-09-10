@@ -1,146 +1,37 @@
-<!doctype html>
-<html lang="ru">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>A1 Search Monitor</title>
-  <style>
-    :root { --ink:#172033; --muted:#667085; --line:#e7eaf0; --bg:#f5f7fb; --card:#fff; --blue:#315efb; --red:#c72c41; --amber:#b66a00; --green:#087f5b; }
-    * { box-sizing:border-box; }
-    body { margin:0; color:var(--ink); background:var(--bg); font:14px/1.45 Inter,Arial,sans-serif; }
-    header { padding:26px max(24px,calc((100vw - 1440px)/2)); color:white; background:#111827; display:flex; justify-content:space-between; gap:20px; align-items:end; }
-    h1 { margin:0; font-size:28px; } header p { margin:5px 0 0; color:#cbd5e1; }
-    main { max-width:1440px; margin:auto; padding:24px; }
-    .notice { padding:12px 15px; margin-bottom:18px; border-radius:10px; background:#fff4dc; color:#7c4a00; border:1px solid #f6d794; }
-    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:12px; margin-bottom:20px; }
-    .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:17px; box-shadow:0 2px 10px #1018280a; }
-    .metric .value { font-size:27px; font-weight:750; margin-top:7px; } .label { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
-    .two { display:grid; grid-template-columns:1.35fr .65fr; gap:16px; margin:16px 0; }
-    h2 { font-size:18px; margin:0 0 14px; } h3 { font-size:15px; }
-    table { width:100%; border-collapse:collapse; } th,td { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; } th { color:var(--muted); font-size:11px; text-transform:uppercase; }
-    .scroll { overflow:auto; max-height:420px; }
-    .pill { display:inline-block; padding:3px 8px; border-radius:999px; background:#eef2ff; font-size:11px; } .SUCCESS,.FOUND,.healthy { color:var(--green); background:#e7f8f1; } .FAILED,.critical,.overdue,.never_run,.invalid_configuration,.quarantine { color:var(--red); background:#fff0f1; } .PARTIAL,.high,.degraded,.not_configured,.action_required { color:var(--amber); background:#fff4dc; }
-    form { display:grid; gap:10px; } input,select,textarea,button { width:100%; border:1px solid #d5dae4; border-radius:8px; padding:9px 10px; font:inherit; } textarea { min-height:76px; resize:vertical; } button { background:var(--blue); color:white; border:0; font-weight:650; cursor:pointer; } button.secondary { background:#fff; color:var(--ink); border:1px solid #d5dae4; }
-    .row { display:grid; grid-template-columns:1fr 1fr; gap:8px; } .check { display:flex; gap:8px; align-items:center; } .check input { width:auto; }
-    .muted { color:var(--muted); } .empty { padding:28px 8px; color:var(--muted); text-align:center; }
-    code { font-size:12px; } .ok { color:var(--green); } .danger { color:var(--red); }
-    a { color:var(--blue); } header a { color:#cbd5e1; }
-    footer { max-width:1440px; margin:auto; padding:0 24px 30px; color:var(--muted); }
-    @media(max-width:900px){ .two{grid-template-columns:1fr} header{align-items:start;flex-direction:column} }
-  </style>
-</head>
-<body>
-<header>
-  <div><h1>A1 Search Monitor</h1><p>Видимость объявлений на первых трёх страницах поиска · <a href="/api/v1/dashboard/listings">объявления</a> · <a href="/api/v1/dashboard/history">история</a> · <a href="/api/v1/dashboard/feedback">ошибки объявлений</a></p></div>
-  <div>Срез: {{ context.days }} дней · {{ context.generated_at.strftime('%d.%m.%Y %H:%M') }} UTC</div>
-</header>
-<main>
-  {% if not auth_enabled %}<div class="notice"><strong>Stage:</strong> аутентификация отключена. Этот экземпляр нельзя публиковать в интернете.</div>{% endif %}
-  {% if context.network_profile != 'cloud_no_vpn' %}<div class="notice"><strong>Сетевой профиль {{ context.network_profile }}:</strong> живые результаты этого экземпляра не являются доказательством работы production без VPN.</div>{% endif %}
-  {% if not context.active_filters %}<div class="notice"><strong>Мониторинг ещё не настроен:</strong> добавьте утверждённые поисковые URL ниже. До этого система не формирует выводов о видимости.</div>{% endif %}
-  {% if context.canonical_filter_catalog.unmatched %}<div class="notice"><strong>Не назначен канонический фильтр:</strong> {{ context.canonical_filter_catalog.unmatched|length }} связей «автомобиль — площадка». Они не считаются проверенными и перечислены ниже.</div>{% endif %}
-
-  <section class="grid">
-    <div class="card metric"><div class="label">Активные авто</div><div class="value">{{ context.listings_active }}</div><div class="muted">из {{ context.listings_total }}</div></div>
-    <div class="card metric"><div class="label">Фильтры</div><div class="value">{{ context.active_filters|length }}</div></div>
-    <div class="card metric"><div class="label">Назначения</div><div class="value">{{ context.canonical_filter_catalog.expectations }}</div><div class="muted">версия {{ context.canonical_filter_catalog.catalog_version }}</div></div>
-    <div class="card metric"><div class="label">Найдено</div><div class="value ok">{{ context.observation_counts.get('found',0) }}</div></div>
-    <div class="card metric"><div class="label">Непоказы</div><div class="value danger">{{ context.open_absences|length }}</div><div class="muted">подтверждённые эпизоды</div></div>
-    <div class="card metric"><div class="label">Тех. сбои</div><div class="value">{{ context.observation_counts.get('technical_error',0) }}</div></div>
-    <div class="card metric"><div class="label">Обратная связь</div><div class="value"><a href="/api/v1/dashboard/feedback">{{ context.open_feedback_count }}</a></div><div class="muted">в работе</div></div>
-  </section>
-
-  <section class="card"><h2>Здоровье системы</h2><p><span class="pill {{ context.operational_status.overall }}">{{ context.operational_status.overall }}</span> <span class="muted">ожидаемый интервал {{ context.operational_status.expected_interval_minutes }} мин. + допуск {{ context.operational_status.grace_minutes }} мин.</span></p><div class="scroll"><table><thead><tr><th>Контур</th><th>Состояние</th><th>Последнее событие</th><th>Пояснение</th></tr></thead><tbody>
-    <tr><td>Импорт таблицы</td><td><span class="pill {{ context.operational_status.import.state }}">{{ context.operational_status.import.state }}</span></td><td>{{ context.operational_status.import.last_finished_at or '—' }}</td><td>{{ context.operational_status.import.reason }}</td></tr>
-    {% for item in context.operational_status.sources %}<tr><td>{{ item.source }}</td><td><span class="pill {{ item.state }}">{{ item.state }}</span></td><td>{{ item.last_run_at or '—' }}{% if item.age_minutes is not none %}<br><span class="muted">{{ item.age_minutes }} мин. назад</span>{% endif %}</td><td>{{ item.reason }}{% if item.active_filters is defined %}<br><span class="muted">активных фильтров: {{ item.active_filters }}</span>{% endif %}</td></tr>{% endfor %}
-  </tbody></table></div></section>
-
-  <section class="two">
-    <div class="card"><h2>Последние циклы</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка / сеть</th><th>Статус</th><th>Фильтры</th><th>Страницы</th><th>Ошибки</th></tr></thead><tbody>
-      {% for run in context.recent_runs %}<tr><td>{{ run.started_at.strftime('%d.%m %H:%M') }}</td><td>{{ run.source.value }}<br><span class="muted">{{ run.network_profile }}</span></td><td><span class="pill {{ run.status.name }}">{{ run.status.value }}</span></td><td>{{ run.filters_ok }}/{{ run.filters_total }}</td><td>{{ run.pages_scanned }}</td><td>{{ run.technical_errors }}</td></tr>{% else %}<tr><td colspan="6" class="empty">Циклов пока нет</td></tr>{% endfor %}
-    </tbody></table></div></div>
-    <div class="card"><h2>Последний импорт</h2>
-      {% if context.last_import %}<p><strong>{{ context.last_import.valid_rows }}</strong> валидных из {{ context.last_import.raw_rows }}</p><p>Отклонено: {{ context.last_import.invalid_rows }}</p><p>Карантин: <strong class="{{ 'danger' if context.last_import.blocked_by_schema_drift else 'ok' }}">{{ 'да' if context.last_import.blocked_by_schema_drift else 'нет' }}</strong></p><p class="muted">{{ context.last_import.finished_at }}</p>{% else %}<div class="empty">Импортов пока нет</div>{% endif %}
-      <p class="muted">Ссылки: Auto.ru {{ context.auto_links }}, Avito {{ context.avito_links }}</p>
-    </div>
-  </section>
-
-  <section class="card"><h2>Покрытие каноническими фильтрами</h2><p class="muted">{{ context.canonical_filter_catalog.definitions_by_source.auto_ru }} Auto.ru + {{ context.canonical_filter_catalog.definitions_by_source.avito }} Avito; одинаковые по смыслу URL не дублируются.</p><div class="scroll"><table><thead><tr><th>VIN / автомобиль</th><th>Площадка</th><th>Семейство</th><th>Состояние</th><th>Причина</th></tr></thead><tbody>
-    {% for item in context.canonical_filter_catalog.unmatched %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}">{{ item.vin or item.listing_id }}</a></td><td>{{ item.source }}</td><td>{{ item.family or 'не распознано' }}</td><td>{{ item.condition or 'не определено' }}</td><td>{{ item.reason }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Все объявления с прямыми ссылками назначены фильтрам</td></tr>{% endfor %}
-  </tbody></table></div></section>
-
-  <section class="card"><h2>Подтверждённые эпизоды отсутствия</h2><div class="scroll"><table><thead><tr><th>VIN / автомобиль</th><th>Фильтр</th><th>Площадка</th><th>Начало</th><th>Пропусков</th></tr></thead><tbody>
-    {% for item in context.open_absences %}<tr><td><strong>{{ item.listing.vin or item.listing_id }}</strong><br><span class="muted">{{ item.listing.brand or '' }} {{ item.listing.model or '' }}</span></td><td>{{ item.filter_id }}</td><td>{{ item.source.value }}</td><td>{{ item.started_at }}</td><td>{{ item.consecutive_misses }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Открытых подтверждённых эпизодов нет</td></tr>{% endfor %}
-  </tbody></table></div></section>
-
-  <section class="two">
-    <div class="card"><h2>Статистика по фильтрам</h2><div class="scroll"><table><thead><tr><th>Фильтр</th><th>Найдено</th><th>Стр. 1 / 2 / 3</th><th>Не найдено</th><th>Тех.</th></tr></thead><tbody>
-      {% for row in context.filter_statistics %}<tr><td><a href="/api/v1/dashboard/history?source={{ row.source }}"><strong>{{ row.name }}</strong></a><br><span class="muted">{{ row.source }}</span></td><td>{{ row.found }}</td><td>{{ row.page_1 }} / {{ row.page_2 }} / {{ row.page_3 }}</td><td>{{ row.absent_confirmed }} <span class="muted">(+{{ row.absent_uncertain }} ожид.)</span></td><td>{{ row.technical_error }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Статистика появится после первого настроенного скана</td></tr>{% endfor %}
-    </tbody></table></div></div>
-    <div class="card"><h2>Последние найденные позиции</h2><div class="scroll"><table><thead><tr><th>Автомобиль</th><th>Фильтр</th><th>Страница</th><th>Позиция</th></tr></thead><tbody>
-      {% for item in context.latest_found %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}"><strong>{{ item.listing.vin or item.listing_id }}</strong></a><br>{% if context.latest_found_urls.get(item.id) %}<a href="{{ context.latest_found_urls.get(item.id) }}" target="_blank" rel="noreferrer">{{ item.title or 'Открыть объявление' }}</a>{% else %}<span class="muted">{{ item.title or 'ссылка не сохранена' }}</span>{% endif %}{% for evidence_page in context.latest_found_evidence.get(item.id, []) %}<br><a href="/api/v1/observations/{{ item.id }}/evidence/{{ evidence_page }}" target="_blank">снимок стр. {{ evidence_page }}</a>{% endfor %}</td><td>{{ item.filter.name }}</td><td>{{ item.page_number }}</td><td>{{ item.absolute_position or '—' }}<br><span class="muted">на стр.: {{ item.position_in_page }}</span></td></tr>{% else %}<tr><td colspan="4" class="empty">Найденных позиций пока нет</td></tr>{% endfor %}
-    </tbody></table></div></div>
-  </section>
-
-  <section class="card"><h2>Выходные за последние 14 дней</h2><div class="scroll"><table><thead><tr><th>Дата</th><th>Подтверждённые непоказы</th><th>Эпизоды, затрагивавшие день</th><th>Технические ошибки</th></tr></thead><tbody>
-    {% for row in context.weekend_summary %}<tr><td>{{ row.date }}</td><td>{{ row.confirmed_absence_observations }}</td><td>{{ row.absence_episodes_overlapping }}</td><td>{{ row.technical_errors }}</td></tr>{% else %}<tr><td colspan="4" class="empty">В выбранном периоде нет выходных дней</td></tr>{% endfor %}
-  </tbody></table></div></section>
-
-  <section class="two">
-    <div class="card"><h2>Активные авто с неполными ссылками</h2><div class="scroll"><table><thead><tr><th>VIN / авто</th><th>Auto.ru</th><th>Avito</th></tr></thead><tbody>
-      {% for item in context.missing_links %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.id }}"><strong>{{ item.vin or 'VIN не указан' }}</strong></a><br><span class="muted">{{ item.brand or '' }} {{ item.model or '' }} {{ item.year or '' }}</span></td><td>{% if context.listing_urls[item.id].auto_ru %}<a href="{{ context.listing_urls[item.id].auto_ru }}" target="_blank" rel="noreferrer">открыть</a>{% else %}нет{% endif %}</td><td>{% if context.listing_urls[item.id].avito %}<a href="{{ context.listing_urls[item.id].avito }}" target="_blank" rel="noreferrer">открыть</a>{% else %}нет{% endif %}</td></tr>{% else %}<tr><td colspan="3" class="empty">У активных авто обе ссылки заполнены</td></tr>{% endfor %}
-    </tbody></table></div></div>
-    <div class="card"><h2>Подтвердить найденную ссылку</h2><form id="listing-link-form">
-      <select name="listing_id" required><option value="">Выберите автомобиль</option>{% for item in context.missing_links %}<option value="{{ item.id }}">{{ item.vin or item.id }} — {{ item.brand or '' }}</option>{% endfor %}</select>
-      <div class="row"><select name="source"><option value="auto_ru">Auto.ru</option><option value="avito">Avito</option></select><input name="actor" placeholder="Кто проверил" required></div>
-      <input name="url" type="url" list="dealer-candidate-urls" placeholder="Прямая ссылка на объявление" required>
-      <datalist id="dealer-candidate-urls">{% for item in context.dealer_candidates %}<option value="{{ item.listing_url }}">{{ item.source.value }} — {{ item.title or item.external_key }}</option>{% endfor %}</datalist>
-      <textarea name="reason" placeholder="Откуда получена ссылка и как проверена" required></textarea>
-      <button type="submit">Сохранить с записью в журнал</button><div id="listing-link-result" class="muted"></div>
-    </form></div>
-  </section>
-
-  <section class="two">
-    <div class="card"><h2>Кандидаты из кабинетов дилера</h2><p class="muted">Система собирает ссылки, но не угадывает VIN. Выберите кандидата выше и подтвердите связь вручную.</p><div class="scroll"><table><thead><tr><th>Площадка</th><th>Объявление</th><th>Цена</th><th>Последний раз</th></tr></thead><tbody>
-      {% for item in context.dealer_candidates %}<tr><td>{{ item.source.value }}<br><span class="muted">{{ item.network_profile }}</span></td><td><a href="{{ item.listing_url }}" target="_blank" rel="noreferrer">{{ item.title or item.external_key }}</a></td><td>{{ item.price_hint or '—' }}</td><td>{{ item.last_seen_at }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Каталог ещё не собран</td></tr>{% endfor %}
-    </tbody></table></div></div>
-    <div class="card"><h2>Последние обходы кабинетов</h2><div class="scroll"><table><thead><tr><th>Время</th><th>Площадка</th><th>Статус</th><th>Ссылок</th><th>Причина</th></tr></thead><tbody>
-      {% for item in context.dealer_discovery_runs %}<tr><td>{{ item.started_at }}</td><td>{{ item.source.value }}<br><span class="muted">{{ item.network_profile }}</span></td><td><span class="pill {{ 'healthy' if item.complete else 'degraded' }}">{{ 'complete' if item.complete else 'failed' }}</span></td><td>{{ item.candidates_found }}</td><td>{{ item.error or '—' }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Обходов пока нет</td></tr>{% endfor %}
-    </tbody></table></div></div>
-  </section>
-
-  <section class="two">
-    <div class="card"><h2>Реестр поисковых фильтров</h2><div class="scroll"><table><thead><tr><th>Название</th><th>Площадка</th><th>Авто</th><th>Состояние</th></tr></thead><tbody>
-      {% for filter in context.active_filters %}<tr><td><a href="{{ filter.raw_url }}" target="_blank" rel="noreferrer">{{ filter.name }}</a></td><td>{{ filter.source.value }}</td><td>{{ filter.expectations|length }}</td><td><span class="pill SUCCESS">активен</span></td></tr>{% else %}<tr><td colspan="4" class="empty">Нет активных фильтров</td></tr>{% endfor %}
-    </tbody></table></div></div>
-    <div class="card"><h2>Добавить или обновить фильтр</h2><form id="filter-form">
-      <div class="row"><select name="source"><option value="auto_ru">Auto.ru</option><option value="avito">Avito</option></select><input name="name" placeholder="Понятное название" required></div>
-      <input name="url" type="url" placeholder="URL страницы поисковой выдачи" required>
-      <textarea name="vins" placeholder="VIN через пробел или с новой строки"></textarea>
-      <label class="check"><input type="checkbox" name="all"> Назначить всем активным авто с объявлением на площадке</label>
-      <button type="submit">Сохранить фильтр</button><div id="filter-result" class="muted"></div>
-    </form></div>
-  </section>
-
-  <section class="two">
-    <div class="card"><h2>Очередь обратной связи</h2><div class="scroll"><table><thead><tr><th>Категория</th><th>Сообщение</th><th>Автор</th><th>Статус</th></tr></thead><tbody>
-      {% for item in context.feedback %}<tr><td><span class="pill {{ item.severity }}">{{ item.category }}</span></td><td>{{ item.message }}</td><td>{{ item.manager_name or '—' }}</td><td>{{ item.status.value }}</td></tr>{% else %}<tr><td colspan="4" class="empty">Открытых замечаний нет</td></tr>{% endfor %}
-    </tbody></table></div></div>
-    <div class="card"><h2>Сообщить об ошибке</h2><form id="feedback-form">
-      <div class="row"><input name="manager" placeholder="Ваше имя" required><select name="severity"><option value="medium">Средняя</option><option value="high">Высокая</option><option value="critical">Критичная</option><option value="low">Низкая</option></select></div>
-      <select name="category"><option value="data_error">Данные</option><option value="price_error">Цена</option><option value="photo_error">Фото</option><option value="description_error">Описание</option><option value="visibility_error">Видимость</option><option value="other">Другое</option></select>
-      <input name="listing_id" placeholder="ID объявления в системе (необязательно)">
-      <textarea name="message" placeholder="Что именно неверно и как должно быть" required></textarea>
-      <button type="submit">Отправить</button><div id="feedback-result" class="muted"></div>
-    </form></div>
-  </section>
-</main>
-<footer>Технический сбой не считается отсутствием. Управленческий эпизод открывается после двух валидных непоказов подряд.</footer>
-<script>
-async function send(url, body, method='POST'){const r=await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});const d=await r.json();if(!r.ok)throw new Error(d.detail||'Ошибка');return d}
-document.querySelector('#filter-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#filter-result');out.textContent='Сохранение…';try{const vins=f.get('vins').split(/[\s,;]+/).filter(Boolean);const d=await send('/api/v1/filters',{source:f.get('source'),name:f.get('name'),url:f.get('url'),vins,apply_to_all_active:f.get('all')==='on'});out.textContent=`Готово: назначено ${d.expectations}, VIN не найдены: ${d.missing_vins.length}`;setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
-document.querySelector('#listing-link-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#listing-link-result');out.textContent='Сохранение…';try{await send(`/api/v1/listings/${f.get('listing_id')}/links`,{source:f.get('source'),url:f.get('url'),actor:f.get('actor'),reason:f.get('reason')},'PATCH');out.textContent='Ссылка сохранена и записана в журнал';setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
-document.querySelector('#feedback-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#feedback-result');out.textContent='Отправка…';try{await send('/api/v1/feedback',{manager_name:f.get('manager'),severity:f.get('severity'),category:f.get('category'),listing_id:f.get('listing_id')||null,message:f.get('message'),source:'dashboard'});out.textContent='Замечание принято';e.target.reset();setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
-</script>
-</body>
-</html>
+{% extends 'base.html' %}
+{% set active_page = '' %}{% set data = context.workspace %}
+{% block title %}Обзор{% endblock %}
+{% block content %}
+<header class="page-heading"><div><span class="eyebrow">A1 · КОНТРОЛЬ ВИДИМОСТИ</span><h1>Мониторинг размещений</h1><p class="muted">Какие объявления видны покупателям и что требует внимания</p></div><div class="timestamp">{{ data.generated_at }} МСК</div></header>
+{% include 'analytics_controls.html' %}
+{% set health_labels = {'healthy':'Актуально', 'overdue':'Нужна новая проверка', 'degraded':'Неполный результат', 'not_configured':'Не настроено', 'never_run':'Не проверено', 'invalid_configuration':'Ошибка настройки', 'quarantine':'Карантин'} %}
+<div class="health-strip"><span>Свежесть всей системы:</span>{% for item in context.operational_status.sources %}<a class="badge {{ 'found' if item.state == 'healthy' else 'technical_error' }}" href="/api/v1/dashboard/settings">{{ 'Auto.ru' if item.source == 'auto_ru' else 'Avito' }} · {{ health_labels.get(item.state, item.state) }}</a>{% endfor %}{% if context.operational_status.import.state != 'healthy' %}<a class="badge technical_error" href="/api/v1/dashboard/settings">Реестр · {{ health_labels.get(context.operational_status.import.state, 'Нужно обновление') }}</a>{% endif %}</div>
+{% if not data.has_filters %}<div class="notice">Мониторинг ещё не настроен. Утвердите поисковые фильтры в <a href="/api/v1/dashboard/settings">настройках</a>.</div>{% endif %}
+<section class="kpi-grid">
+<div class="kpi"><div class="kpi-label">Автомобили в выборке</div><div class="kpi-value">{{ data.vehicle_count }}</div><div class="kpi-note">{{ data.active_count }} активных · {{ data.archive_count }} в архиве всего</div></div>
+<div class="kpi primary-kpi"><div class="kpi-label">Размещения найдены</div><div class="kpi-value">{{ data.totals.get('found',0) }} <small style="font-size:16px;font-weight:400">/ {{ data.placement_count }}</small></div><div class="kpi-note">Последние проверки текущих ссылок за период</div></div>
+<div class="kpi"><div class="kpi-label">Нужна проверка результата</div><div class="kpi-value">{{ data.totals.get('absent_confirmed',0) + data.totals.get('absent_uncertain',0) }}</div><div class="kpi-note">Размещений не найдено в проверенных фильтрах</div></div>
+<div class="kpi"><div class="kpi-label">Замечания менеджеров</div><div class="kpi-value"><a href="/api/v1/dashboard/feedback">{{ data.open_feedback }}</a></div><div class="kpi-note">Открытые замечания по всему реестру</div></div>
+</section>
+{% include 'progress.html' %}
+{% if data.legacy_unattributed %}<div class="notice">Часть прежних наблюдений не содержит ID проверяемой ссылки. Они сохранены в истории, но не выдаются за актуальный результат текущего объявления. Поэтому «нет актуальной проверки» не означает «машина отсутствует».</div>{% endif %}
+<div class="split">
+<section class="panel"><div class="section-head"><h2>Что требует внимания</h2><a href="/api/v1/dashboard/placements?{{ data.query }}">Все размещения →</a></div>
+<div class="insight"><div><a href="/api/v1/dashboard/placements?{{ data.query }}&amp;status=technical_error">Не удалось проверить</a><p>Технический сбой не доказывает отсутствие объявления</p></div><span class="badge technical_error">{{ data.totals.get('technical_error',0) }}</span></div>
+<div class="insight"><div><a href="/api/v1/dashboard/placements?{{ data.query }}&amp;status=not_configured">Не назначен фильтр</a><p>Прямая ссылка есть, поисковый сценарий ещё не задан</p></div><span class="badge">{{ data.totals.get('not_configured',0) }}</span></div>
+<div class="insight"><div><a href="/api/v1/dashboard/placements?{{ data.query }}&amp;status=not_checked">Нет актуальной проверки</a><p>Нет идентифицированного последнего результата для текущей ссылки</p></div><span class="badge">{{ data.totals.get('not_checked',0) }}</span></div>
+<div class="insight"><div>Актуальность реестра<p>{% if data.last_import %}Последний импорт: {{ data.last_import.time }} МСК · {{ data.last_import.valid }} из {{ data.last_import.total }} строк{% else %}Обновится перед запуском мониторинга{% endif %}</p></div><span class="badge {{ 'technical_error' if data.last_import and data.last_import.blocked else '' }}">{{ 'Карантин' if data.last_import and data.last_import.blocked else 'Перед каждым запуском' }}</span></div>
+</section>
+<section class="panel"><div class="section-head"><h2>Динамика найденных объявлений</h2><a href="/api/v1/dashboard/analytics?{{ data.query }}">Статистика →</a></div>
+<p class="helper">Количество успешных обнаружений по дням. Один автомобиль может учитываться в нескольких проверках.</p>
+{% set maxfound = data.daily|map(attribute='found')|max %}
+<div class="mini-bars" aria-label="Динамика успешных обнаружений">{% for day in data.daily %}<div class="mini-column {{ 'weekend' if day.weekend else '' }}" title="{{ day.date }}: найдено {{ day.found }}, ошибок {{ day.technical }}"><span class="mini-bar" style="height:{{ (day.found * 85 / maxfound) if maxfound else 0 }}px"></span>{% if data.days <= 7 %}<small>{{ day.label }}</small>{% endif %}</div>{% endfor %}</div><div class="legend"><span>Зелёный — будни</span><span>Песочный — выходные</span></div>
+</section></div>
+{% set site = context.company_site_audit %}
+<section class="panel"><div class="section-head"><div><h2>Публикация на сайте A1Auto</h2><p class="helper">Независимая сверка активных автомобилей маркетинга с публичным каталогом A1Auto. Она не заменяет проверку видимости в поиске Auto.ru и Avito.</p></div><a href="/api/v1/dashboard/company-site">Открыть сверку →</a></div>
+{% if site.state == 'ready' %}<div class="distribution"><span><strong>{{ site.summary.active_marketing_records }}</strong>активных в маркетинге</span><span><strong>{{ site.summary.published_catalogue_candidates }}</strong>опубликовано на сайте</span><span><strong>{{ site.summary.issues_total }}</strong>требуют сверки</span><span><strong>{{ site.summary.issues_by_severity.high }}</strong>высокий риск</span></div><p class="helper">Последняя сверка: {{ site.generated_at.strftime('%d.%m.%Y %H:%M') if site.generated_at else 'время не определено' }} МСК · <a href="{{ site.source_url }}" target="_blank" rel="noopener noreferrer">каталог A1Auto ↗</a></p>{% else %}<div class="notice">{{ site.reason }} Запустите полный локальный цикл, чтобы получить отдельный результат по сайту.</div>{% endif %}</section>
+<section class="panel"><div class="section-head"><h2>Последние проверки площадок</h2><a href="/api/v1/dashboard/history">История →</a></div>
+<div class="scroll"><table><thead><tr><th>Время, МСК</th><th>Площадка</th><th>Результат</th><th>Фильтров успешно</th><th>Ошибки</th><th>Длительность</th></tr></thead><tbody>{% for run in data.runs[:6] %}<tr><td>{{ run.time }}</td><td>{{ run.source }}{% if not run.trusted %}<span class="subline">Диагностический прогон</span>{% endif %}</td><td>{{ run.status }}</td><td>{{ run.ok }} / {{ run.total }}</td><td>{{ run.errors }}</td><td>{{ run.seconds if run.seconds is not none else '—' }} с</td></tr>{% else %}<tr><td colspan="6" class="empty">Проверок за период нет. Запустите мониторинг с локального компьютера.</td></tr>{% endfor %}</tbody></table></div></section>
+{% if context.feedback %}<section class="panel"><div class="section-head"><h2>Последние замечания</h2><a href="/api/v1/dashboard/feedback">Открыть очередь →</a></div>{% for ticket in context.feedback[:3] %}<div class="insight"><div>{{ ticket.message }}<p>{{ ticket.manager_name or 'Менеджер' }}</p></div></div>{% endfor %}</section>{% endif %}
+{% endblock %}
+{% block scripts %}<script src="/static/progress.js" defer></script>{% endblock %}

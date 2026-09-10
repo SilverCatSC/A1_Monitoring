@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import asyncio
 import re
+from collections.abc import Callable
 from datetime import UTC, datetime
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from bs4 import BeautifulSoup
-from playwright.async_api import Browser, Page, async_playwright
+from playwright.async_api import async_playwright
 
 from app.config import settings
 from app.models import EngineType
@@ -14,33 +15,68 @@ from app.scraper.base import (
     ListingHit,
     ScanResult,
     canonical_listing_key,
+    capture_listing_card_evidence,
     capture_page_evidence,
     classify_result_page,
     is_marketplace_listing_url,
 )
+from app.scraper.browser_session import browser_page
+from app.scraper.pacing import choose_pause
+from app.scraper.result_scope import pagination_state, primary_cards
+from app.scraper.seller import catalogue_html, seller_page_matches
 
 
 class AutoRuAdapter:
     source = EngineType.AUTO_RU
 
-    def __init__(self, request_timeout: int = 20) -> None:
+    def __init__(
+        self,
+        request_timeout: int = 20,
+        progress_callback: Callable[[dict], None] | None = None,
+    ) -> None:
         self.request_timeout = request_timeout
+        self.progress_callback = progress_callback
 
-    async def scan_filter(self, search_url: str, max_pages: int = 3) -> ScanResult:
+    def _progress(self, event: str, **payload) -> None:
+        if self.progress_callback:
+            try:
+                self.progress_callback({'event': event, 'source': self.source.value, **payload})
+            except Exception:
+                pass
+
+    async def scan_filter(
+        self,
+        search_url: str,
+        max_pages: int = 3,
+        target_keys: set[str] | None = None,
+        seller_catalogue: bool = False,
+    ) -> ScanResult:
         start = datetime.now(UTC)
         hits: list[ListingHit] = []
         pages_scanned = 0
         exhausted = False
         error: str | None = None
         diagnostics: dict[str, int | str] = {'engine': 'auto_ru', 'start_url': search_url}
+        seen_pages: set[frozenset[str]] = set()
         async with async_playwright() as p:
-            browser: Browser = await p.chromium.launch(headless=settings.playwright_headless)
-            page: Page = await browser.new_page()
-            await page.set_viewport_size({'width': 1920, 'height': 1080})
-
-            try:
+            async with browser_page(p) as page:
                 for page_number in range(1, max_pages + 1):
                     url = _page_url(search_url, page_number)
+                    wait_seconds = choose_pause(
+                        settings.scan_page_pause_min_seconds,
+                        settings.scan_page_pause_max_seconds,
+                    )
+                    if wait_seconds:
+                        self._progress(
+                            'page_wait',
+                            page=page_number,
+                            pages_total=max_pages,
+                            wait_seconds=round(wait_seconds, 1),
+                        )
+                        await asyncio.sleep(wait_seconds)
+                    self._progress(
+                        'page_started', page=page_number, pages_total=max_pages, url=url
+                    )
                     diagnostics[f'page_{page_number}'] = 0
                     try:
                         response = await page.goto(
@@ -48,11 +84,18 @@ class AutoRuAdapter:
                             timeout=self.request_timeout * 1000,
                             wait_until='domcontentloaded',
                         )
-                        if response is not None and response.status >= 400:
-                            raise RuntimeError(f'HTTP {response.status}')
-                        await page.mouse.wheel(0, 1600)
-                        await asyncio.sleep(0.7)
+                        http_status = response.status if response is not None else None
+                        diagnostics[f'page_{page_number}_http_status'] = http_status or 0
+                        if http_status is None or http_status < 400:
+                            # Auto.ru can virtualise a short result list after a blind
+                            # scroll and leave only the model landing content in the DOM.
+                            # Read cards at the top first; target-card evidence scrolls
+                            # only to the precise listing later in this method.
+                            await page.evaluate('window.scrollTo(0, 0)')
+                            await asyncio.sleep(settings.auto_ru_page_delay_seconds)
                         html = await page.content()
+                        diagnostics[f'page_{page_number}_requested_url'] = url
+                        diagnostics[f'page_{page_number}_final_url'] = page.url
                         evidence_path = await capture_page_evidence(
                             page,
                             source=self.source,
@@ -62,11 +105,61 @@ class AutoRuAdapter:
                         )
                         if evidence_path:
                             diagnostics[f'page_{page_number}_evidence'] = evidence_path
-                        parsed = self._extract(html, page_number)
+                        if http_status is not None and http_status >= 400:
+                            error = f'page {page_number}: RuntimeError: HTTP {http_status}'
+                            diagnostics[f'page_{page_number}_state'] = 'technical_error'
+                            break
+                        if seller_catalogue and not seller_page_matches(search_url, page.url):
+                            error = 'seller page redirected outside the approved seller catalogue'
+                            break
+                        parsed = self._extract(catalogue_html(html) if seller_catalogue else html, page_number)
+                        pagination = pagination_state(html, self.source.value)
+                        diagnostics[f'page_{page_number}_pagination'] = pagination
+                        if pagination['current'] is not None and pagination['current'] != page_number:
+                            error = f'pagination mismatch: requested {page_number}, displayed {pagination["current"]}'
+                            diagnostics[f'page_{page_number}_state'] = 'pagination_mismatch'
+                            break
+                        page_keys = frozenset(canonical_listing_key(self.source, hit.url) for hit in parsed)
+                        diagnostics[f'page_{page_number}_listing_keys'] = sorted(page_keys)
+                        if page_keys and page_keys in seen_pages:
+                            error = 'pagination repeated a page; traversal is not proven'
+                            diagnostics[f'page_{page_number}_state'] = 'pagination_repeat'
+                            break
+                        seen_pages.add(page_keys)
                         page_state, reason = classify_result_page(html, len(parsed))
+                        declared_offers = _declared_offer_count(html)
+                        if declared_offers is not None:
+                            diagnostics[f'page_{page_number}_declared_offers'] = declared_offers
+                        card_evidence = 0
+                        if page_state == 'results' and target_keys:
+                            for hit in parsed:
+                                if canonical_listing_key(self.source, hit.url) not in target_keys:
+                                    continue
+                                card_path = await capture_listing_card_evidence(
+                                    page,
+                                    source=self.source,
+                                    search_url=search_url,
+                                    page_number=page_number,
+                                    hit=hit,
+                                    evidence_dir=settings.evidence_dir,
+                                )
+                                if card_path:
+                                    hit.raw['card_evidence'] = card_path
+                                    card_evidence += 1
                         diagnostics[f'page_{page_number}'] = len(parsed)
                         diagnostics[f'page_{page_number}_state'] = page_state
                         pages_scanned += 1
+                        final_result_page = pagination['last'] or (not pagination['has_next'] and _all_offers_are_visible(declared_offers, len(parsed)))
+                        self._progress(
+                            'page_finished',
+                            page=page_number,
+                            pages_total=max_pages,
+                            cards=len(parsed),
+                            target_cards=card_evidence,
+                            state=page_state,
+                            evidence=evidence_path,
+                            exhausted=final_result_page,
+                        )
                         if page_state == 'blocked':
                             error = f'blocked page {page_number}: {reason}'
                             break
@@ -77,12 +170,19 @@ class AutoRuAdapter:
                             exhausted = True
                             break
                         hits.extend(parsed)
+                        if final_result_page:
+                            exhausted = True
+                            break
                     except Exception as exc:
                         error = f'page {page_number}: {type(exc).__name__}: {exc}'
                         diagnostics[f'page_{page_number}_state'] = 'technical_error'
+                        self._progress(
+                            'page_failed',
+                            page=page_number,
+                            pages_total=max_pages,
+                            error=error,
+                        )
                         break
-            finally:
-                await browser.close()
 
         return ScanResult(
             filter_id='',
@@ -97,42 +197,44 @@ class AutoRuAdapter:
         )
 
     def _extract(self, html: str, page_number: int) -> list[ListingHit]:
-        soup = BeautifulSoup(html, 'html.parser')
         results: list[ListingHit] = []
         seen: set[str] = set()
-        links = soup.select(
-            'a.ListingItemTitle__link[href*="/cars/"][href*="/sale/"], '
-            'a[href*="/cars/used/sale/"], a[href*="/cars/new/sale/"], '
-            'a[href*="/cars/new/group/"], '
-            'a[href*="/lcv/used/sale/"], a[href*="/lcv/new/sale/"]'
-        )
-        for link in links:
-            if not link.get('href'):
-                continue
-            raw_url = link['href']
-            if raw_url.startswith('//'):
-                raw_url = 'https:' + raw_url
-            if raw_url.startswith('/'):
-                raw_url = 'https://auto.ru' + raw_url
-            if not is_marketplace_listing_url(EngineType.AUTO_RU, raw_url):
+        cards = []
+        for candidate in primary_cards(html, '.ListingItem, .OfferSnippet, [class*="ListingItemUniversal-"]',
+                                       root_selector='.ListingCars__items, .CardGroupOffersList__items'):
+            classes = candidate.get('class') or []
+            if any(
+                class_name in {'ListingItem', 'OfferSnippet'}
+                or (class_name.startswith('ListingItemUniversal-') and '__' not in class_name)
+                for class_name in classes
+            ):
+                cards.append(candidate)
+        for card in cards:
+            links = card.select('a[href]')
+            ranked_links = sorted(
+                links,
+                key=lambda item: (
+                    'ListingItemTitle__link' not in (item.get('class') or []),
+                    'фото' in item.get_text(' ', strip=True).lower(),
+                ),
+            )
+            link = None
+            raw_url = ''
+            for candidate in ranked_links:
+                candidate_url = candidate.get('href') or ''
+                if candidate_url.startswith('//'):
+                    candidate_url = 'https:' + candidate_url
+                if candidate_url.startswith('/'):
+                    candidate_url = 'https://auto.ru' + candidate_url
+                if is_marketplace_listing_url(EngineType.AUTO_RU, candidate_url):
+                    link, raw_url = candidate, candidate_url
+                    break
+            if link is None:
                 continue
             key = canonical_listing_key(EngineType.AUTO_RU, raw_url)
             if not key or key in seen:
                 continue
             seen.add(key)
-
-            card = None
-            for ancestor in link.parents:
-                classes = ancestor.get('class') or []
-                if any(
-                    class_name == 'ListingItem'
-                    or class_name == 'OfferSnippet'
-                    or (class_name.startswith('ListingItemUniversal-') and '__' not in class_name)
-                    for class_name in classes
-                ):
-                    card = ancestor
-                    break
-            card = card or link.parent
             card_text = card.get_text(' ', strip=True)
             title = link.get_text(' ', strip=True)[:255] or card_text[:255]
             price_match = re.search(r'(?<!\d)(\d{1,3}(?:[\s\u00a0]\d{3})+)\s*₽', card_text)
@@ -158,6 +260,18 @@ class AutoRuAdapter:
 def _page_url(base_url: str, page_number: int) -> str:
     if page_number <= 1:
         return base_url
-    sep = '&' if '?' in base_url else '?'
-    params = urlencode({'page': page_number})
-    return f'{base_url}{sep}{params}'
+    parts = urlsplit(base_url)
+    query = [(key, value) for key, value in parse_qsl(parts.query) if key != 'page']
+    query.append(('page', str(page_number)))
+    return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def _declared_offer_count(html: str) -> int | None:
+    """Read the result-count label Auto.ru displays above a short catalogue."""
+    text = BeautifulSoup(html, 'html.parser').get_text(' ', strip=True)
+    match = re.search(r'(?<!\d)(\d{1,5})\s+предложени(?:е|я|й)\b', text, re.IGNORECASE)
+    return int(match.group(1)) if match else None
+
+
+def _all_offers_are_visible(declared_offers: int | None, parsed_count: int) -> bool:
+    return declared_offers is not None and declared_offers > 0 and parsed_count == declared_offers

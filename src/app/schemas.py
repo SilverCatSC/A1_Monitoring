@@ -51,6 +51,12 @@ class ListingLinkUpdate(BaseModel):
     reason: str
 
 
+class ReconciliationConfirm(BaseModel):
+    url: str = Field(max_length=3000)
+    actor: str = Field(min_length=1, max_length=150)
+    reason: str = Field(min_length=1, max_length=2000)
+
+
 class FeedbackCreate(BaseModel):
     listing_id: str | None = None
     filter_id: str | None = None

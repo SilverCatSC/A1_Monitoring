@@ -13,6 +13,7 @@ from app.models import (
     EngineType,
     ImportFieldDrift,
     Listing,
+    ListingLinkOverride,
     SearchFilter,
     SourceImportSnapshot,
     VehicleFilterExpectation,
@@ -23,6 +24,7 @@ from app.scraper.base import (
     is_marketplace_listing_url,
     is_marketplace_search_url,
 )
+from app.service.registry_audit import record_registry_change, registry_values
 
 
 class SourceImportError(RuntimeError):
@@ -230,6 +232,7 @@ class SourceImporter:
         try:
             for row, filters, signature in parsed_rows:
                 listing = self.db.query(Listing).filter(Listing.vehicle_signature == signature).one_or_none()
+                previous = registry_values(listing) if listing is not None else None
                 if listing is None:
                     listing = Listing(
                         vehicle_signature=signature,
@@ -278,6 +281,14 @@ class SourceImporter:
                     listing.source_auto_ru = incoming_auto_ru
                 if incoming_avito or not listing.source_avito:
                     listing.source_avito = incoming_avito
+                for field, source, incoming in (
+                    ('source_auto_ru', EngineType.AUTO_RU, incoming_auto_ru),
+                    ('source_avito', EngineType.AVITO, incoming_avito),
+                ):
+                    override = self.db.query(ListingLinkOverride).filter_by(listing_id=listing.id, source=source).one_or_none()
+                    if override and is_marketplace_listing_url(source, override.url):
+                        override.last_source_url = incoming
+                        setattr(listing, field, override.url)
                 listing.dealer_auto_ru = _clean_optional(row.get('dealer_url_auto_ru'))
                 listing.dealer_avito = _clean_optional(row.get('dealer_url_avito'))
                 listing.direct_url = _clean_optional(row.get('listing_url') or row.get('direct_url'))
@@ -289,6 +300,7 @@ class SourceImporter:
                     listing.price_hint = None
                 listing.notes = _clean_optional(row.get('notes'))
                 listing.is_active = _is_active_status(row.get('source_status'))
+                record_registry_change(self.db, listing, previous, snapshot.id)
 
                 for filt in filters:
                     existing_filter = (
@@ -337,10 +349,13 @@ class SourceImporter:
                     existing_filter.active = False
 
             if present_signatures:
-                self.db.query(Listing).filter(
+                for listing in self.db.query(Listing).filter(
                     Listing.is_active.is_(True),
                     Listing.vehicle_signature.not_in(present_signatures),
-                ).update({Listing.is_active: False}, synchronize_session=False)
+                ):
+                    previous = registry_values(listing)
+                    listing.is_active = False
+                    record_registry_change(self.db, listing, previous, snapshot.id)
 
             snapshot.finished_at = _utcnow()
             snapshot.valid_rows = valid

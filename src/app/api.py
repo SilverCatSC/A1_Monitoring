@@ -20,6 +20,7 @@ from app.models import (
     FeedbackStatus,
     Listing,
     ListingObservation,
+    ListingReconciliation,
     ManagerFeedback,
     ObservationState,
     SearchFilter,
@@ -34,12 +35,20 @@ from app.schemas import (
     ImportResponse,
     KPIResponse,
     ListingLinkUpdate,
+    ReconciliationConfirm,
     TriggerCycleResponse,
     TriggerScanResponse,
 )
-from app.service.cycle import MonitoringCycleService
+from app.scraper.base import canonical_listing_key
+from app.service.analytics import STATES, activity_context, analytics_context
+from app.service.company_site_report import company_site_audit_context
+from app.service.cycle import MonitoringCycleService, cycle_lock
 from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
-from app.service.evidence import EvidenceAccessError, resolve_observation_evidence
+from app.service.evidence import (
+    EvidenceAccessError,
+    resolve_named_evidence,
+    resolve_observation_evidence,
+)
 from app.service.feedback import (
     ALLOWED_CATEGORIES,
     ALLOWED_SEVERITIES,
@@ -48,7 +57,8 @@ from app.service.feedback import (
 )
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
-from app.service.monitor import MonitorService, ScanAlreadyRunning, ScanConfigurationError
+from app.service.monitor import ScanAlreadyRunning, ScanConfigurationError
+from app.service.reconciliation import reconciliation_context
 from app.service.report import (
     dashboard_context,
     feedback_queue_context,
@@ -60,6 +70,7 @@ from app.service.report import (
     operational_status,
     weekend_summary,
 )
+from app.service.scan_progress import read_scan_progress
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
@@ -133,17 +144,102 @@ def latest_scan_status(db: Session = Depends(get_db)):
     return latest_scan_runs_status(db)
 
 
+@router.get('/status/scans/progress')
+def current_scan_progress():
+    return read_scan_progress(settings.evidence_dir)
+
+
 @router.get('/dashboard', response_class=HTMLResponse)
-def dashboard_html(request: Request, days: int = 7, db: Session = Depends(get_db)):
+def dashboard_html(request: Request, days: int = 7, source: str = '', brand: str = '',
+                   q: str = '', scope: str = 'active', db: Session = Depends(get_db)):
     safe_days = min(max(days, 1), 90)
+    if source not in ('', 'auto_ru', 'avito') or scope not in ('active', 'all'):
+        raise HTTPException(status_code=422, detail='unsupported dashboard filter')
+    context = dashboard_context(db, days=safe_days)
+    context['workspace'] = analytics_context(db, days=safe_days, source=source, brand=brand, q=q, scope=scope)
     return templates.TemplateResponse(
         request=request,
         name='dashboard.html',
         context={
-            'context': dashboard_context(db, days=safe_days),
+            'context': context,
             'auth_enabled': settings.auth_enabled,
         },
     )
+
+
+@router.get('/dashboard/settings', response_class=HTMLResponse)
+def settings_html(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request=request, name='operations.html', context={
+        'context': dashboard_context(db), 'auth_enabled': settings.auth_enabled,
+    })
+
+
+@router.get('/dashboard/reconciliation', response_class=HTMLResponse)
+def reconciliation_html(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(request=request, name='reconciliation.html', context={'data': reconciliation_context(db)})
+
+
+@router.get('/dashboard/company-site', response_class=HTMLResponse)
+def company_site_html(request: Request, db: Session = Depends(get_db)):
+    """Display the latest host-side A1Auto catalogue reconciliation."""
+    return templates.TemplateResponse(
+        request=request,
+        name='company_site.html',
+        context={'data': company_site_audit_context(), 'context': dashboard_context(db)},
+    )
+
+
+@router.post('/dealer/reconciliation/{check_id}/confirm')
+def confirm_reconciliation(check_id: str, payload: ReconciliationConfirm, db: Session = Depends(get_db)):
+    try:
+        with cycle_lock(db):
+            record = db.get(ListingReconciliation, check_id)
+            if record is None:
+                raise HTTPException(status_code=404, detail='Сверка не найдена')
+            latest = db.query(ListingReconciliation).filter_by(listing_id=record.listing_id, source=record.source).order_by(
+                ListingReconciliation.checked_at.desc(), ListingReconciliation.id.desc()).first()
+            listing = db.get(Listing, record.listing_id)
+            current = listing.source_auto_ru if record.source == EngineType.AUTO_RU else listing.source_avito
+            if latest.id != record.id or canonical_listing_key(record.source, current) != canonical_listing_key(record.source, record.url):
+                raise HTTPException(status_code=409, detail='Сверка или ссылка уже изменилась. Обновите страницу.')
+            checked_at = record.checked_at.replace(tzinfo=datetime.UTC) if record.checked_at.tzinfo is None else record.checked_at
+            if datetime.datetime.now(datetime.UTC) - checked_at > datetime.timedelta(hours=24):
+                raise HTTPException(status_code=409, detail='Сверка старше суток. Повторите мониторинг перед подтверждением.')
+            if not listing.is_active or payload.url not in {c['url'] for c in record.candidates}:
+                raise HTTPException(status_code=422, detail='Выберите кандидата из этой сверки для активного автомобиля')
+            for other in db.query(Listing).filter(Listing.is_active.is_(True), Listing.id != listing.id):
+                other_url = other.source_auto_ru if record.source == EngineType.AUTO_RU else other.source_avito
+                if canonical_listing_key(record.source, other_url) == canonical_listing_key(record.source, payload.url):
+                    raise HTTPException(status_code=409, detail='Это объявление уже связано с другим активным автомобилем')
+            ListingRegistryService(db).update_link(listing.id, source=record.source, url=payload.url,
+                actor=payload.actor, reason=f'Сверка {record.id}: {payload.reason}')
+            db.commit()
+            return {'status': 'saved', 'listing_id': listing.id}
+    except ScanAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail='Дождитесь окончания текущего мониторинга') from exc
+    except ListingValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@router.get('/dashboard/placements', response_class=HTMLResponse)
+@router.get('/dashboard/analytics', response_class=HTMLResponse)
+def analytics_html(request: Request, days: int = 7, source: str = '', brand: str = '',
+                   q: str = '', status: str = '', scope: str = 'active', db: Session = Depends(get_db)):
+    if source not in ('', 'auto_ru', 'avito') or scope not in ('active', 'all') or (status and status not in STATES):
+        raise HTTPException(status_code=422, detail='unsupported analytics filter')
+    name = 'placements.html' if request.url.path.endswith('/placements') else 'analytics.html'
+    return templates.TemplateResponse(request=request, name=name, context={
+        'data': analytics_context(db, days=days, source=source, brand=brand, q=q, status=status, scope=scope),
+    })
+
+
+@router.get('/dashboard/activity', response_class=HTMLResponse)
+def activity_html(request: Request, days: int = 30, kind: str = '', page: int = 1, db: Session = Depends(get_db)):
+    if kind not in ('', 'registry', 'import', 'scan', 'feedback'):
+        raise HTTPException(status_code=422, detail='unsupported activity kind')
+    return templates.TemplateResponse(request=request, name='activity.html', context={
+        'data': activity_context(db, days=days, kind=kind, page=page),
+    })
 
 
 @router.get('/dashboard/feedback', response_class=HTMLResponse)
@@ -274,12 +370,33 @@ def observation_evidence(
     )
 
 
+@router.get('/reconciliations/{reconciliation_id}/evidence')
+def reconciliation_evidence(
+    reconciliation_id: str,
+    db: Session = Depends(get_db),
+):
+    record = db.get(ListingReconciliation, reconciliation_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail='reconciliation not found')
+    direct = (record.details or {}).get('direct_inspection') or {}
+    try:
+        path = resolve_named_evidence(direct.get('evidence'), settings.evidence_dir)
+    except EvidenceAccessError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        path,
+        media_type='image/png',
+        filename=path.name,
+        content_disposition_type='inline',
+    )
+
+
 @router.post('/scan', response_model=TriggerScanResponse)
 def trigger_scan(db: Session = Depends(get_db)):
-    service = MonitorService(db)
+    service = MonitoringCycleService(db)
     started_at = datetime.datetime.now(datetime.UTC)
     try:
-        summary = service.run_full_cycle()
+        summary = service.run()['scan']
     except ScanConfigurationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     except ScanAlreadyRunning as exc:
@@ -450,13 +567,17 @@ def list_listings(
 @router.patch('/listings/{listing_id}/links')
 def update_listing_link(listing_id: str, payload: ListingLinkUpdate, db: Session = Depends(get_db)):
     try:
-        listing = ListingRegistryService(db).update_link(
-            listing_id,
-            source=payload.source,
-            url=payload.url,
-            actor=payload.actor,
-            reason=payload.reason,
-        )
+        with cycle_lock(db):
+            listing = ListingRegistryService(db).update_link(
+                listing_id,
+                source=payload.source,
+                url=payload.url,
+                actor=payload.actor,
+                reason=payload.reason,
+            )
+            db.commit()
+    except ScanAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail='Дождитесь окончания текущего мониторинга') from exc
     except ListingValidationError as exc:
         code = 404 if str(exc) == 'listing not found' else 422
         raise HTTPException(status_code=code, detail=str(exc)) from exc

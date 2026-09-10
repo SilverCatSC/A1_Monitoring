@@ -5,6 +5,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.models import Base, ManagerFeedback
+from app.service.analytics import analytics_context
 from app.service.report import dashboard_context
 
 
@@ -23,6 +24,7 @@ def test_dashboard_template_renders_and_escapes_manager_input(tmp_path):
         )
         session.commit()
         context = dashboard_context(session)
+        context['workspace'] = analytics_context(session)
         template_dir = Path(__file__).parents[2] / 'src' / 'app' / 'templates'
         environment = Environment(
             loader=FileSystemLoader(template_dir),
@@ -33,6 +35,8 @@ def test_dashboard_template_renders_and_escapes_manager_input(tmp_path):
         )
 
         assert 'A1 Search Monitor' in html
+        assert 'Ход текущей проверки' in html
+        assert '/static/progress.js' in html
         assert 'Мониторинг ещё не настроен' in html
         assert '&lt;script&gt;' in html
         assert '<script>alert("xss")</script>' not in html

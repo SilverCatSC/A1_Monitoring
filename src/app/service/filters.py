@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import re
-from dataclasses import dataclass
-from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+from dataclasses import dataclass, replace
+from urllib.parse import parse_qs, parse_qsl, urlencode, urlsplit, urlunsplit
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -16,7 +16,7 @@ class FilterValidationError(ValueError):
     pass
 
 
-CATALOG_VERSION = 'a1-monitoring-instruction-2026-09-04-v1'
+CATALOG_VERSION = 'a1-monitoring-rules-2026-09-09-v5'
 
 
 @dataclass(frozen=True)
@@ -27,6 +27,8 @@ class CanonicalFilterDefinition:
     url: str
     family: str
     condition: str
+    output_type: str | None = None
+    geo_radius_km: int | None = None
 
 
 # Business-owned search-result URLs from "Инструкция по мониторингу машин.md".
@@ -37,9 +39,11 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'auto_v_class_new',
         EngineType.AUTO_RU,
         'Mercedes-Benz V-Class — новые',
-        'https://auto.ru/moskva/cars/mercedes/v_klasse/new/',
+        'https://auto.ru/moskva/cars/mercedes/v_klasse/new/?geo_radius=0&output_type=list&rid=213',
         'v_class',
         'new',
+        'list',
+        0,
     ),
     CanonicalFilterDefinition(
         'auto_v_class_used',
@@ -53,7 +57,7 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'auto_vle_new',
         EngineType.AUTO_RU,
         'Mercedes-Benz VLE — новые',
-        'https://auto.ru/moskva/cars/mercedes/vle/new/',
+        'https://auto.ru/moskva/cars/new/group/mercedes/vle/25032425-25032429/?catalog_filter=mark%3DMERCEDES%2Cmodel%3DVLE%2Cgeneration%3D25032425%2Cconfiguration%3D25032429%2Ctech_param%3D25032431',
         'vle',
         'new',
     ),
@@ -164,6 +168,31 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
 )
 
 
+def _moscow_only(definition: CanonicalFilterDefinition) -> CanonicalFilterDefinition:
+    """Owner rule, 2026-09-07: both marketplaces use Moscow, no radius extension."""
+    parts = urlsplit(definition.url)
+    if definition.source == EngineType.AUTO_RU:
+        geography = {'geo_radius': '0', 'rid': '213'}
+    elif definition.source == EngineType.AVITO:
+        parts = parts._replace(path=re.sub(r'^/(?:all|moskva)/', '/moskva/', parts.path))
+        geography = {'localPriority': '0', 'radius': '0', 'searchRadius': '0'}
+    else:
+        return definition
+    query = [
+        (key, value) for key, value in parse_qsl(parts.query, keep_blank_values=True)
+        if key not in geography
+    ]
+    query.extend(geography.items())
+    return replace(
+        definition,
+        url=urlunsplit(parts._replace(query=urlencode(sorted(query)))),
+        geo_radius_km=0,
+    )
+
+
+CANONICAL_FILTERS = tuple(_moscow_only(definition) for definition in CANONICAL_FILTERS)
+
+
 def _target_listing_url(listing: Listing, source: EngineType) -> str | None:
     return listing.source_auto_ru if source == EngineType.AUTO_RU else listing.source_avito
 
@@ -253,6 +282,22 @@ def normalize_search_url(value: str) -> str:
     parts = urlsplit(value.strip())
     query = urlencode(sorted(parse_qsl(parts.query, keep_blank_values=True)))
     return urlunsplit((parts.scheme.lower(), parts.netloc.lower(), parts.path, query, ''))
+
+
+def _canonical_url_contract_matches(definition: CanonicalFilterDefinition) -> bool:
+    parts = urlsplit(definition.url)
+    query = parse_qs(parts.query, keep_blank_values=True)
+    if definition.output_type is not None and query.get('output_type') != [definition.output_type]:
+        return False
+    if not parts.path.startswith('/moskva/') or definition.geo_radius_km != 0:
+        return False
+    if definition.source == EngineType.AUTO_RU:
+        expected = {'geo_radius': '0', 'rid': '213'}
+    elif definition.source == EngineType.AVITO:
+        expected = {'localPriority': '0', 'radius': '0', 'searchRadius': '0'}
+    else:
+        return False
+    return all(query.get(key) == [value] for key, value in expected.items())
 
 
 class FilterRegistryService:
@@ -472,6 +517,7 @@ class FilterRegistryService:
             definition.key
             for definition in CANONICAL_FILTERS
             if not is_marketplace_search_url(definition.source, definition.url)
+            or not _canonical_url_contract_matches(definition)
         ]
         if invalid_definitions:
             raise FilterValidationError(
@@ -531,6 +577,10 @@ class FilterRegistryService:
                 'condition': definition.condition,
                 'source_document': 'Инструкция по мониторингу машин.md',
             }
+            if definition.output_type is not None:
+                criteria['output_type'] = definition.output_type
+            if definition.geo_radius_km is not None:
+                criteria['geo_radius_km'] = definition.geo_radius_km
             if entity.raw_criteria and 'operator_active_override' in entity.raw_criteria:
                 criteria['operator_active_override'] = entity.raw_criteria[
                     'operator_active_override'

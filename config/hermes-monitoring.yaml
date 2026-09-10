@@ -1,0 +1,21 @@
+providers:
+  a1-local:
+    api: http://127.0.0.1:18080/v1
+    models:
+      Qwen3.5-9B-Q4_K_M.gguf:
+        context_length: 65536
+        supports_vision: true
+model:
+  provider: custom:a1-local
+  default: Qwen3.5-9B-Q4_K_M.gguf
+fallback_providers: []
+agent:
+  max_turns: 1
+  reasoning_effort: low
+  coding_context: off
+  disabled_toolsets:
+    - all
+platform_toolsets:
+  cli: []
+security:
+  tirith_enabled: false

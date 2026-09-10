@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "a1-search-monitor"
-version = "0.4.1"
-description = "Autonomous cloud monitoring stack for used car listing visibility on Avito and Auto.ru"
+version = "0.9.0"
+description = "Local-browser monitoring stack for used car listing visibility on Avito and Auto.ru"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -34,7 +34,7 @@ dev = ["pytest>=8.3", "ruff>=0.5", "mypy>=1.10"]
 package-dir = {"" = "src"}
 
 [tool.setuptools.package-data]
-app = ["templates/*.html"]
+app = ["templates/*.html", "static/*.css", "static/*.js"]
 
 [tool.ruff]
 line-length = 110

@@ -5,10 +5,8 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-COPY pyproject.toml /tmp/pyproject.toml
-RUN python -c "import tomllib; p=tomllib.load(open('/tmp/pyproject.toml','rb')); print('\\n'.join(p['project']['dependencies']))" \
-    > /tmp/requirements.txt \
-    && pip install --no-cache-dir 'setuptools>=61' -r /tmp/requirements.txt
+COPY requirements.lock /tmp/requirements.lock
+RUN pip install --no-cache-dir -r /tmp/requirements.lock
 
 COPY . /app
 

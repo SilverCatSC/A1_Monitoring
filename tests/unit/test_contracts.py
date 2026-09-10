@@ -41,6 +41,13 @@ def test_actual_contract_headers_map_listing_links_not_filters():
     assert mapped['listing_url_avito'].startswith('https://www.avito.ru/')
 
 
+def test_a1auto_header_is_mapped_to_direct_listing_url():
+    headers = canonicalize_headers(['a1auto.ru'])
+    mapped = map_row(headers, {'a1auto.ru': 'https://a1auto.ru/cars-for-sale/v-vip_11_07.html'})
+
+    assert mapped['listing_url'] == 'https://a1auto.ru/cars-for-sale/v-vip_11_07.html'
+
+
 def test_combined_vehicle_name_is_split_only_for_known_brand_prefixes():
     assert split_brand_model('Mercedes-Benz V-Class') == ('Mercedes-Benz', 'V-Class')
     assert split_brand_model('Land Rover Range Rover') == ('Land Rover', 'Range Rover')

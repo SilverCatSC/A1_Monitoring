@@ -1,0 +1,9 @@
+<a class="skip-link" href="#main-content">К содержимому</a>
+<aside class="app-nav" aria-label="Основная навигация">
+  <a class="app-brand" href="/api/v1/dashboard"><span class="brand-symbol">A1</span><span>Search Monitor<small>Контроль размещений</small></span></a>
+  <div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
+  <nav>{% for slug, title, icon in [('', 'Обзор', '◫'), ('listings', 'Автомобили', '▦'), ('reconciliation', 'Сверка ссылок', '⇄'), ('company-site', 'Сайт A1Auto', '⌂'), ('placements', 'Размещения', '↗'), ('analytics', 'Статистика', '▥'), ('history', 'История проверок', '◷'), ('feedback', 'Замечания', '☷'), ('activity', 'Активность', '≋'), ('settings', 'Настройки', '⚙')] %}
+    <a href="/api/v1/dashboard{{ '/' + slug if slug else '' }}" {% if active_page|default('') == slug %}aria-current="page"{% endif %}><span aria-hidden="true">{{ icon }}</span>{{ title }}</a>
+  {% endfor %}</nav>
+  <div class="nav-foot"><span class="status-dot"></span> Локальное приложение<br><small>Москва · первые 3 страницы<br>Результаты публичного поиска</small></div>
+</aside>

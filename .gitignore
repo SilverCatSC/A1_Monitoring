@@ -30,5 +30,8 @@ evidence/
 tmp_test_source.csv
 
 # IDE
+.DS_Store
+.ruff_cache/
+.mypy_cache/
 .idea/
 .vscode/

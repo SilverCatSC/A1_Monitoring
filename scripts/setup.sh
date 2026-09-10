@@ -1,16 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-
-echo "[setup] creating python virtual env if needed"
-if [ ! -d ".venv" ]; then
-  python3 -m venv .venv
+cd "$(dirname "$0")/.."
+if [[ ! -x .venv312/bin/python ]]; then
+  if ! command -v python3.12 >/dev/null; then
+    echo "Нужен Python 3.12. Установите его и повторите настройку." >&2
+    exit 1
+  fi
+  python3.12 -m venv .venv312
 fi
-
-source .venv/bin/activate
-pip install -U pip
-pip install -e .
-python -m playwright install chromium
-python -m app.cli init
-
-echo "[setup] done"
-
+.venv312/bin/python -m pip install -r requirements.lock
+.venv312/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv312/bin/python scripts/prepare_local.py
+./scripts/start_local.sh
+.venv312/bin/python scripts/doctor.py

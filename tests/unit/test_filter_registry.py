@@ -1,3 +1,6 @@
+from dataclasses import replace
+from urllib.parse import parse_qs, urlsplit
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -7,6 +10,8 @@ from app.service.filters import (
     CANONICAL_FILTERS,
     FilterRegistryService,
     FilterValidationError,
+    _canonical_url_contract_matches,
+    _moscow_only,
 )
 
 
@@ -222,9 +227,136 @@ def test_catalog_has_one_semantic_avito_sprinter_filter_and_preserves_operator_d
     assert entity.raw_criteria['operator_active_override'] is False
 
 
+def test_new_v_class_filter_forces_list_view_and_moscow_only(session):
+    definition = next(item for item in CANONICAL_FILTERS if item.key == 'auto_v_class_new')
+    query = parse_qs(urlsplit(definition.url).query)
+
+    assert query['output_type'] == ['list']
+    assert query['geo_radius'] == ['0']
+    assert query['rid'] == ['213']
+    assert definition.output_type == 'list'
+    assert definition.geo_radius_km == 0
+
+    session.add(
+        _listing(
+            'NEWVCLASSFILTER01',
+            auto_url='https://auto.ru/cars/new/group/mercedes/v_klasse/1/2/1234567890-a/',
+        )
+    )
+    session.commit()
+    FilterRegistryService(session).sync_canonical_catalog()
+
+    entity = (
+        session.query(SearchFilter)
+        .filter(SearchFilter.source == EngineType.AUTO_RU, SearchFilter.name.contains('V-Class'))
+        .filter(SearchFilter.name.contains('новые'))
+        .one()
+    )
+    assert entity.raw_url.endswith('geo_radius=0&output_type=list&rid=213')
+    assert entity.raw_criteria['output_type'] == 'list'
+    assert entity.raw_criteria['geo_radius_km'] == 0
+
+
+def test_all_auto_filters_use_moscow_only_and_keep_existing_criteria():
+    for definition in CANONICAL_FILTERS:
+        if definition.source != EngineType.AUTO_RU:
+            continue
+        query = parse_qs(urlsplit(definition.url).query)
+        assert query['geo_radius'] == ['0'], definition.key
+        assert query['rid'] == ['213'], definition.key
+        assert definition.geo_radius_km == 0
+        if definition.key == 'auto_range_rover_new':
+            assert 'tech_param=23789468' in query['catalog_filter'][0]
+        if definition.key == 'auto_sprinter_all':
+            assert query['sort'] == ['fresh_relevance_1-desc']
+
+
 def test_catalog_filter_without_current_expectations_is_inactive(session):
     service = FilterRegistryService(session)
     service.sync_canonical_catalog()
 
     assert session.query(SearchFilter).count() == 16
     assert session.query(SearchFilter).filter(SearchFilter.active.is_(True)).count() == 0
+
+
+def test_all_avito_filters_use_moscow_only_and_keep_model_paths(session):
+    definitions = [d for d in CANONICAL_FILTERS if d.source == EngineType.AVITO]
+    assert len(definitions) == 6
+    FilterRegistryService(session).sync_canonical_catalog()
+    for definition in definitions:
+        parts = urlsplit(definition.url)
+        query = parse_qs(parts.query)
+        assert parts.path.startswith('/moskva/avtomobili/'), definition.key
+        assert query['radius'] == query['searchRadius'] == query['localPriority'] == ['0']
+        assert definition.geo_radius_km == 0
+        assert _canonical_url_contract_matches(definition)
+        entity = session.query(SearchFilter).filter(
+            SearchFilter.source == EngineType.AVITO,
+            SearchFilter.name == definition.name,
+        ).one()
+        assert entity.raw_url == definition.url
+        assert entity.raw_criteria['geo_radius_km'] == 0
+        if definition.key == 'avito_zeekr_9x_new':
+            assert parts.path.endswith('/novyy/zeekr/9x-ASgBAgICA0SGFMbmAeC2DYaJwxDitg328K8V')
+        if definition.key == 'avito_sprinter_all':
+            assert query['cd'] == ['1']
+            assert 'context' in query
+
+
+def test_avito_moscow_rule_replaces_conflicting_radius_and_preserves_other_parameters():
+    definition = next(d for d in CANONICAL_FILTERS if d.key == 'avito_zeekr_9x_new')
+    old_url = definition.url.replace('/moskva/', '/all/').split('?')[0]
+    old_url += '?radius=200&radius=500&searchRadius=200&localPriority=1&s=104&context=kept'
+    fixed = _moscow_only(replace(definition, url=old_url, geo_radius_km=None))
+    query = parse_qs(urlsplit(fixed.url).query)
+    assert query == {
+        'radius': ['0'], 'searchRadius': ['0'], 'localPriority': ['0'],
+        's': ['104'], 'context': ['kept'],
+    }
+    assert _canonical_url_contract_matches(fixed)
+    assert _moscow_only(fixed) == fixed
+
+
+@pytest.mark.parametrize('bad_change', [
+    lambda url: url.replace('/moskva/', '/all/'),
+    lambda url: url.replace('radius=0', 'radius=200'),
+    lambda url: url.replace('searchRadius=0', 'searchRadius=200'),
+    lambda url: url.replace('localPriority=0', 'localPriority=1'),
+    lambda url: url + '&radius=200',
+])
+def test_avito_contract_rejects_national_expanded_or_ambiguous_geography(bad_change):
+    definition = next(d for d in CANONICAL_FILTERS if d.key == 'avito_zeekr_9x_new')
+    assert not _canonical_url_contract_matches(
+        replace(definition, url=bad_change(definition.url))
+    )
+
+
+def test_avito_geography_sync_preserves_identity_assignments_and_operator_disable(session):
+    session.add(_listing(
+        'ZEEKRMOSCOW000001',
+        auto_url='https://auto.ru/cars/new/group/zeekr/9x/1/2/1234567890-a/',
+        avito_url='https://www.avito.ru/moskva/avtomobili/zeekr_9x_2026_1234567890',
+    ))
+    session.commit()
+    service = FilterRegistryService(session)
+    service.sync_canonical_catalog()
+    entity = session.query(SearchFilter).filter(
+        SearchFilter.source == EngineType.AVITO, SearchFilter.name == 'Zeekr 9X — новые',
+    ).one()
+    original_id, original_version = entity.id, entity.version
+    assignments = session.query(VehicleFilterExpectation).filter_by(filter_id=entity.id)
+    original_listing_id = assignments.one().listing_id
+    entity.raw_url = entity.raw_url.replace('/moskva/', '/all/').split('?')[0]
+    service.set_active(entity.id, False)
+
+    result = service.sync_canonical_catalog()
+    assert result['updated'] == 1
+    assert result['created'] == 0
+    assert result['expectations'] == 2
+    assert entity.id == original_id
+    assert entity.version == original_version + 1
+    assert entity.active is False
+    assert entity.raw_criteria['geo_radius_km'] == 0
+    assert entity.raw_criteria['operator_active_override'] is False
+    assert assignments.one().listing_id == original_listing_id
+    assert service.sync_canonical_catalog()['updated'] == 0

@@ -1,13 +1,16 @@
+import asyncio
 import os
 from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from app.models import ListingObservation
+from app.models import EngineType, ListingObservation
+from app.scraper.base import ListingHit, capture_listing_card_evidence
 from app.service.evidence import (
     EvidenceAccessError,
     cleanup_evidence,
     evidence_pages,
+    has_card_evidence,
     resolve_observation_evidence,
 )
 
@@ -65,3 +68,85 @@ def test_evidence_resolver_rejects_missing_files_and_symlinks(tmp_path):
     link.symlink_to(target)
     with pytest.raises(EvidenceAccessError, match='invalid evidence file'):
         resolve_observation_evidence(_observation('link.png'), 1, str(tmp_path))
+
+
+def test_card_evidence_is_preferred_for_found_observation(tmp_path):
+    card = tmp_path / 'card.png'
+    page = tmp_path / 'page.png'
+    card.write_bytes(b'card')
+    page.write_bytes(b'page')
+    observation = ListingObservation(
+        found=True,
+        page_number=2,
+        raw_payload={
+            'card_evidence': card.name,
+            'scan_diagnostics': {'page_1_evidence': page.name},
+        },
+    )
+    assert evidence_pages(observation) == [2]
+    assert has_card_evidence(observation) is True
+    assert resolve_observation_evidence(observation, 2, str(tmp_path)) == card
+
+
+class _FakeCard:
+    def __init__(self):
+        self.first = self
+
+    async def count(self):
+        return 1
+
+    async def is_visible(self):
+        return True
+
+    async def scroll_into_view_if_needed(self, **_kwargs):
+        return None
+
+    async def screenshot(self, *, path, **_kwargs):
+        with open(path, 'wb') as output:
+            output.write(b'card image')
+
+
+class _FakeAnchors:
+    def __init__(self):
+        self.card = _FakeCard()
+
+    async def count(self):
+        return 1
+
+    def nth(self, _index):
+        return self
+
+    def locator(self, selector):
+        assert selector.startswith('xpath=ancestor::*')
+        return self.card
+
+
+class _FakePage:
+    def locator(self, selector):
+        assert '1234567890' in selector
+        return _FakeAnchors()
+
+
+def test_exact_listing_card_screenshot_is_saved(tmp_path):
+    hit = ListingHit(
+        external_id='1234567890',
+        title='Car',
+        url='https://auto.ru/cars/used/sale/brand/model/1234567890-test/',
+        page_number=2,
+        position=3,
+        price=None,
+        raw={},
+    )
+    stored = asyncio.run(
+        capture_listing_card_evidence(
+            _FakePage(),
+            source=EngineType.AUTO_RU,
+            search_url='https://auto.ru/moskva/cars/all/',
+            page_number=2,
+            hit=hit,
+            evidence_dir=str(tmp_path),
+        )
+    )
+    assert stored is not None
+    assert stored.startswith('auto_ru_card_1234567890_')
+    assert (tmp_path / stored).read_bytes() == b'card image'

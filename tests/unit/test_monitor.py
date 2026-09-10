@@ -36,7 +36,10 @@ class FakeAdapter:
     def __init__(self, results):
         self.results = list(results)
 
-    async def scan_filter(self, _url: str, _max_pages: int) -> ScanResult:
+    async def scan_filter(
+        self, _url: str, _max_pages: int, target_keys: set[str] | None = None
+    ) -> ScanResult:
+        self.target_keys = target_keys
         return self.results.pop(0)
 
 
@@ -121,6 +124,12 @@ def test_canonical_listing_key_ignores_slug_and_tracking_query():
 
 def test_result_page_classification_fails_closed():
     assert classify_result_page('<h1>Подтвердите, что вы не робот</h1>', 0)[0] == 'blocked'
+    assert (
+        classify_result_page(
+            '<h1>Подтвердите, что запросы отправляли вы, а не робот</h1>', 0
+        )[0]
+        == 'blocked'
+    )
     assert classify_result_page('<h1>По вашему запросу ничего не найдено</h1>', 0)[0] == 'empty'
     assert classify_result_page('<main>new unknown markup</main>', 0)[0] == 'unrecognized'
     assert classify_result_page('<article>car</article>', 1)[0] == 'results'
@@ -162,6 +171,130 @@ def test_incomplete_scan_records_technical_error_not_absence(tmp_path, monkeypat
         assert session.query(AbsenceEpisode).count() == 0
         assert summary['technical_errors'] == 1
         assert observation.scan_run.status == ScanRunStatus.FAILED
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_monitor_emits_visible_progress_and_passes_target_keys(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+        adapter = FakeAdapter([_result()])
+        events = []
+        MonitorService(
+            session, auto_adapter=adapter, progress_callback=events.append
+        ).run_full_cycle()
+
+        names = [item['event'] for item in events]
+        assert names == [
+            'cycle_started',
+            'source_started',
+            'filter_started',
+            'filter_finished',
+            'source_finished',
+            'cycle_finished',
+        ]
+        assert adapter.target_keys == {'auto_ru:1234567890'}
+        assert events[2]['filter_name'] == 'V-Class Moscow'
+        assert events[3]['found'] == 0
+        assert events[-1]['summary']['missed_uncertain'] == 1
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_monitor_reports_cautious_filter_pause(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    monkeypatch.setattr('app.service.monitor.settings.scan_filter_pause_min_seconds', 4)
+    monkeypatch.setattr('app.service.monitor.settings.scan_filter_pause_max_seconds', 4)
+    sleeps = []
+    monkeypatch.setattr('app.service.monitor.time.sleep', sleeps.append)
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+        events = []
+        MonitorService(
+            session,
+            auto_adapter=FakeAdapter([_result()]),
+            progress_callback=events.append,
+        ).run_full_cycle()
+
+        wait = next(item for item in events if item['event'] == 'filter_wait')
+        assert wait['wait_seconds'] == 4
+        assert wait['filter_name'] == 'V-Class Moscow'
+        assert sleeps == [4]
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_monitor_retries_once_when_chrome_tab_was_closed(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    monkeypatch.setattr('app.service.monitor.settings.target_closed_retry_seconds', 4)
+    sleeps = []
+    monkeypatch.setattr('app.service.monitor.time.sleep', sleeps.append)
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+        interrupted = _result(
+            complete=False,
+            error='page 1: TargetClosedError: Target page has been closed',
+        )
+        found = _result(
+            _hit('https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-new/'),
+        )
+        events = []
+        adapter = FakeAdapter([interrupted, found])
+
+        summary = MonitorService(
+            session, auto_adapter=adapter, progress_callback=events.append
+        ).run_full_cycle()
+
+        assert adapter.results == []
+        assert sleeps == [4]
+        assert summary['technical_errors'] == 0
+        assert summary['found'] == 1
+        assert [event['event'] for event in events].count('filter_retry') == 1
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_marketplace_challenge_stops_remaining_source_requests(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    session, engine = _session(tmp_path)
+    try:
+        listing, _ = _seed(session)
+        second_filter = SearchFilter(
+            id='filter-2',
+            source=EngineType.AUTO_RU,
+            external_key='business-filter-2',
+            name='Second filter',
+            raw_url='https://auto.ru/moskva/cars/mercedes/v_class/new/',
+            active=True,
+        )
+        session.add(second_filter)
+        session.flush()
+        session.add(
+            VehicleFilterExpectation(filter_id=second_filter.id, listing_id=listing.id)
+        )
+        session.commit()
+        blocked = _result(complete=False, error='blocked page 1: smart captcha')
+        blocked.diagnostics = {'page_1_state': 'blocked'}
+        adapter = FakeAdapter([blocked])
+
+        summary = MonitorService(session, auto_adapter=adapter).run_full_cycle()
+
+        assert adapter.results == []
+        assert summary['filters_scanned'] == 2
+        assert summary['technical_errors'] == 2
+        assert session.query(ListingObservation).count() == 2
+        assert {
+            item.raw_payload['scan_diagnostics'].get('blocked_by_filter_id')
+            for item in session.query(ListingObservation).all()
+        } == {None, 'filter-1'}
     finally:
         session.close()
         engine.dispose()
@@ -273,9 +406,12 @@ def test_cloud_absence_streak_does_not_reuse_local_run(tmp_path, monkeypatch):
         engine.dispose()
 
 
-def test_absence_requires_two_validated_misses_and_can_recur(tmp_path, monkeypatch):
+@pytest.mark.parametrize('network_profile', ['cloud_no_vpn', 'local_browser'])
+def test_absence_requires_two_validated_misses_and_can_recur(
+    tmp_path, monkeypatch, network_profile
+):
     monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
-    monkeypatch.setattr('app.service.monitor.settings.network_profile', 'cloud_no_vpn')
+    monkeypatch.setattr('app.service.monitor.settings.network_profile', network_profile)
     session, engine = _session(tmp_path)
     try:
         listing, _ = _seed(session)

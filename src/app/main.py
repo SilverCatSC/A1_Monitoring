@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from app.api import router
 from app.config import settings
@@ -35,6 +37,7 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title='A1 Search Monitor', lifespan=lifespan)
+app.mount('/static', StaticFiles(directory=Path(__file__).parent / 'static'), name='static')
 
 
 @app.middleware('http')

@@ -1,0 +1,33 @@
+llm:
+  backend: hermes
+  permission_mode: default
+  opencode_permission_mode: default
+evaluation:
+  stage1_enabled: true
+  stage2_enabled: true
+  stage3_enabled: false
+consensus:
+  diversity_required: false
+execution:
+  auto_evaluate: true
+  auto_evolve: true
+  run_verify_commands: true
+  cross_harness_redispatch: false
+  n_version_tournament: false
+  default_policy: ask
+orchestrator:
+  runtime_backend: hermes
+  permission_mode: acceptEdits
+  opencode_permission_mode: default
+  hermes_cli_path: "__PROJECT_ROOT__/scripts/hermes_maintenance_windows.cmd"
+  default_max_turns: 10
+  max_parallel_workers: 1
+  use_worktrees: true
+  worktree_root: "__PROJECT_ROOT__/artifacts/ouroboros_worktrees"
+  worktree_cleanup: prune-merged
+  pm_snapshot_worktrees: true
+  pm_snapshot_root: "__PROJECT_ROOT__/artifacts/ouroboros_snapshots"
+telemetry:
+  enabled: false
+seed:
+  verify_command_gate: block

@@ -37,6 +37,13 @@ def test_production_refuses_disabled_or_weak_auth():
         password='long-random-password',
         network_profile='cloud_no_vpn',
     )
+    validate_security_configuration(
+        environment='production',
+        enabled=True,
+        username='admin',
+        password='long-random-password',
+        network_profile='local_browser',
+    )
 
 
 def test_production_refuses_unverified_network_profile():
