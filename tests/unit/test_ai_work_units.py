@@ -63,14 +63,21 @@ def test_heavy_audit_input_contains_counts_instead_of_full_unit_payloads() -> No
         'failures': [{'stage': 'vision'}],
         'hermes_review': {'verdict': 'technical_failure'},
         'unit_reports': [{
+            'vehicle_key': 'vin:ONE',
             'data': {'verdict': 'ok'},
-            'vision': [{'verdict': 'technical_failure'}],
+            'vision': [{'verdict': 'technical_failure', 'findings': ['blurred']}],
             'large': 'omit',
         }],
     })
 
     assert compact['verdict_counts'] == {'data:ok': 1, 'vision:technical_failure': 1}
     assert compact['failure_counts'] == {'vision': 1}
+    assert compact['disputed_units'] == [{
+        'vehicle_key': 'vin:ONE',
+        'data_verdict': 'ok',
+        'vision_verdicts': ['technical_failure'],
+        'findings': ['blurred'],
+    }]
     assert 'unit_reports' not in compact
 
 

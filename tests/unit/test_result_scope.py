@@ -73,7 +73,7 @@ def test_visible_status_banners_are_not_confused_with_descriptions(html, expecte
     assert direct_page_status(html, EngineType.AUTO_RU, url, url, 200)['state'] == expected
 
 
-@pytest.mark.parametrize('scenario', ['short', 'repeat', 'wrong_page'])
+@pytest.mark.parametrize('scenario', ['short', 'target_complete', 'repeat', 'wrong_page'])
 def test_browser_traversal_stops_at_real_end_or_rejects_duplicate_pages(tmp_path, monkeypatch, scenario):
     for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'avito_page_delay_seconds'):
         monkeypatch.setattr(settings, key, 0)
@@ -99,13 +99,21 @@ def test_browser_traversal_stops_at_real_end_or_rejects_duplicate_pages(tmp_path
                 yield page
             monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
             try:
-                return await AvitoAdapter().scan_filter('https://www.avito.ru/moskva/avtomobili/?localPriority=0&radius=0&searchRadius=0', 3)
+                targets = {'avito:1000000001'} if scenario == 'target_complete' else None
+                return await AvitoAdapter().scan_filter(
+                    'https://www.avito.ru/moskva/avtomobili/?localPriority=0&radius=0&searchRadius=0',
+                    3,
+                    target_keys=targets,
+                )
             finally:
                 await browser.close()
     result = asyncio.run(exercise())
     assert len(result.hits) == 1
     if scenario == 'short':
         assert result.complete and result.exhausted and requests == [1]
+    elif scenario == 'target_complete':
+        assert result.complete and not result.exhausted and requests == [1]
+        assert result.diagnostics['completion_reason'] == 'all_target_listings_found'
     else:
         assert not result.complete and requests == [1, 2]
         assert 'pagination' in result.error

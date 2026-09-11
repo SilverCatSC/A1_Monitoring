@@ -47,6 +47,22 @@ class ScanResult:
     error: str | None = None
 
 
+def all_target_listings_found(
+    source: EngineType,
+    target_keys: set[str] | None,
+    hits: list[ListingHit],
+) -> bool:
+    """Return true when every expected marketplace listing is already visible."""
+    if not target_keys:
+        return False
+    found_keys = {
+        key
+        for hit in hits
+        if (key := canonical_listing_key(source, hit.url))
+    }
+    return target_keys.issubset(found_keys)
+
+
 BLOCK_PAGE_MARKERS = (
     'подтвердите, что вы не робот',
     'подтвердите, что запросы отправляли вы, а не робот',

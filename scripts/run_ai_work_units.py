@@ -430,8 +430,8 @@ def main() -> int:
     compact = {'coverage': coverage, 'units': compact_units}
     print(f'AI_STAGE synthesis units={len(reports)} images={vision_completed}/{vision_expected}', flush=True)
     allowed_keys = {str(item.get('vehicle_key')) for item in units if isinstance(item, dict) and item.get('vehicle_key')}
-    # Deterministic severity ordering is stable for the small local model; the
-    # compact result is independently assessed by the heavy Ouroboros stage.
+    # Deterministic severity ordering keeps the routine light-model result stable.
+    # A heavy Hermes review can be requested separately for disputed cases.
     final = _compose_final(compact, None, failures)
     # Keep the public review contract as the last, deterministic boundary.
     final = parse_review(json.dumps(final, ensure_ascii=False), allowed_vehicle_keys=allowed_keys)

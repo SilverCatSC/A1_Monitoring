@@ -13,6 +13,7 @@ from app.models import EngineType
 from app.scraper.base import (
     ListingHit,
     ScanResult,
+    all_target_listings_found,
     canonical_listing_key,
     capture_listing_card_evidence,
     capture_page_evidence,
@@ -55,6 +56,7 @@ class AvitoAdapter:
         hits: list[ListingHit] = []
         pages_scanned = 0
         exhausted = False
+        targets_satisfied = False
         error: str | None = None
         diagnostics = {'engine': 'avito', 'start_url': search_url}
         seen_pages: set[frozenset[str]] = set()
@@ -161,6 +163,10 @@ class AvitoAdapter:
                         diagnostics[f'page_{page_number}'] = len(parsed)
                         diagnostics[f'page_{page_number}_state'] = page_state
                         pages_scanned += 1
+                        candidate_hits = hits + parsed if page_state == 'results' else hits
+                        targets_satisfied = all_target_listings_found(
+                            self.source, target_keys, candidate_hits
+                        )
                         self._progress(
                             'page_finished',
                             page=page_number,
@@ -169,6 +175,7 @@ class AvitoAdapter:
                             target_cards=card_evidence,
                             state=page_state,
                             evidence=evidence_path,
+                            targets_satisfied=targets_satisfied,
                         )
                         if page_state == 'blocked':
                             error = f'blocked page {page_number}: {reason}'
@@ -180,6 +187,10 @@ class AvitoAdapter:
                             exhausted = True
                             break
                         hits.extend(parsed)
+                        if targets_satisfied:
+                            diagnostics['completion_reason'] = 'all_target_listings_found'
+                            diagnostics['target_keys_found'] = sorted(target_keys or ())
+                            break
                         if pagination['last'] or (page_number == 1 and pagination['total'] is not None
                                                   and len(page_keys) == pagination['total'] and not pagination['has_next']):
                             exhausted = True
@@ -202,7 +213,9 @@ class AvitoAdapter:
             diagnostics=diagnostics,
             scanned_at=start,
             requested_pages=max_pages,
-            complete=error is None and (pages_scanned == max_pages or exhausted),
+            complete=error is None and (
+                pages_scanned == max_pages or exhausted or targets_satisfied
+            ),
             exhausted=exhausted,
             error=error,
         )

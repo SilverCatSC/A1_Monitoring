@@ -56,13 +56,13 @@ def test_maintenance_wrapper_separates_completion_from_runtime_profile() -> None
     assert "env -i" in script
 
 
-def test_full_monitoring_runs_both_agents_and_head_table_audit() -> None:
+def test_full_monitoring_runs_hermes_and_head_table_audit() -> None:
     script = (ROOT / 'scripts' / 'run_full_monitoring_macos.sh').read_text(encoding='utf-8')
 
     assert 'run_head_table_audit_macos.sh' in script
     assert 'run_company_site_audit_macos.sh' in script
     assert 'run_ai_review_macos.sh' in script
-    assert 'run_ouroboros_live_audit_macos.sh' in script
+    assert 'run_ouroboros_live_audit_macos.sh' not in script
     assert 'start_local_ai.sh' in script
     assert 'ai_was_running=false' in script
 

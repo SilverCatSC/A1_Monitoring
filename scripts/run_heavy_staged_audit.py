@@ -22,6 +22,7 @@ from scripts.validate_staged_review import validate_staged  # noqa: E402
 
 def _compact(data: dict[str, Any]) -> dict[str, Any]:
     verdicts = Counter()
+    disputed_units = []
     for report in data.get('unit_reports', []):
         if not isinstance(report, dict):
             continue
@@ -31,6 +32,22 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
         for vision in report.get('vision', []):
             if isinstance(vision, dict):
                 verdicts[f"vision:{vision.get('verdict', 'unknown')}"] += 1
+        data_report = report.get('data') if isinstance(report.get('data'), dict) else {}
+        vision_reports = [
+            item for item in report.get('vision', []) if isinstance(item, dict)
+        ]
+        if data_report.get('verdict') != 'ok' or any(
+            item.get('verdict') != 'ok' for item in vision_reports
+        ):
+            findings = list(data_report.get('findings') or [])
+            for item in vision_reports:
+                findings.extend(item.get('findings') or [])
+            disputed_units.append({
+                'vehicle_key': report.get('vehicle_key'),
+                'data_verdict': data_report.get('verdict'),
+                'vision_verdicts': [item.get('verdict') for item in vision_reports],
+                'findings': findings[:5],
+            })
     failure_counts = Counter(
         str(item.get('stage') or 'unknown')
         for item in data.get('failures', [])
@@ -41,6 +58,8 @@ def _compact(data: dict[str, Any]) -> dict[str, Any]:
         'verdict_counts': dict(verdicts),
         'failure_counts': dict(failure_counts),
         'review': data.get('hermes_review', {}),
+        'disputed_units_total': len(disputed_units),
+        'disputed_units': disputed_units[:12],
     }
 
 

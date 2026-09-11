@@ -14,6 +14,7 @@ from app.models import EngineType
 from app.scraper.base import (
     ListingHit,
     ScanResult,
+    all_target_listings_found,
     canonical_listing_key,
     capture_listing_card_evidence,
     capture_page_evidence,
@@ -56,6 +57,7 @@ class AutoRuAdapter:
         hits: list[ListingHit] = []
         pages_scanned = 0
         exhausted = False
+        targets_satisfied = False
         error: str | None = None
         diagnostics: dict[str, int | str] = {'engine': 'auto_ru', 'start_url': search_url}
         seen_pages: set[frozenset[str]] = set()
@@ -168,6 +170,10 @@ class AutoRuAdapter:
                         diagnostics[f'page_{page_number}_state'] = page_state
                         pages_scanned += 1
                         final_result_page = pagination['last'] or (not pagination['has_next'] and _all_offers_are_visible(declared_offers, len(parsed)))
+                        candidate_hits = hits + parsed if page_state == 'results' else hits
+                        targets_satisfied = all_target_listings_found(
+                            self.source, target_keys, candidate_hits
+                        )
                         self._progress(
                             'page_finished',
                             page=page_number,
@@ -177,6 +183,7 @@ class AutoRuAdapter:
                             state=page_state,
                             evidence=evidence_path,
                             exhausted=final_result_page,
+                            targets_satisfied=targets_satisfied,
                         )
                         if page_state == 'blocked':
                             error = f'blocked page {page_number}: {reason}'
@@ -188,6 +195,10 @@ class AutoRuAdapter:
                             exhausted = True
                             break
                         hits.extend(parsed)
+                        if targets_satisfied:
+                            diagnostics['completion_reason'] = 'all_target_listings_found'
+                            diagnostics['target_keys_found'] = sorted(target_keys or ())
+                            break
                         if final_result_page:
                             exhausted = True
                             break
@@ -209,7 +220,9 @@ class AutoRuAdapter:
             diagnostics=diagnostics,
             scanned_at=start,
             requested_pages=max_pages,
-            complete=error is None and (pages_scanned == max_pages or exhausted),
+            complete=error is None and (
+                pages_scanned == max_pages or exhausted or targets_satisfied
+            ),
             exhausted=exhausted,
             error=error,
         )

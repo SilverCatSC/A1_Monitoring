@@ -35,20 +35,17 @@ ai_start_status=0
 ./scripts/start_local_ai.sh 2>&1 | tee -a "$log_file" || ai_start_status=$?
 
 ai_status=0
-ouroboros_status=0
 if [[ $ai_start_status -eq 0 ]]; then
   ./scripts/run_ai_review_macos.sh 2>&1 | tee -a "$log_file" || ai_status=$?
-  ./scripts/run_ouroboros_live_audit_macos.sh 2>&1 | tee -a "$log_file" || ouroboros_status=$?
 else
   ai_status=$ai_start_status
-  ouroboros_status=$ai_start_status
 fi
 if ! $ai_was_running; then
   ./scripts/stop_local_ai.sh 2>&1 | tee -a "$log_file" || true
 fi
 
-if [[ $scan_status -eq 2 || $company_site_status -ne 0 || $head_table_status -ne 0 || $ai_status -ne 0 || $ouroboros_status -ne 0 ]]; then
-  echo "MONITORING_SYSTEM_PARTIAL scan_status=$scan_status company_site_status=$company_site_status head_table_status=$head_table_status ai_status=$ai_status ouroboros_status=$ouroboros_status log=$log_file"
+if [[ $scan_status -eq 2 || $company_site_status -ne 0 || $head_table_status -ne 0 || $ai_status -ne 0 ]]; then
+  echo "MONITORING_SYSTEM_PARTIAL scan_status=$scan_status company_site_status=$company_site_status head_table_status=$head_table_status ai_status=$ai_status log=$log_file"
   exit 2
 fi
 

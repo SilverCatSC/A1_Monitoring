@@ -67,7 +67,9 @@ def test_windows_full_run_is_sequential_and_memory_guarded():
     assert "@('compose', 'stop', 'app', 'backup', 'db')" in script
     assert 'start_local_ai_windows.ps1' in script
     assert 'run_ai_review_windows.ps1' in script
-    assert 'run_ouroboros_live_audit_windows.ps1' in script
+    assert 'run_ouroboros_live_audit_windows.ps1' not in script
+    assert '[switch]$RunHeavyReview' in script
+    assert 'run_heavy_staged_audit.py' in script
     assert "start_local_ai_windows.ps1') -Profile heavy" in script
     assert "AiProfile = 'light'" in script
     assert '-Profile $AiProfile' in script
