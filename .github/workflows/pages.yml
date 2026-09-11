@@ -19,6 +19,9 @@ concurrency:
 
 jobs:
   deploy:
+    # Runtime reports can contain VIN and internal notes. Enable this repository
+    # variable only after the exported public/ tree has passed a privacy review.
+    if: ${{ vars.ENABLE_PUBLIC_REPORT == 'true' }}
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

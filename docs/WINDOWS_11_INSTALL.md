@@ -75,9 +75,8 @@ docker info --format '{{.OSType}}'
 
 Рабочая папка: `C:\work\A1_Monitoring`.
 
-На 09.09.2026 [целевой репозиторий GitHub](https://github.com/SilverCatSC/A1_Monitoring)
-пуст: команда clone пока не даст рабочий продукт. До публикации перенесите исходники
-из `/Users/filaret/Desktop/a1_search_monitor_noapi_product` на MSI приватным способом.
+Исходный код опубликован в
+[целевом репозитории GitHub](https://github.com/SilverCatSC/A1_Monitoring).
 Нужны `src`, `scripts`, `alembic`, `tests`, `docs`, `requirements.lock`,
 `pyproject.toml`, `alembic.ini`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`,
 `.env.example` и документация. Сохраните структуру папок.
@@ -87,7 +86,7 @@ docker info --format '{{.OSType}}'
 заново на Windows. Новая установка создаёт новую базу — история с Mac сама не
 появится. Перенос существующей истории требует отдельного приватного backup/restore.
 
-После публикации проверенной версии исходников можно будет использовать:
+Для новой установки используйте:
 
 ```powershell
 New-Item -ItemType Directory -Force C:\work | Out-Null
