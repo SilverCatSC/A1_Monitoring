@@ -2,6 +2,7 @@
 param(
     [ValidateSet('auto_ru,avito','auto_ru','avito')][string]$Engines = 'auto_ru,avito',
     [ValidateRange(1,10)][int]$Pages = 3,
+    [ValidateSet('normal','cautious')][string]$Pace = 'normal',
     [ValidateSet('light','heavy')][string]$AiProfile = 'light',
     [ValidateRange(1024,65536)][int]$MinFreeMemoryMb = 7500,
     [switch]$AllowSwap
@@ -19,7 +20,7 @@ Start-Transcript -Path $log
 try {
     Write-A1MemorySnapshot 'start' | Out-Null
     Invoke-A1Native 'docker' @('compose', 'up', '-d', 'app', 'db', 'backup')
-    & $python scripts/local_scan.py --engines $Engines --pages $Pages --pace cautious
+    & $python scripts/local_scan.py --engines $Engines --pages $Pages --pace $Pace
     $scanStatus = $LASTEXITCODE
     if ($scanStatus -ne 0 -and $scanStatus -ne 2) { throw "Live scan failed (exit $scanStatus)." }
     if ($scanStatus -eq 2) { $overall = 2 }

@@ -77,14 +77,15 @@ def test_browser_traversal_stops_at_real_end_or_rejects_duplicate_pages(tmp_path
                     html = '<span data-marker="page-title/count">1</span>' + html
                 elif scenario == 'wrong_page':
                     html += '<ul data-marker="pagination-button"><span data-marker="pagination-button/page(1)" class="item_current-test">1</span><a data-marker="pagination-button/page(2)" href="?p=2">2</a><a data-marker="pagination-button/nextPage" href="?p=2"></a></ul>'
-                await route.fulfill(content_type='text/html', body=html)
+                html = '<button>Москва + 0 км</button>' + html
+                await route.fulfill(content_type='text/html; charset=utf-8', body=html)
             await page.route('**/*', route_page)
             @asynccontextmanager
             async def local_page(_playwright):
                 yield page
             monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
             try:
-                return await AvitoAdapter().scan_filter('https://www.avito.ru/moskva/avtomobili/', 3)
+                return await AvitoAdapter().scan_filter('https://www.avito.ru/moskva/avtomobili/?localPriority=0&radius=0&searchRadius=0', 3)
             finally:
                 await browser.close()
     result = asyncio.run(exercise())

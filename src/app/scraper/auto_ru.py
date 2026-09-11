@@ -21,6 +21,7 @@ from app.scraper.base import (
     is_marketplace_listing_url,
 )
 from app.scraper.browser_session import browser_page
+from app.scraper.geography import verify_geography
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import pagination_state, primary_cards
 from app.scraper.seller import catalogue_html, seller_page_matches
@@ -112,6 +113,18 @@ class AutoRuAdapter:
                         if seller_catalogue and not seller_page_matches(search_url, page.url):
                             error = 'seller page redirected outside the approved seller catalogue'
                             break
+                        if not seller_catalogue:
+                            geography = await verify_geography(page, self.source)
+                            diagnostics[f'page_{page_number}_geography'] = geography
+                            if geography['state'] != 'verified':
+                                error = 'geography_unverified: ' + geography['reason']
+                                break
+                            if geography.get('corrected'):
+                                html = await page.content()
+                                diagnostics[f'page_{page_number}_final_url'] = page.url
+                                diagnostics[f'page_{page_number}_evidence'] = await capture_page_evidence(
+                                    page, source=self.source, search_url=search_url,
+                                    page_number=page_number, evidence_dir=settings.evidence_dir)
                         parsed = self._extract(catalogue_html(html) if seller_catalogue else html, page_number)
                         pagination = pagination_state(html, self.source.value)
                         diagnostics[f'page_{page_number}_pagination'] = pagination

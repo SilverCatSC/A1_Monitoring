@@ -97,6 +97,35 @@ def test_fresh_membership_proves_link_but_does_not_create_visibility(db):
     assert db.query(ListingReconciliation).count() == 1
 
 
+def test_exact_vin_replacement_precedes_search_and_creates_override(db):
+    db.get(Listing, 'car').vin = 'W1VVNLSZXS4493307'
+    db.commit()
+
+    async def inspect(source, url, progress):
+        if url == OLD:
+            return {'state': 'removed', 'reason': 'removed'}
+        return {'state': 'active', 'card': {'vin': 'W1VVNLSZXS4493307'}, 'evidence': 'saved.png'}
+
+    preflight, _ = reconcile(db, result([NEW]), inspect)
+    assert preflight['checks']['car:auto_ru']['state'] == 'verified'
+    assert preflight['checks']['car:auto_ru']['url'] == NEW
+    assert db.get(Listing, 'car').source_auto_ru == NEW
+    assert db.query(ListingLinkOverride).one().last_source_url == OLD
+    assert db.query(ListingObservation).count() == 0
+
+
+def test_candidate_challenge_prevents_replacement(db):
+    db.get(Listing, 'car').vin = 'W1VVNLSZXS4493307'
+    db.commit()
+
+    async def inspect(source, url, progress):
+        return {'state': 'unknown'} if url == OLD else {'state': 'blocked'}
+
+    preflight, _ = reconcile(db, result([NEW]), inspect)
+    assert preflight['blocked_sources'] == ['auto_ru']
+    assert db.get(Listing, 'car').source_auto_ru == OLD
+
+
 def test_model_match_suggests_new_listing_but_never_rebinds_without_person(db):
     preflight, _ = reconcile(db, result([NEW]))
     assert preflight['checks']['car:auto_ru']['state'] == 'review_required'
