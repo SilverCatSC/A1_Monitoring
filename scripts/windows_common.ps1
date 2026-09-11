@@ -7,6 +7,13 @@ function Invoke-A1Native {
     }
 }
 
+function Get-A1PowerShellExecutable {
+    $pwsh = Get-Command 'pwsh.exe' -ErrorAction SilentlyContinue
+    if ($pwsh) { return $pwsh.Source }
+    $windowsPowerShell = Get-Command 'powershell.exe' -ErrorAction Stop
+    return $windowsPowerShell.Source
+}
+
 function Get-A1BaseUrl {
     param([string]$ProjectRoot)
     $port = '18000'

@@ -22,10 +22,37 @@ def test_geography_rejects_duplicate_values_and_wrong_host():
     assert not url_matches_moscow(EngineType.AUTO_RU, url.replace('/moskva/', '/all/'))
 
 
-def test_avito_requires_all_geography_parameters():
+def test_avito_accepts_omitted_default_local_priority_only():
     url = 'https://www.avito.ru/moskva/avtomobili?localPriority=0&radius=0&searchRadius=0'
     assert url_matches_moscow(EngineType.AVITO, url)
+    assert url_matches_moscow(EngineType.AVITO, url.replace('localPriority=0&', ''))
     assert not url_matches_moscow(EngineType.AVITO, url.replace('searchRadius=0', 'searchRadius=200'))
+    assert not url_matches_moscow(EngineType.AVITO, url.replace('localPriority=0', 'localPriority=1'))
+
+
+def test_avito_accepts_canonical_zero_radius_with_visible_moscow(monkeypatch):
+    async def evidence(*args, **kwargs):
+        return 'avito-geography-proof.png'
+    monkeypatch.setattr('app.scraper.base.capture_page_evidence', evidence)
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            try:
+                page = await browser.new_page()
+                await page.route(
+                    '**/*',
+                    lambda route: route.fulfill(
+                        content_type='text/html; charset=utf-8', body='<button>Москва</button>'
+                    ),
+                )
+                await page.goto('https://www.avito.ru/moskva/avtomobili?radius=0&searchRadius=0')
+                result = await verify_geography(page, EngineType.AVITO)
+                assert result['state'] == 'verified'
+                assert result['evidence'] == 'avito-geography-proof.png'
+            finally:
+                await browser.close()
+    asyncio.run(exercise())
 
 
 def test_auto_radius_is_applied_then_read_again(monkeypatch):

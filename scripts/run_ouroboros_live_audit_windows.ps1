@@ -24,8 +24,17 @@ $outputDir = Join-Path $Root 'artifacts\ouroboros_reviews'
 New-Item -ItemType Directory -Force $outputDir | Out-Null
 $report = Join-Path $outputDir ("review_{0}.txt" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 $qualityBar = 'You are the independent local Ouroboros audit stage of A1 Monitoring. Review only the compact staged Hermes artifact. Audit coverage, schema, provenance, contradictions, technical failures, and support by saved evidence. A vehicle can have no VIN, so use vehicle_key. Never invent a fact, never treat partial or technical scan as absence, never access a browser, network, or other files, and never propose automatic data or code changes.'
-& $ouroboros qa $packet --artifact-type api_response --quality-bar $qualityBar --pass-threshold 0.85 1> $report 2>&1
-$status = $LASTEXITCODE
+# Windows PowerShell 5.1 wraps native stderr lines as ErrorRecord objects. Ouroboros
+# writes normal progress logs there, so temporarily prevent those records from
+# aborting the script before its exit code and fallback path can be handled.
+$savedErrorActionPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
+try {
+    & $ouroboros qa $packet --artifact-type api_response --quality-bar $qualityBar --pass-threshold 0.85 1> $report 2>&1
+    $status = $LASTEXITCODE
+} finally {
+    $ErrorActionPreference = $savedErrorActionPreference
+}
 if (-not (Test-Path $report) -or (Get-Item $report).Length -eq 0) { throw 'Ouroboros report is missing.' }
 Copy-Item -Force $report (Join-Path $outputDir 'latest.txt')
 if ($status -ne 0) {

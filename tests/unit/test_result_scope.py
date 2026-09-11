@@ -38,6 +38,20 @@ def test_auto_ru_counts_only_primary_group_not_sidebar_or_recommendations():
     assert not _all_offers_are_visible(6, 9)
 
 
+def test_auto_ru_uses_card_group_when_model_summary_precedes_it():
+    card_url = 'https://auto.ru/cars/new/group/zeekr/9x/24873747/24874750/1133320957-x/'
+    html = (
+        '<div class="ListingCars__items ListingCars__items_modelCars">'
+        '<div class="ListingItemGroup"><a href="/catalog/">9X</a></div></div>'
+        '<div class="CardGroupOffersList__items">'
+        f'<div class="ListingItemUniversal-live"><a href="{card_url}">Zeekr 9X</a>'
+        '<span>14 200 000 ₽</span></div></div>'
+    )
+    hits = AutoRuAdapter()._extract(html, 1)
+    assert len(hits) == 1
+    assert hits[0].url == card_url
+
+
 @pytest.mark.parametrize('source,html,expected', [
     ('avito', '<span data-marker="page-title/count">130</span><ul data-marker="pagination-button"><span class="item_current-abc" data-marker="pagination-button/page(2)">2</span><a data-marker="pagination-button/page(3)" href="?p=3">3</a><a data-marker="pagination-button/nextPage" href="?p=3"></a></ul>', (2, 130, False)),
     ('avito', '<ul data-marker="pagination-button"><a data-marker="pagination-button/page(1)" href="/">1</a><span class="item_current-abc" data-marker="pagination-button/page(2)">2</span></ul>', (2, None, True)),

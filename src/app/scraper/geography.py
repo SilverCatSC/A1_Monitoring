@@ -13,10 +13,16 @@ def url_matches_moscow(source: EngineType, url: str) -> bool:
     domain = 'auto.ru' if source == EngineType.AUTO_RU else 'avito.ru'
     if host not in (domain, 'www.' + domain) or not parts.path.startswith('/moskva/'):
         return False
-    expected = {'geo_radius': '0', 'rid': '213'} if source == EngineType.AUTO_RU else {
-        'localPriority': '0', 'radius': '0', 'searchRadius': '0'}
     query = parse_qs(parts.query)
-    return all(query.get(key) == [value] for key, value in expected.items())
+    if source == EngineType.AUTO_RU:
+        return all(query.get(key) == [value] for key, value in {'geo_radius': '0', 'rid': '213'}.items())
+    # Avito removes localPriority=0 from the canonical URL because zero is its
+    # default state. An explicit non-zero value is still rejected.
+    return (
+        query.get('radius') == ['0']
+        and query.get('searchRadius') == ['0']
+        and query.get('localPriority') in (None, ['0'])
+    )
 
 
 def confirmed_control_text(text: str) -> bool:
@@ -62,6 +68,17 @@ async def verify_geography(page, source: EngineType, allow_correction: bool = Tr
                     result['state'] = 'verified'
                     await page.keyboard.press('Escape')
                     return result
+    if source == EngineType.AVITO:
+        visible_moscow = any(re.fullmatch(r'\s*Москва\s*', label, re.I) for label in labels)
+        if url_matches_moscow(source, page.url) and visible_moscow:
+            from app.config import settings
+            from app.scraper.base import capture_page_evidence
+            result['evidence'] = await capture_page_evidence(
+                page, source=source, search_url=page.url, page_number=0,
+                evidence_dir=settings.evidence_dir,
+            )
+            result['state'] = 'verified'
+            return result
     if url_matches_moscow(source, page.url) and any(confirmed_control_text(label) for label in labels):
         result['state'] = 'verified'
         return result
