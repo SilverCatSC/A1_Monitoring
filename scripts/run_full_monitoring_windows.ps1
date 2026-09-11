@@ -20,6 +20,17 @@ $docker = Get-A1DockerExecutable
 # Windows PowerShell 5.1. Plain progress is deterministic and transcript-safe.
 $env:COMPOSE_PROGRESS = 'plain'
 $env:BUILDKIT_PROGRESS = 'plain'
+$cycleMutex = New-Object System.Threading.Mutex($false, 'Local\A1MonitoringFullCycle')
+$cycleAcquired = $false
+try {
+    $cycleAcquired = $cycleMutex.WaitOne(0)
+} catch [System.Threading.AbandonedMutexException] {
+    $cycleAcquired = $true
+}
+if (-not $cycleAcquired) {
+    $cycleMutex.Dispose()
+    throw 'Another full monitoring cycle is already running. Wait for its PowerShell prompt to return.'
+}
 New-Item -ItemType Directory -Force artifacts | Out-Null
 $log = Join-Path $Root ("artifacts\full_monitoring_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 $overall = 0
@@ -59,6 +70,8 @@ try {
     & $docker compose up -d app db backup | Out-Host
     Write-A1MemorySnapshot 'finished' | Out-Null
     Stop-Transcript
+    $cycleMutex.ReleaseMutex()
+    $cycleMutex.Dispose()
 }
 if ($overall -ne 0) { Write-Warning "MONITORING_SYSTEM_PARTIAL_WINDOWS log=$log"; exit 2 }
 Write-Host "MONITORING_SYSTEM_OK_WINDOWS log=$log"

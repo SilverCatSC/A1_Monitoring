@@ -127,3 +127,36 @@ def test_screenshot_ignores_hidden_copy_and_captures_visible_card(tmp_path):
             finally:
                 await browser.close()
     asyncio.run(exercise())
+
+
+def test_auto_ru_reports_captcha_before_geography(tmp_path, monkeypatch):
+    for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'auto_ru_page_delay_seconds'):
+        monkeypatch.setattr(settings, key, 0)
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            page = await browser.new_page()
+            await page.route(
+                '**/*',
+                lambda route: route.fulfill(
+                    content_type='text/html; charset=utf-8',
+                    body='<h1>Подтвердите, что запросы отправляли вы, а не робот</h1>',
+                ),
+            )
+            @asynccontextmanager
+            async def local_page(_playwright):
+                yield page
+            monkeypatch.setattr('app.scraper.auto_ru.browser_page', local_page)
+            try:
+                return await AutoRuAdapter().scan_filter(
+                    'https://auto.ru/moskva/cars/zeekr/9x/new/?geo_radius=0&rid=213', 1
+                )
+            finally:
+                await browser.close()
+
+    result = asyncio.run(exercise())
+    assert result.complete is False
+    assert result.diagnostics['page_1_state'] == 'blocked'
+    assert result.error.startswith('blocked page 1:')

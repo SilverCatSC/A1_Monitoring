@@ -114,6 +114,11 @@ class AutoRuAdapter:
                             error = 'seller page redirected outside the approved seller catalogue'
                             break
                         if not seller_catalogue:
+                            pre_geo_state, pre_geo_reason = classify_result_page(html, 0)
+                            if pre_geo_state == 'blocked':
+                                diagnostics[f'page_{page_number}_state'] = 'blocked'
+                                error = f'blocked page {page_number}: {pre_geo_reason}'
+                                break
                             geography = await verify_geography(page, self.source)
                             diagnostics[f'page_{page_number}_geography'] = geography
                             if geography['state'] != 'verified':

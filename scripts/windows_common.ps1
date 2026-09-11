@@ -27,6 +27,22 @@ function Get-A1DockerExecutable {
     throw 'docker.exe was not found. Start or reinstall Docker Desktop.'
 }
 
+function Get-A1LocalAiProcesses {
+    param([string]$ProjectRoot, [string]$Port)
+    $server = [IO.Path]::GetFullPath(
+        (Join-Path $ProjectRoot 'artifacts\llama_cpp_windows\llama-server.exe')
+    )
+    $portPattern = '(?:^|\s)--port(?:=|\s+)' + [regex]::Escape($Port) + '(?:\s|$)'
+    return @(
+        Get-CimInstance Win32_Process -Filter "name='llama-server.exe'" |
+            Where-Object {
+                $_.ExecutablePath -and
+                [IO.Path]::GetFullPath($_.ExecutablePath) -ieq $server -and
+                $_.CommandLine -match $portPattern
+            }
+    )
+}
+
 function Get-A1BaseUrl {
     param([string]$ProjectRoot)
     $port = '18000'

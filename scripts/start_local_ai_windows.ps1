@@ -35,6 +35,15 @@ if ($running) {
         Write-Host "Stop it first with .\scripts\stop_local_ai_windows.ps1."
         exit 1
     }
+    $managed = @(Get-A1LocalAiProcesses $Root $lock.AI_MODEL_PORT)
+    if ($managed.Count -ne 1) {
+        Write-Host "LOCAL_AI_PROCESS_OWNERSHIP_UNCLEAR_WINDOWS count=$($managed.Count) url=$baseUrl"
+        Write-Host "Stop it first with .\scripts\stop_local_ai_windows.ps1."
+        exit 1
+    }
+    $state = Join-Path $Root 'artifacts\ai_runtime'
+    New-Item -ItemType Directory -Force $state | Out-Null
+    $managed[0].ProcessId | Set-Content (Join-Path $state 'llama-server-windows.pid') -Encoding ascii
     Write-Host "LOCAL_AI_REUSED_WINDOWS profile=$Profile $baseUrl"
     return
 }
