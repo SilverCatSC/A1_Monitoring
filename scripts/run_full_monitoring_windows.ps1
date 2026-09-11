@@ -5,6 +5,7 @@ param(
     [ValidateSet('normal','cautious')][string]$Pace = 'normal',
     [ValidateSet('light','heavy')][string]$AiProfile = 'light',
     [ValidateRange(1024,65536)][int]$MinFreeMemoryMb = 7500,
+    [ValidateRange(1,20)][int]$ReplacementChecks = 20,
     [switch]$AllowSwap,
     [switch]$RunHeavyReview
 )
@@ -21,6 +22,10 @@ $docker = Get-A1DockerExecutable
 # Windows PowerShell 5.1. Plain progress is deterministic and transcript-safe.
 $env:COMPOSE_PROGRESS = 'plain'
 $env:BUILDKIT_PROGRESS = 'plain'
+$env:CAPTCHA_WAIT_SECONDS = '0'
+$env:CAPTCHA_RETRY_UNTIL_SUCCESS = 'true'
+$env:CAPTCHA_RELOAD_SECONDS = '15'
+$env:SELLER_DIRECT_CHECKS_LIMIT = [string]$ReplacementChecks
 $cycleMutex = New-Object System.Threading.Mutex($false, 'Local\A1MonitoringFullCycle')
 $cycleAcquired = $false
 try {
@@ -38,6 +43,11 @@ $overall = 0
 Start-Transcript -Path $log
 try {
     Write-A1MemorySnapshot 'start' | Out-Null
+    # Hermes participates in seller reconciliation before search, so the light
+    # local model must already be available while the visible browser is open.
+    $env:A1_REPLACEMENT_AI = '1'
+    $env:A1_LOCAL_AI_URL = 'http://127.0.0.1:18080'
+    & (Join-Path $PSScriptRoot 'start_local_ai_windows.ps1') -Profile $AiProfile -MinFreeMemoryMb $MinFreeMemoryMb -AllowSwap:$AllowSwap
     Invoke-A1Native $docker @('compose', 'up', '-d', 'app', 'db', 'backup')
     & $python scripts/local_scan.py --engines $Engines --pages $Pages --pace $Pace
     $scanStatus = $LASTEXITCODE
@@ -54,7 +64,6 @@ try {
     Start-Sleep -Seconds 5
     Write-A1MemorySnapshot 'browser_and_docker_stopped' | Out-Null
 
-    & (Join-Path $PSScriptRoot 'start_local_ai_windows.ps1') -Profile $AiProfile -MinFreeMemoryMb $MinFreeMemoryMb -AllowSwap:$AllowSwap
     & $powerShell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ai_review_windows.ps1') -PreparedPacket -Profile $AiProfile
     if ($LASTEXITCODE -ne 0) { $overall = 2 }
     if ($RunHeavyReview -and $AiProfile -ne 'heavy') {

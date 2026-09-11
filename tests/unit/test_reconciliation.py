@@ -135,6 +135,35 @@ def test_model_match_suggests_new_listing_but_never_rebinds_without_person(db):
     assert db.query(ListingLinkOverride).count() == 0
 
 
+def test_hermes_unique_high_confidence_match_updates_local_link(db):
+    async def inspect(_source, url, _progress):
+        if url == OLD:
+            return {'state': 'removed', 'reason': 'removed', 'evidence': 'old.png'}
+        return {'state': 'active', 'card': {'title': 'Mercedes-Benz VLE'}, 'evidence': 'new.png'}
+
+    def matcher(_listing, _source, _reference, _candidate, _inspection):
+        return {
+            'verdict': 'same',
+            'confidence': 0.99,
+            'matching_signals': ['same body details', 'same interior'],
+            'conflicts': [],
+            'reason': 'Совпадают индивидуальные признаки',
+        }
+
+    adapter = Adapter(result([NEW]))
+    service = SellerReconciliationService(
+        db,
+        discovery=DealerDiscoveryService(db, auto_adapter=adapter),
+        inspector=inspect,
+        matcher=matcher,
+    )
+    preflight = service.run()
+
+    assert preflight['checks']['car:auto_ru']['state'] == 'verified'
+    assert db.get(Listing, 'car').source_auto_ru == NEW
+    assert db.query(ListingLinkOverride).one().actor == 'hermes-reconciliation'
+
+
 def test_old_cached_candidate_is_not_a_fresh_confirmation(db):
     db.add(DealerListingCandidate(source=EngineType.AUTO_RU, external_key=canonical_listing_key(EngineType.AUTO_RU, OLD),
         dealer_url=DEALER, listing_url=OLD, network_profile='local_browser', active=True,

@@ -10,6 +10,9 @@
       case 'dealer_catalogue_started': message = `${source(e.source)} · каталог продавца · пауза ${e.wait_seconds} с`; break;
       case 'dealer_catalogue_finished': message = `${source(e.source)} · кандидатов ${e.candidates} · ${e.complete ? 'каталог пройден' : 'каталог просмотрен не полностью'}`; break;
       case 'dealer_link_check': message = `${source(e.source)} · проверка старой ссылки · пауза ${e.wait_seconds} с`; break;
+      case 'hermes_replacement_started': message = `Hermes · ${e.vehicle || 'автомобиль'} · сравнение кандидата ${source(e.source)}`; break;
+      case 'hermes_replacement_finished': message = `Hermes · ${e.vehicle || 'автомобиль'} · ${e.verdict} · уверенность ${Math.round((e.confidence || 0) * 100)}%`; break;
+      case 'hermes_link_updated': message = `Hermes обновил локальную ссылку · ${e.vehicle || source(e.source)}`; break;
       case 'dealer_preflight_finished': message = 'Сверка ссылок завершена. Неоднозначные связи переданы на подтверждение.'; break;
       case 'source_refresh_started': message = 'Обновление реестра из таблицы'; break;
       case 'source_refresh_finished': message = `Реестр обновлён: ${e.rows_valid} из ${e.rows_total} строк`; break;
@@ -17,6 +20,10 @@
       case 'filter_started': message = `${source(e.source)} · ${e.filter_name}`; break;
       case 'filter_wait': case 'page_wait': message = `Пауза ${e.wait_seconds} с`; break;
       case 'filter_retry': message = `Вкладка закрыта. Повтор через ${e.retry_seconds} с`; break;
+      case 'captcha_waiting': message = e.retry_until_success ? `${source(e.source)} · CAPTCHA: ожидание и повтор до успешного открытия` : `${source(e.source)} · решите CAPTCHA в открытом Chrome, ожидание до ${e.timeout_seconds} с`; break;
+      case 'captcha_reloading': message = `${source(e.source)} · повторная загрузка ссылки после CAPTCHA`; break;
+      case 'captcha_resolved': message = `${source(e.source)} · CAPTCHA решена, проверка продолжается`; break;
+      case 'captcha_timeout': message = `${source(e.source)} · CAPTCHA не решена за ${e.timeout_seconds} с`; break;
       case 'page_started': message = `${source(e.source)} · загрузка страницы ${e.page}/${e.pages_total}`; break;
       case 'page_finished': message = `Страница ${e.page}: ${e.cards || 0} карточек, ${e.target_cards || 0} снимков своих объявлений`; break;
       case 'page_failed': message = `Страница ${e.page}: ${e.error || 'сбой'}`; break;

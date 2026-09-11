@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import re
 from dataclasses import dataclass
@@ -10,6 +11,7 @@ from urllib.parse import unquote, urlparse
 
 from bs4 import BeautifulSoup
 
+from app.config import settings
 from app.models import EngineType
 
 
@@ -97,6 +99,76 @@ def classify_result_page(html: str, card_count: int) -> tuple[str, str | None]:
         if marker in visible_text or marker in lower_html:
             return 'empty', marker
     return 'unrecognized', 'no listing cards and no explicit empty-result marker'
+
+
+async def wait_for_captcha_resolution(
+    page,
+    source: EngineType,
+    progress=None,
+    initial_http_status: int | None = None,
+) -> str | None:
+    """Keep the visible tab open so the operator can solve a marketplace challenge."""
+    timeout = settings.captcha_wait_seconds
+    retry_until_success = settings.captcha_retry_until_success
+    if timeout <= 0 and not retry_until_success:
+        return None
+    if progress:
+        progress(
+            'captcha_waiting',
+            timeout_seconds=None if retry_until_success else timeout,
+            retry_until_success=retry_until_success,
+            message='Ожидание CAPTCHA; ссылка будет перезагружаться до успешного открытия',
+        )
+    deadline = None if retry_until_success else asyncio.get_running_loop().time() + timeout
+    next_progress = asyncio.get_running_loop().time() + 30
+    reload_delay = settings.captcha_reload_seconds
+    next_reload = asyncio.get_running_loop().time() + reload_delay
+    latest_http_status = initial_http_status
+    while deadline is None or asyncio.get_running_loop().time() < deadline:
+        try:
+            html = await page.content()
+        except Exception:
+            html = None
+        if html is not None:
+            state, _ = classify_result_page(html, 0)
+            if state != 'blocked' and (latest_http_status is None or latest_http_status < 400):
+                if progress:
+                    progress('captcha_resolved')
+                return html
+        remaining = 5 if deadline is None else max(0.1, deadline - asyncio.get_running_loop().time())
+        await asyncio.sleep(min(5, remaining))
+        now = asyncio.get_running_loop().time()
+        if now >= next_reload:
+            if progress:
+                progress('captcha_reloading')
+            try:
+                response = await page.reload(wait_until='domcontentloaded')
+                latest_http_status = response.status if response is not None else None
+            except Exception:
+                pass
+            reload_delay = min(60, reload_delay * 2)
+            next_reload = now + reload_delay
+        if progress and now >= next_progress:
+            seconds_left = None if deadline is None else max(0, int(deadline - now))
+            progress(
+                'captcha_waiting',
+                timeout_seconds=seconds_left,
+                retry_until_success=retry_until_success,
+            )
+            next_progress = now + 30
+    try:
+        html = await page.content()
+    except Exception:
+        html = None
+    if html is not None:
+        state, _ = classify_result_page(html, 0)
+        if state != 'blocked' and (latest_http_status is None or latest_http_status < 400):
+            if progress:
+                progress('captcha_resolved')
+            return html
+    if progress:
+        progress('captcha_timeout', timeout_seconds=timeout)
+    return None
 
 
 def canonical_listing_key(source: EngineType, value: str | None) -> str | None:

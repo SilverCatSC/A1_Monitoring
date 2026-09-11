@@ -16,6 +16,7 @@ from app.service.analytics import local_time, money
 from app.service.dealer_discovery import DealerDiscoveryService
 from app.service.filters import _listing_family
 from app.service.listings import ListingRegistryService
+from app.service.replacement_ai import configured_replacement_matcher
 
 LABELS = {'verified': 'Есть в каталоге продавца', 'review_required': 'Нужно проверить ссылку',
           'removed': 'Есть отметка о снятии / продаже', 'unavailable': 'Сверка недоступна',
@@ -38,17 +39,26 @@ def suggested_candidates(listing, source, candidates):
                         source_avito=candidate.listing_url if source == EngineType.AVITO else None)
         if _listing_family(probe, source) != family:
             continue
+        raw = candidate.raw_payload or {}
         result.append({'id': candidate.id, 'url': candidate.listing_url, 'title': candidate.title,
-                       'price': money(candidate.price_hint), 'basis': 'Совпадает семейство модели; автомобиль должен подтвердить человек'})
+                       'price': money(candidate.price_hint), 'price_value': candidate.price_hint,
+                       'card_text': str(raw.get('raw_text') or '')[:1200],
+                       'basis': 'Совпадает семейство модели; автомобиль должен подтвердить человек'})
+    expected_price = float(listing.price_hint or 0)
+    result.sort(key=lambda row: (
+        abs(float(row.get('price_value') or 0) - expected_price) if expected_price and row.get('price_value') else float('inf'),
+        str(row.get('title') or ''),
+    ))
     return result[:30]
 
 
 class SellerReconciliationService:
-    def __init__(self, db, progress_callback=None, discovery=None, inspector=None):
+    def __init__(self, db, progress_callback=None, discovery=None, inspector=None, matcher=None):
         self.db = db
         self.progress = progress_callback or (lambda event: None)
         self.discovery = discovery or DealerDiscoveryService(db, progress_callback=progress_callback)
         self.inspector = inspector or inspect_direct_link
+        self.matcher = matcher if matcher is not None else configured_replacement_matcher()
         self.inspections = {}
         self.candidate_checks = Counter()
 
@@ -56,51 +66,118 @@ class SellerReconciliationService:
         key = (source, canonical_listing_key(source, url))
         if key not in self.inspections:
             self.inspections[key] = asyncio.run(self.inspector(source, url, self.progress))
+            self.inspections[key].setdefault('url', url)
         return self.inspections[key]
 
     def resolve_replacement(self, listing, source, candidates, listings, blocked):
-        """Apply only a unique VIN match from freshly observed seller cards."""
+        """Resolve exact VIN matches and ask Hermes to rank visual candidates."""
         vin = (listing.vin or '').strip().upper()
-        if not re.fullmatch(r'[A-HJ-NPR-Z0-9]{17}', vin):
-            return None
-        if sum((row.vin or '').strip().upper() == vin for row in listings) != 1:
-            return None
         suggestions = suggested_candidates(listing, source, candidates)
-        # Do not select a winner from a truncated candidate population.
-        if not suggestions or len(suggestions) >= 30 or len(suggestions) > settings.seller_direct_checks_limit:
-            return None
+        if not suggestions or len(suggestions) >= 30:
+            return None, suggestions
+        remaining_checks = max(0, settings.seller_direct_checks_limit - self.candidate_checks[source])
+        inspection_limit = min(remaining_checks, settings.seller_ai_candidates_per_listing)
+        inspected_population_complete = len(suggestions) <= inspection_limit
         field = 'source_auto_ru' if source == EngineType.AUTO_RU else 'source_avito'
         matches = []
-        for candidate in suggestions:
+        inspected = []
+        for candidate in suggestions[:inspection_limit]:
             cache_key = (source, canonical_listing_key(source, candidate['url']))
             if cache_key not in self.inspections:
                 if self.candidate_checks[source] >= settings.seller_direct_checks_limit:
-                    return None
+                    break
                 self.candidate_checks[source] += 1
             inspection = self.inspect(source, candidate['url'])
             if inspection.get('state') == 'blocked':
                 blocked.add(source.value)
-                return None
+                break
             if inspection.get('state') != 'active':
-                return None
+                continue
+            inspected.append((candidate, inspection))
             card_vin = (inspection.get('card', {}).get('vin') or '').strip().upper()
-            if not re.fullmatch(r'[A-HJ-NPR-Z0-9]{17}', card_vin):
-                return None
-            if card_vin == vin:
+            if (
+                re.fullmatch(r'[A-HJ-NPR-Z0-9]{17}', vin)
+                and sum((row.vin or '').strip().upper() == vin for row in listings) == 1
+                and card_vin == vin
+            ):
                 matches.append((candidate, inspection))
-        if len(matches) != 1:
-            return None
-        candidate, inspection = matches[0]
-        key = canonical_listing_key(source, candidate['url'])
-        if any(row.id != listing.id and canonical_listing_key(source, getattr(row, field)) == key for row in listings):
-            return None
-        if not inspection.get('evidence'):
-            return None
-        old_url = getattr(listing, field)
-        reason = 'Автоматическая сверка: единственный точный VIN в активной карточке свежего каталога дилера'
-        ListingRegistryService(self.db).update_link(listing.id, source=source, url=candidate['url'],
-                                                   actor='reconciliation', reason=reason)
-        return {'old_url': old_url, 'url': candidate['url'], 'reason': reason, 'inspection': inspection}
+        if inspected_population_complete and len(matches) == 1:
+            candidate, inspection = matches[0]
+            key = canonical_listing_key(source, candidate['url'])
+            if not any(row.id != listing.id and canonical_listing_key(source, getattr(row, field)) == key for row in listings) and inspection.get('evidence'):
+                old_url = getattr(listing, field)
+                reason = 'Автоматическая сверка: единственный точный VIN в активной карточке свежего каталога дилера'
+                ListingRegistryService(self.db).update_link(listing.id, source=source, url=candidate['url'],
+                                                           actor='reconciliation', reason=reason)
+                return {'old_url': old_url, 'url': candidate['url'], 'reason': reason, 'inspection': inspection}, suggestions
+
+        old_key = canonical_listing_key(source, getattr(listing, field))
+        reference = self.inspections.get((source, old_key)) or {}
+        if self.matcher and reference.get('evidence') and source.value not in blocked:
+            for candidate, inspection in inspected:
+                self.progress({
+                    'event': 'hermes_replacement_started',
+                    'source': source.value,
+                    'vehicle': f'{listing.brand or ""} {listing.model or ""}'.strip(),
+                    'candidate_url': candidate['url'],
+                })
+                candidate['hermes_review'] = self.matcher(
+                    listing, source, reference, candidate, inspection
+                )
+                self.progress({
+                    'event': 'hermes_replacement_finished',
+                    'source': source.value,
+                    'vehicle': f'{listing.brand or ""} {listing.model or ""}'.strip(),
+                    'verdict': candidate['hermes_review'].get('verdict'),
+                    'confidence': candidate['hermes_review'].get('confidence', 0),
+                })
+            ai_matches = [
+                (candidate, inspection)
+                for candidate, inspection in inspected
+                if candidate.get('hermes_review', {}).get('verdict') == 'same'
+                and candidate['hermes_review'].get('confidence', 0) >= 0.98
+                and len(candidate['hermes_review'].get('matching_signals') or []) >= 2
+                and not candidate['hermes_review'].get('conflicts')
+            ]
+            if inspected_population_complete and len(ai_matches) == 1:
+                candidate, inspection = ai_matches[0]
+                candidate_key = canonical_listing_key(source, candidate['url'])
+                link_is_free = not any(
+                    row.id != listing.id
+                    and canonical_listing_key(source, getattr(row, field)) == candidate_key
+                    for row in listings
+                )
+                if link_is_free:
+                    old_url = getattr(listing, field)
+                    reason = (
+                        'Hermes: единственный кандидат перевыкладки подтверждён сравнением '
+                        'двух снимков, цены и описания; confidence '
+                        f"{candidate['hermes_review']['confidence']:.2f}"
+                    )
+                    ListingRegistryService(self.db).update_link(
+                        listing.id,
+                        source=source,
+                        url=candidate['url'],
+                        actor='hermes-reconciliation',
+                        reason=reason,
+                    )
+                    self.progress({
+                        'event': 'hermes_link_updated',
+                        'source': source.value,
+                        'vehicle': f'{listing.brand or ""} {listing.model or ""}'.strip(),
+                        'url': candidate['url'],
+                    })
+                    return {
+                        'old_url': old_url,
+                        'url': candidate['url'],
+                        'reason': reason,
+                        'inspection': inspection,
+                        'hermes_review': candidate['hermes_review'],
+                    }, suggestions
+        for candidate in suggestions:
+            candidate.pop('price_value', None)
+            candidate.pop('card_text', None)
+        return None, suggestions
 
     def run(self):
         self.inspections.clear()
@@ -146,15 +223,17 @@ class SellerReconciliationService:
                         elif inspection['state'] == 'blocked':
                             blocked.add(source.value)
                             state, reason = 'unavailable', 'Проверка старой ссылки остановлена защитой площадки'
-                if state in ('review_required', 'removed', 'missing_link') and source.value not in blocked and counts[key] <= 1:
-                    replacement = self.resolve_replacement(listing, source, candidates, listings, blocked)
+                suggestions = []
+                unique_current_link = key is None or counts[key] <= 1
+                if state in ('review_required', 'removed', 'missing_link') and source.value not in blocked and unique_current_link:
+                    replacement, suggestions = self.resolve_replacement(listing, source, candidates, listings, blocked)
                     if replacement:
                         detail['replacement'] = {k: v for k, v in replacement.items() if k != 'inspection'}
                         detail['direct_inspection'] = replacement['inspection']
                         url, state, reason = replacement['url'], 'verified', replacement['reason']
                     elif source.value in blocked:
                         state, reason = 'unavailable', 'Сверка кандидатов остановлена защитой площадки'
-                suggestions = [] if state == 'verified' else suggested_candidates(listing, source, candidates)
+                suggestions = [] if state == 'verified' else (suggestions or suggested_candidates(listing, source, candidates))
                 record = ListingReconciliation(batch_id=batch_id, listing_id=listing.id, source=source,
                     state=state, url=url, reason=reason, candidates=suggestions, details=detail, checked_at=datetime.now(UTC))
                 self.db.add(record)

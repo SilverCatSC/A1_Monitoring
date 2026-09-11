@@ -19,6 +19,7 @@ from app.scraper.base import (
     capture_page_evidence,
     classify_result_page,
     is_marketplace_listing_url,
+    wait_for_captcha_resolution,
 )
 from app.scraper.browser_session import browser_page
 from app.scraper.geography import verify_geography
@@ -104,6 +105,25 @@ class AvitoAdapter:
                         )
                         if evidence_path:
                             diagnostics[f'page_{page_number}_evidence'] = evidence_path
+                        pre_geo_state, pre_geo_reason = classify_result_page(html, 0)
+                        if pre_geo_state == 'blocked' or http_status in {403, 429}:
+                            resolved = await wait_for_captcha_resolution(
+                                page, self.source, self._progress, http_status
+                            )
+                            if resolved is None:
+                                diagnostics[f'page_{page_number}_state'] = 'blocked'
+                                error = f'blocked page {page_number}: {pre_geo_reason}'
+                                break
+                            html = resolved
+                            http_status = None
+                            diagnostics[f'page_{page_number}_captcha_resolved'] = 1
+                            diagnostics[f'page_{page_number}_evidence'] = await capture_page_evidence(
+                                page,
+                                source=self.source,
+                                search_url=search_url,
+                                page_number=page_number,
+                                evidence_dir=settings.evidence_dir,
+                            )
                         if http_status is not None and http_status >= 400:
                             error = f'page {page_number}: RuntimeError: HTTP {http_status}'
                             diagnostics[f'page_{page_number}_state'] = 'technical_error'
@@ -112,11 +132,6 @@ class AvitoAdapter:
                             error = 'seller page redirected outside the approved seller catalogue'
                             break
                         if not seller_catalogue:
-                            pre_geo_state, pre_geo_reason = classify_result_page(html, 0)
-                            if pre_geo_state == 'blocked':
-                                diagnostics[f'page_{page_number}_state'] = 'blocked'
-                                error = f'blocked page {page_number}: {pre_geo_reason}'
-                                break
                             geography = await verify_geography(page, self.source)
                             diagnostics[f'page_{page_number}_geography'] = geography
                             if geography['state'] != 'verified':

@@ -68,6 +68,15 @@ class Settings(BaseSettings):
     target_closed_retry_seconds: float = Field(
         default=5, alias='TARGET_CLOSED_RETRY_SECONDS', ge=0, le=30
     )
+    captcha_wait_seconds: int = Field(
+        default=0, alias='CAPTCHA_WAIT_SECONDS', ge=0, le=1800
+    )
+    captcha_retry_until_success: bool = Field(
+        default=False, alias='CAPTCHA_RETRY_UNTIL_SUCCESS'
+    )
+    captcha_reload_seconds: int = Field(
+        default=15, alias='CAPTCHA_RELOAD_SECONDS', ge=5, le=300
+    )
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')
     run_every_minutes: int = Field(default=30, alias='RUN_EVERY_MINUTES', ge=1)
     report_retention_days: int = Field(default=90, alias='REPORT_RETENTION_DAYS', ge=1)
@@ -77,6 +86,9 @@ class Settings(BaseSettings):
     dealer_pages_limit: int = Field(default=3, alias='DEALER_PAGES_LIMIT', ge=1, le=10)
     seller_preflight_pages: int = Field(default=5, alias='SELLER_PREFLIGHT_PAGES', ge=1, le=10)
     seller_direct_checks_limit: int = Field(default=5, alias='SELLER_DIRECT_CHECKS_LIMIT', ge=0, le=20)
+    seller_ai_candidates_per_listing: int = Field(
+        default=3, alias='SELLER_AI_CANDIDATES_PER_LISTING', ge=1, le=5
+    )
     seller_detail_checks_limit: int = Field(
         default=100, alias='SELLER_DETAIL_CHECKS_LIMIT', ge=0, le=250
     )

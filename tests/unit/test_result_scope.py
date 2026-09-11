@@ -9,7 +9,7 @@ from app.config import settings
 from app.models import EngineType
 from app.scraper.auto_ru import AutoRuAdapter, _all_offers_are_visible
 from app.scraper.avito import AvitoAdapter
-from app.scraper.base import ListingHit, capture_listing_card_evidence
+from app.scraper.base import ListingHit, capture_listing_card_evidence, wait_for_captcha_resolution
 from app.scraper.result_scope import pagination_state
 from app.scraper.seller import direct_page_status
 
@@ -168,3 +168,34 @@ def test_auto_ru_reports_captcha_before_geography(tmp_path, monkeypatch):
     assert result.complete is False
     assert result.diagnostics['page_1_state'] == 'blocked'
     assert result.error.startswith('blocked page 1:')
+
+
+def test_captcha_wait_resumes_after_operator_solves_it(monkeypatch):
+    monkeypatch.setattr(settings, 'captcha_wait_seconds', 30)
+    monkeypatch.setattr(settings, 'captcha_retry_until_success', True)
+
+    async def no_sleep(_seconds):
+        return None
+
+    monkeypatch.setattr('app.scraper.base.asyncio.sleep', no_sleep)
+
+    class Page:
+        calls = 0
+
+        async def content(self):
+            self.calls += 1
+            if self.calls == 1:
+                return '<h1>Подтвердите, что вы не робот</h1>'
+            return '<div class="ListingItem">Mercedes</div>'
+
+    events = []
+
+    async def exercise():
+        return await wait_for_captcha_resolution(
+            Page(), EngineType.AUTO_RU, lambda event, **payload: events.append(event)
+        )
+
+    html = asyncio.run(exercise())
+
+    assert 'Mercedes' in html
+    assert events == ['captcha_waiting', 'captcha_resolved']
