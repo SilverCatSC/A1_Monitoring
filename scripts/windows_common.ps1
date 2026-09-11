@@ -14,6 +14,19 @@ function Get-A1PowerShellExecutable {
     return $windowsPowerShell.Source
 }
 
+function Get-A1DockerExecutable {
+    $command = Get-Command 'docker.exe' -ErrorAction SilentlyContinue
+    if ($command) { return $command.Source }
+    $candidates = @(
+        (Join-Path $env:LOCALAPPDATA 'Programs\DockerDesktop\resources\bin\docker.exe'),
+        (Join-Path $env:ProgramFiles 'Docker\Docker\resources\bin\docker.exe')
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) { return $candidate }
+    }
+    throw 'docker.exe was not found. Start or reinstall Docker Desktop.'
+}
+
 function Get-A1BaseUrl {
     param([string]$ProjectRoot)
     $port = '18000'

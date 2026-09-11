@@ -14,13 +14,19 @@ Set-Location $Root
 . (Join-Path $PSScriptRoot 'windows_common.ps1')
 $python = Join-Path $Root '.venv312\Scripts\python.exe'
 $powerShell = Get-A1PowerShellExecutable
+$docker = Get-A1DockerExecutable
+# Docker Compose 29 can fail with "failed to get console: The handle is invalid"
+# when its interactive progress renderer runs inside Start-Transcript on
+# Windows PowerShell 5.1. Plain progress is deterministic and transcript-safe.
+$env:COMPOSE_PROGRESS = 'plain'
+$env:BUILDKIT_PROGRESS = 'plain'
 New-Item -ItemType Directory -Force artifacts | Out-Null
 $log = Join-Path $Root ("artifacts\full_monitoring_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
 $overall = 0
 Start-Transcript -Path $log
 try {
     Write-A1MemorySnapshot 'start' | Out-Null
-    Invoke-A1Native 'docker' @('compose', 'up', '-d', 'app', 'db', 'backup')
+    Invoke-A1Native $docker @('compose', 'up', '-d', 'app', 'db', 'backup')
     & $python scripts/local_scan.py --engines $Engines --pages $Pages --pace $Pace
     $scanStatus = $LASTEXITCODE
     if ($scanStatus -ne 0 -and $scanStatus -ne 2) { throw "Live scan failed (exit $scanStatus)." }
@@ -32,7 +38,7 @@ try {
     Invoke-A1Native $python @('scripts/build_ai_work_units.py')
 
     & (Join-Path $PSScriptRoot 'stop_monitoring_chrome_windows.ps1')
-    Invoke-A1Native 'docker' @('compose', 'stop', 'app', 'backup', 'db')
+    Invoke-A1Native $docker @('compose', 'stop', 'app', 'backup', 'db')
     Start-Sleep -Seconds 5
     Write-A1MemorySnapshot 'browser_and_docker_stopped' | Out-Null
 
@@ -50,7 +56,7 @@ try {
     $overall = 2
 } finally {
     & (Join-Path $PSScriptRoot 'stop_local_ai_windows.ps1')
-    docker compose up -d app db backup | Out-Host
+    & $docker compose up -d app db backup | Out-Host
     Write-A1MemorySnapshot 'finished' | Out-Null
     Stop-Transcript
 }
