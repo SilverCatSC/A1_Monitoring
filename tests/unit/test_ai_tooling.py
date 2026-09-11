@@ -27,7 +27,7 @@ def test_ouroboros_internal_llm_profile_is_local_and_has_no_tools() -> None:
     assert "api: http://127.0.0.1:18080/v1" in config
     assert "provider: custom:a1-local" in config
     assert "fallback_providers: []" in config
-    assert "default: Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf" in config
+    assert "default: Qwen3.5-9B-Q4_K_M.gguf" in config
     assert "supports_vision: true" in config
     assert "disabled_toolsets:\n    - all" in config
     assert "platform_toolsets:\n  cli: []" in config
@@ -111,9 +111,10 @@ def test_local_model_server_is_low_concurrency_and_multimodal() -> None:
     assert 'AI_HEAVY_MODEL_FILE=Qwen3.5-9B-Q4_K_M.gguf' in lock
 
 
-def test_staged_runner_reserves_reasoning_for_final_synthesis() -> None:
+def test_staged_runner_uses_deterministic_data_and_synthesis() -> None:
     script = _read(ROOT / 'scripts' / 'run_ai_work_units.py')
 
-    assert "_data_prompt(unit), reasoning='none'" in script
+    assert '_deterministic_data_report(unit, vehicle_key)' in script
     assert "reasoning='none'," in script
-    assert "_summary_prompt(compact), reasoning='low'" in script
+    assert 'final = _compose_final(compact, None, failures)' in script
+    assert "coverage['technical_failures'] = len(failures)" in script

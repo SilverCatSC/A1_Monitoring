@@ -15,12 +15,14 @@ $mmprojFile = $lock.AI_MODEL_MMPROJ_FILE
 $context = $lock.AI_MODEL_CONTEXT
 $maxOutputTokens = $lock.AI_MODEL_MAX_OUTPUT_TOKENS
 $reasoningBudget = $lock.AI_MODEL_REASONING_BUDGET
+$reasoningFormat = 'off'
 if ($Profile -eq 'heavy') {
     $modelFile = $lock.AI_HEAVY_MODEL_FILE
     $mmprojFile = $lock.AI_HEAVY_MODEL_MMPROJ_FILE
     $context = $lock.AI_HEAVY_MODEL_CONTEXT
     $maxOutputTokens = $lock.AI_HEAVY_MODEL_MAX_OUTPUT_TOKENS
     $reasoningBudget = $lock.AI_HEAVY_MODEL_REASONING_BUDGET
+    $reasoningFormat = 'auto'
 }
 $running = $null
 try {
@@ -59,7 +61,7 @@ $args = @(
     '-n', $maxOutputTokens, '--threads-http', '2', '--poll', '0',
     '--poll-batch', '0', '--cache-type-k', 'q4_0', '--cache-type-v', 'q4_0',
     '--host', '127.0.0.1', '--port', $lock.AI_MODEL_PORT, '--no-webui',
-    '--reasoning', 'auto', '--reasoning-budget', $reasoningBudget
+    '--reasoning', $reasoningFormat, '--reasoning-budget', $reasoningBudget
 )
 $process = Start-Process -FilePath $server -ArgumentList $args -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
 $process.Id | Set-Content (Join-Path $state 'llama-server-windows.pid') -Encoding ascii

@@ -68,10 +68,41 @@ def test_windows_full_run_is_sequential_and_memory_guarded():
     assert 'start_local_ai_windows.ps1' in script
     assert 'run_ai_review_windows.ps1' in script
     assert 'run_ouroboros_live_audit_windows.ps1' in script
+    assert "start_local_ai_windows.ps1') -Profile heavy" in script
     assert "AiProfile = 'light'" in script
     assert '-Profile $AiProfile' in script
     assert 'MinFreeMemoryMb = 7500' in script
     assert '-AllowSwap:$AllowSwap' in script
+
+
+def test_windows_ai_review_selects_requested_model_profile():
+    root = Path(__file__).resolve().parents[2]
+    wrapper = (root / 'scripts' / 'run_ai_review_windows.ps1').read_text(encoding='utf-8')
+    helper = (root / 'scripts' / 'hermes_monitoring_oneshot_windows.py').read_text(encoding='utf-8')
+
+    assert "$env:A1_AI_PROFILE = $Profile" in wrapper
+    assert "os.environ.get('A1_AI_PROFILE', 'light')" in helper
+    assert '/v1/chat/completions' in helper
+
+
+def test_windows_ouroboros_uses_executable_hermes_with_heavy_profile():
+    root = Path(__file__).resolve().parents[2]
+    template = (root / 'config' / 'ouroboros-windows.yaml.template').read_text(encoding='utf-8')
+    wrapper = (root / 'scripts' / 'run_ouroboros_live_audit_windows.ps1').read_text(encoding='utf-8')
+
+    assert 'hermes_cli_path: "hermes"' in template
+    assert "$env:HERMES_HOME = Join-Path $Root 'artifacts\\hermes_ouroboros_llm_home'" in wrapper
+    assert "artifacts\\hermes_agent\\venv\\Scripts" in wrapper
+    assert 'run_heavy_staged_audit.py' in wrapper
+    assert 'OUROBOROS_WINDOWS_FALLBACK_READY' in wrapper
+
+
+def test_monitoring_chrome_shutdown_tolerates_process_exit_race():
+    root = Path(__file__).resolve().parents[2]
+    script = (root / 'scripts' / 'stop_monitoring_chrome_windows.ps1').read_text(encoding='utf-8')
+
+    assert 'Stop-Process' in script
+    assert '-ErrorAction SilentlyContinue' in script
 
 
 def test_windows_ai_server_is_cpu_only_single_slot_and_multimodal():
@@ -81,6 +112,8 @@ def test_windows_ai_server_is_cpu_only_single_slot_and_multimodal():
     assert "'--mmproj', $mmproj" in script
     assert "Profile = 'light'" in script
     assert "AI_HEAVY_MODEL_FILE" in script
+    assert "$reasoningFormat = 'off'" in script
+    assert "$reasoningFormat = 'auto'" in script
     assert 'LOCAL_AI_DIFFERENT_MODEL_WINDOWS' in script
     assert "'-ngl', '0'" in script
     assert "'-np', '1'" in script
