@@ -59,10 +59,11 @@ class AutoRuAdapter:
         error: str | None = None
         diagnostics: dict[str, int | str] = {'engine': 'auto_ru', 'start_url': search_url}
         seen_pages: set[frozenset[str]] = set()
+        catalogue_url = _list_url(search_url) if not seller_catalogue else search_url
         async with async_playwright() as p:
             async with browser_page(p) as page:
                 for page_number in range(1, max_pages + 1):
-                    url = _page_url(search_url, page_number)
+                    url = _page_url(catalogue_url, page_number)
                     wait_seconds = choose_pause(
                         settings.scan_page_pause_min_seconds,
                         settings.scan_page_pause_max_seconds,
@@ -287,6 +288,24 @@ def _page_url(base_url: str, page_number: int) -> str:
     query = [(key, value) for key, value in parse_qsl(parts.query) if key != 'page']
     query.append(('page', str(page_number)))
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def _list_url(base_url: str) -> str:
+    """Request the catalogue view instead of Auto.ru's model landing page."""
+    parts = urlsplit(base_url)
+    query = parse_qsl(parts.query, keep_blank_values=True)
+    output_type_seen = False
+    normalized: list[tuple[str, str]] = []
+    for key, value in query:
+        if key == 'output_type':
+            if not output_type_seen:
+                normalized.append((key, 'list'))
+                output_type_seen = True
+            continue
+        normalized.append((key, value))
+    if not output_type_seen:
+        normalized.append(('output_type', 'list'))
+    return urlunsplit(parts._replace(query=urlencode(normalized)))
 
 
 def _declared_offer_count(html: str) -> int | None:

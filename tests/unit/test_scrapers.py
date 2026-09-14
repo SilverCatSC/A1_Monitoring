@@ -1,4 +1,4 @@
-from app.scraper.auto_ru import AutoRuAdapter, _all_offers_are_visible, _declared_offer_count
+from app.scraper.auto_ru import AutoRuAdapter, _all_offers_are_visible, _declared_offer_count, _list_url
 from app.scraper.auto_ru import _page_url as auto_page_url
 from app.scraper.avito import AvitoAdapter
 from app.scraper.avito import _page_url as avito_page_url
@@ -43,6 +43,15 @@ def test_auto_ru_stops_after_short_catalogue_is_fully_parsed():
     assert _all_offers_are_visible(2, 2)
     assert not _all_offers_are_visible(15, 14)
     assert not _all_offers_are_visible(None, 2)
+
+
+def test_auto_ru_requests_list_view_for_model_catalogues():
+    assert _list_url('https://auto.ru/moskva/cars/hongqi/hq9/new/?geo_radius=0&rid=213') == (
+        'https://auto.ru/moskva/cars/hongqi/hq9/new/?geo_radius=0&rid=213&output_type=list'
+    )
+    assert _list_url('https://auto.ru/moskva/cars/hongqi/hq9/new/?output_type=grid&rid=213') == (
+        'https://auto.ru/moskva/cars/hongqi/hq9/new/?output_type=list&rid=213'
+    )
 
 
 def test_auto_ru_excludes_sidebar_premium_and_uses_title_link():

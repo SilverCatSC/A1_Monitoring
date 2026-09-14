@@ -149,6 +149,52 @@ def test_avito_other_city_page_is_results_not_parser_uncertainty(tmp_path, monke
     assert result.diagnostics['page_2'] == 0
 
 
+def test_auto_ru_model_filter_requests_list_catalogue(tmp_path, monkeypatch):
+    for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'auto_ru_page_delay_seconds'):
+        monkeypatch.setattr(settings, key, 0)
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
+    requests = []
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            page = await browser.new_page()
+
+            async def route_page(route):
+                requests.append(route.request.url)
+                html = (
+                    '<h1>Hongqi HQ9 — 1 предложение</h1>'
+                    '<div class="ListingCars__items">'
+                    '<div class="ListingItemUniversal-AbCdE">'
+                    '<a class="ListingItemTitle__link" '
+                    'href="https://auto.ru/cars/new/group/hongqi/hq9/1/2/1133149207-car/">'
+                    'Hongqi HQ9</a></div></div>'
+                    '<div data-seo="listing-pagination">'
+                    '<a class="ListingPagination__page Button_checked">1</a></div>'
+                )
+                await route.fulfill(content_type='text/html', body=html)
+
+            await page.route('**/*', route_page)
+
+            @asynccontextmanager
+            async def local_page(_playwright):
+                yield page
+
+            monkeypatch.setattr('app.scraper.auto_ru.browser_page', local_page)
+            try:
+                return await AutoRuAdapter().scan_filter(
+                    'https://auto.ru/moskva/cars/hongqi/hq9/new/?rid=213', max_pages=3
+                )
+            finally:
+                await browser.close()
+
+    result = asyncio.run(exercise())
+    assert result.complete is True
+    assert result.exhausted is True
+    assert len(result.hits) == 1
+    assert parse_qs(urlsplit(requests[0]).query)['output_type'] == ['list']
+
+
 def test_expected_hit_without_exact_card_evidence_fails_closed(tmp_path, monkeypatch):
     for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'avito_page_delay_seconds'):
         monkeypatch.setattr(settings, key, 0)
