@@ -38,6 +38,10 @@ Mac/stage deployment evidence: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.
 VPN-клиента трактуют его как bypass или как proxy-route. До изменения переключателя
 или reconnect требуется явное подтверждение владельца.
 
+Current Mac routing evidence is recorded in
+[VPN_GATE_2026-09-14.md](VPN_GATE_2026-09-14.md). It is a configuration and
+basic reachability result, not a replacement for the remaining M7 gates.
+
 После подтверждения оператор фиксирует screenshot/текст настроек и выполняет один
 контролируемый доступ в обычном Chrome:
 
