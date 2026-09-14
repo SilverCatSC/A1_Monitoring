@@ -1,5 +1,16 @@
 # Журнал изменений
 
+## M6.8 — production-auth hardening и post-deploy stage verification — 2026-09-14
+
+- `fdd3ef4` fail-closed проверяет production-конфигурацию, обязательный roster
+  из четырёх ролей и минимальную длину секретов; cloud override не может
+  унаследовать local stage/no-auth профиль.
+- Повторный deploy на основном MacBook/stage подтвердил loopback readiness и
+  Mac-host preflight без создания monitoring cycle, обращения к площадкам или
+  изменения VPSUS.
+- Это compatibility evidence локального stage, а не приёмка реальных ролей,
+  Basic-auth, split-tunnel или M7.
+
 ## M6.7 — проверенный Mac preflight и восстановление dashboard — 2026-09-14
 
 - На Mac/stage применён `25c55fe`: при Alembic `20260914_0011` и версии

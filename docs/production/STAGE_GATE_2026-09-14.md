@@ -36,6 +36,20 @@ PostgreSQL enum label `review_required`, while historical enum labels and data
 remain untouched. This verification did not start a marketplace scan, change a
 VPN route, publish data, or create role accounts.
 
+## Post-auth-hardening runtime verification
+
+После controlled deployment `fdd3ef4` на том же Mac/stage приложение осталось
+на версии `0.14.0` и Alembic `20260914_0011`. На loopback успешно ответили
+`/api/v1/health`, `/api/v1/ready`, `/api/v1/dashboard` и
+`/api/v1/dashboard/settings`; `scripts/doctor.py --http --wait` вернул
+`LOCAL_READY`, а `./scripts/run_monitoring_host_macos.sh --preflight` —
+`preflight_succeeded` с `execution_model=readiness_only_no_cycle`.
+
+Проверка подтверждает совместимость production-auth hardening со stage-профилем
+`AUTH_ENABLED=false` на loopback. Она не создаёт и не проверяет реальные
+учётные записи, Basic-auth, production network/publication, Chrome, VPN либо
+marketplace cycle. Реальные роли и их приёмка остаются отдельными Gate 0/M7.
+
 ## Boundary
 
 This closes the backup/restore technical gate for the current Mac/stage only.

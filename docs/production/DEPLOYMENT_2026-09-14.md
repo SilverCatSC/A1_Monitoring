@@ -1,5 +1,9 @@
 # Controlled deployment record — 2026-09-14
 
+> Историческая запись initial deploy с Alembic `20260914_0010`, а не описание
+> текущего main. Более поздние runtime-проверки Mac/stage ведутся в
+> [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md).
+
 ## Scope
 
 Подтверждён и выполнен controlled deploy текущего main на локальном

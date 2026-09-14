@@ -7,7 +7,8 @@ the correct Avito selected-radius mode but has a valid `partial` outcome; see
 он задаёт порядок приёмки после отдельного подтверждения владельца. Ни unit tests,
 ни статическая проверка Windows, ни сохранённый исторический запуск не закрывают M7.
 
-Mac/stage deployment evidence: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.md).
+Current Mac/stage evidence: [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md).
+Initial deploy history: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.md).
 
 ## Результат M7
 
