@@ -50,6 +50,24 @@ VPN route, publish data, or create role accounts.
 учётные записи, Basic-auth, production network/publication, Chrome, VPN либо
 marketplace cycle. Реальные роли и их приёмка остаются отдельными Gate 0/M7.
 
+## Post-M6.9 MacBook-admission deployment verification
+
+После commit `b56edd2` локальный Mac/stage image был пересобран и app-container
+пересоздан без удаления volumes. Последующая проверка `docker-compose ps`
+показала healthy `app` и `db`; `scripts/doctor.py --http --wait` завершился
+`LOCAL_READY` с отключённым container autoscan.
+
+Новый `./scripts/run_monitoring_host_macos.sh --preflight` завершился
+`preflight_succeeded` / `HOST_RUNNER_PREFLIGHT_OK no_cycle_created=true` после
+проверяемого inherited kernel-lock context. Он подтвердил только GUI/unlocked
+host, services и loopback readiness: Chrome, source import, recovery, VPN
+attestation и marketplace traffic не запускались.
+
+Это runtime-совместимость нового fail-closed MacBook admission boundary со
+stage-контуром, а не M7 acceptance. Валидная VPN attestation не создавалась;
+VPSUS policy/IPv6 egress proof, реальные роли, controlled shadow-run, TCC и
+LaunchAgent остаются отдельными owner gates.
+
 ## Boundary
 
 This closes the backup/restore technical gate for the current Mac/stage only.
