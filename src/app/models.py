@@ -59,10 +59,33 @@ class ScanRunStatus(str, enum.Enum):
     FAILED = 'failed'
 
 
+class MonitoringCycle(Base):
+    """Durable ledger entry for one complete import-to-card-check attempt."""
+
+    __tablename__ = 'monitoring_cycles'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    status: Mapped[str] = mapped_column(String, default='running', nullable=False, index=True)
+    network_profile: Mapped[str] = mapped_column(String, nullable=False)
+    app_version: Mapped[str] = mapped_column(String, nullable=False)
+    started_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    roster_count: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    roster_sha256: Mapped[str | None] = mapped_column(String, nullable=True)
+    manifest_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
 class SourceImportSnapshot(Base):
     __tablename__ = 'source_import_snapshots'
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    cycle_id: Mapped[str | None] = mapped_column(
+        ForeignKey('monitoring_cycles.id'), index=True, nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -195,6 +218,9 @@ class DealerDiscoveryRun(Base):
     __tablename__ = 'dealer_discovery_runs'
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    cycle_id: Mapped[str | None] = mapped_column(
+        ForeignKey('monitoring_cycles.id'), index=True, nullable=True
+    )
     source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True)
     dealer_url: Mapped[str] = mapped_column(Text, nullable=False)
     network_profile: Mapped[str] = mapped_column(String, default='unknown', nullable=False)
@@ -229,6 +255,9 @@ class ListingReconciliation(Base):
 
     __tablename__ = 'listing_reconciliations'
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    cycle_id: Mapped[str | None] = mapped_column(
+        ForeignKey('monitoring_cycles.id'), index=True, nullable=True
+    )
     batch_id: Mapped[str] = mapped_column(String, index=True)
     listing_id: Mapped[str] = mapped_column(ForeignKey('listings.id'), index=True)
     source: Mapped[EngineType] = mapped_column(Enum(EngineType))
@@ -289,6 +318,9 @@ class ScanRun(Base):
     __tablename__ = 'scan_runs'
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    cycle_id: Mapped[str | None] = mapped_column(
+        ForeignKey('monitoring_cycles.id'), index=True, nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

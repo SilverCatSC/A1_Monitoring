@@ -42,10 +42,20 @@ def suggested_candidates(listing, source, candidates):
 
 
 class SellerReconciliationService:
-    def __init__(self, db, progress_callback=None, discovery=None, inspector=None):
+    def __init__(
+        self,
+        db,
+        progress_callback=None,
+        discovery=None,
+        inspector=None,
+        cycle_id: str | None = None,
+    ):
         self.db = db
+        self.cycle_id = cycle_id
         self.progress = progress_callback or (lambda event: None)
-        self.discovery = discovery or DealerDiscoveryService(db, progress_callback=progress_callback)
+        self.discovery = discovery or DealerDiscoveryService(
+            db, progress_callback=progress_callback, cycle_id=cycle_id
+        )
         self.inspector = inspector or inspect_direct_link
 
     def run(self):
@@ -91,7 +101,7 @@ class SellerReconciliationService:
                             blocked.add(source.value)
                             state, reason = 'unavailable', 'Проверка старой ссылки остановлена защитой площадки'
                 suggestions = [] if state == 'verified' else suggested_candidates(listing, source, candidates)
-                record = ListingReconciliation(batch_id=batch_id, listing_id=listing.id, source=source,
+                record = ListingReconciliation(cycle_id=self.cycle_id, batch_id=batch_id, listing_id=listing.id, source=source,
                     state=state, url=url, reason=reason, candidates=suggestions, details=detail, checked_at=datetime.now(UTC))
                 self.db.add(record)
                 self.db.flush()
@@ -99,7 +109,7 @@ class SellerReconciliationService:
         self.db.commit()
         summary = dict(Counter(c['state'] for c in checks.values()))
         self.progress({'event': 'dealer_preflight_finished', 'batch_id': batch_id, 'summary': summary})
-        return {'batch_id': batch_id, 'checks': checks, 'blocked_sources': sorted(blocked), 'summary': summary,
+        return {'cycle_id': self.cycle_id, 'batch_id': batch_id, 'checks': checks, 'blocked_sources': sorted(blocked), 'summary': summary,
                 'discovery': discovery}
 
     def inspect_current_cards(self, preflight):

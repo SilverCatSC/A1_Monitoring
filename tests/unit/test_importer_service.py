@@ -51,6 +51,32 @@ def test_import_service_accepts_optional_unknown_columns(db_modules):
         session.close()
 
 
+def test_import_snapshot_is_correlated_to_a_full_cycle(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import SourceImportSnapshot
+
+    session = app_db.SessionLocal()
+    try:
+        rows = _make_rows(
+            {
+                'brand': 'Lada',
+                'model': 'Granta',
+                'vin': 'VIN1234567890ABC',
+                'source_status': 'ok',
+            }
+        )
+        summary = SourceImporter(session).run(
+            rows, source_signature='test-cycle', cycle_id='cycle-1'
+        )
+
+        assert summary['snapshot_id']
+        snapshot = session.get(SourceImportSnapshot, summary['snapshot_id'])
+        assert snapshot.cycle_id == 'cycle-1'
+    finally:
+        session.close()
+
+
 def test_importer_splits_current_combined_brand_model_header(db_modules):
     app_db, _ = db_modules
     from app.importer.service import SourceImporter

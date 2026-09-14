@@ -88,12 +88,18 @@ class SourceImporter:
     def __init__(self, db: Session):
         self.db = db
 
-    def run(self, rows: list[SourceRecord], source_signature: str | None = None) -> dict[str, int]:
+    def run(
+        self,
+        rows: list[SourceRecord],
+        source_signature: str | None = None,
+        cycle_id: str | None = None,
+    ) -> dict[str, int | str]:
         if rows is None:
             rows = []
 
         parsed_rows: list[tuple[dict[str, Any], list[SearchFilterDefinition], str | None]] = []
         snapshot = SourceImportSnapshot(
+            cycle_id=cycle_id,
             started_at=_utcnow(),
             source_signature=source_signature,
             raw_rows=len(rows),
@@ -366,8 +372,11 @@ class SourceImporter:
             self.db.rollback()
             raise
 
-        return {
+        summary: dict[str, int | str] = {
             'rows_total': len(rows),
             'rows_valid': valid,
             'rows_invalid': missing,
         }
+        if cycle_id is not None:
+            summary['snapshot_id'] = snapshot.id
+        return summary

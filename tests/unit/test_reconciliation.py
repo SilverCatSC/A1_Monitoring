@@ -20,6 +20,7 @@ from app.models import (
     ListingObservation,
     ListingReconciliation,
     ObservationState,
+    ScanRun,
     SearchFilter,
     VehicleFilterExpectation,
 )
@@ -95,6 +96,26 @@ def test_fresh_membership_proves_link_but_does_not_create_visibility(db):
     assert adapter.calls[0][2] == {'seller_catalogue': True}
     assert db.query(ListingObservation).count() == 0
     assert db.query(ListingReconciliation).count() == 1
+
+
+def test_cycle_id_correlates_discovery_reconciliation_and_search(db):
+    cycle_id = 'cycle-1'
+    adapter = Adapter(result([OLD]))
+    discovery = DealerDiscoveryService(
+        db, auto_adapter=adapter, avito_adapter=adapter, cycle_id=cycle_id
+    )
+    preflight = SellerReconciliationService(
+        db, discovery=discovery, cycle_id=cycle_id
+    ).run()
+    MonitorService(
+        db, auto_adapter=Adapter(result([OLD])), preflight=preflight, cycle_id=cycle_id
+    ).run_full_cycle()
+
+    assert db.query(DealerDiscoveryRun).one().cycle_id == cycle_id
+    assert db.query(ListingReconciliation).one().cycle_id == cycle_id
+    run = db.query(ScanRun).one()
+    assert run.cycle_id == cycle_id
+    assert db.query(ListingObservation).one().raw_payload['cycle_id'] == cycle_id
 
 
 def test_model_match_suggests_new_listing_but_never_rebinds_without_person(db):

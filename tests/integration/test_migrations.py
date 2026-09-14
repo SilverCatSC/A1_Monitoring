@@ -16,10 +16,16 @@ def test_migration_builds_clean_database(tmp_path):
     engine = create_engine(database_url)
     try:
         tables = set(inspect(engine).get_table_names())
-        assert {'alembic_version', 'listings', 'listing_observations', 'manager_feedback'} <= tables
+        assert {
+            'alembic_version',
+            'listings',
+            'listing_observations',
+            'manager_feedback',
+            'monitoring_cycles',
+        } <= tables
         with engine.connect() as connection:
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                '20260909_0006'
+                '20260914_0007'
             )
     finally:
         engine.dispose()
@@ -46,7 +52,7 @@ def test_migration_adopts_pre_alembic_schema_without_data_loss(tmp_path):
         with engine.connect() as connection:
             assert connection.execute(text('SELECT count(*) FROM listings')).scalar_one() == 1
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                '20260909_0006'
+                '20260914_0007'
             )
     finally:
         engine.dispose()

@@ -48,8 +48,10 @@ class MonitorService:
         avito_adapter=None,
         progress_callback: Callable[[dict], None] | None = None,
         preflight: dict | None = None,
+        cycle_id: str | None = None,
     ):
         self.db = db
+        self.cycle_id = cycle_id
         self.progress_callback = progress_callback
         self.preflight = preflight
         self.auto_adapter = auto_adapter or AutoRuAdapter(
@@ -109,6 +111,8 @@ class MonitorService:
             filter_url=search_filter.raw_url,
             app_version=settings.app_version,
         )
+        if self.cycle_id is not None:
+            raw_payload['cycle_id'] = self.cycle_id
         if self.preflight is not None:
             raw_payload['seller_preflight'] = self.preflight['checks'].get(f'{listing_id}:{source.value}', {})
             raw_payload['seller_preflight_batch'] = self.preflight['batch_id']
@@ -229,6 +233,7 @@ class MonitorService:
     def _run_full_cycle(self) -> dict:
         started = datetime.now(UTC)
         summary = {
+            'cycle_id': self.cycle_id,
             'filters_scanned': 0,
             'found': 0,
             'missed_confirmed': 0,
@@ -245,7 +250,7 @@ class MonitorService:
         }
         total_filters = sum(len(rows) for rows in filters_by_source.values())
         overall_index = 0
-        self._progress('cycle_started', total_filters=total_filters)
+        self._progress('cycle_started', total_filters=total_filters, cycle_id=self.cycle_id)
 
         for source in [EngineType.AUTO_RU, EngineType.AVITO]:
             if source.value not in enabled:
@@ -255,6 +260,7 @@ class MonitorService:
                 'source_started', source=source.value, filters_total=len(filters)
             )
             scan_run = ScanRun(
+                cycle_id=self.cycle_id,
                 started_at=started,
                 source=source,
                 network_profile=settings.network_profile,

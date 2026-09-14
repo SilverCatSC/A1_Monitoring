@@ -26,8 +26,16 @@ _POSTGRES_DISCOVERY_LOCK_KEY = 4_101_002
 
 
 class DealerDiscoveryService:
-    def __init__(self, db: Session, auto_adapter=None, avito_adapter=None, progress_callback=None):
+    def __init__(
+        self,
+        db: Session,
+        auto_adapter=None,
+        avito_adapter=None,
+        progress_callback=None,
+        cycle_id: str | None = None,
+    ):
         self.db = db
+        self.cycle_id = cycle_id
         self.progress = progress_callback or (lambda event: None)
         self.adapters = {
             EngineType.AUTO_RU: auto_adapter
@@ -53,6 +61,7 @@ class DealerDiscoveryService:
                 summary['sources'] += 1
                 started = datetime.now(UTC)
                 record = DealerDiscoveryRun(
+                    cycle_id=self.cycle_id,
                     source=source,
                     dealer_url=dealer_url,
                     network_profile=settings.network_profile,
