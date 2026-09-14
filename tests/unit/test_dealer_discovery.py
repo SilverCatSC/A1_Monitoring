@@ -128,6 +128,36 @@ def test_partial_dealer_snapshot_keeps_observed_new_candidates(tmp_path, monkeyp
         engine.dispose()
 
 
+def test_dealer_candidate_keeps_the_page_evidence_that_proved_its_presence(tmp_path, monkeypatch):
+    engine = create_engine(f'sqlite:///{tmp_path / "dealer-evidence.db"}')
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    url = 'https://auto.ru/diler/cars/all/a1_avto_moskva/'
+    listing_url = 'https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-a/'
+    monkeypatch.setattr('app.service.dealer_discovery.settings.dealer_auto_urls', url)
+    monkeypatch.setattr('app.service.dealer_discovery.settings.dealer_avito_urls', '')
+    try:
+        result = _result(_hit(listing_url))
+        result.diagnostics.update(
+            page_1_evidence='catalogue.png',
+            page_1_evidence_manifest='catalogue.png.json',
+        )
+        service = DealerDiscoveryService(
+            session,
+            auto_adapter=FakeAdapter(result),
+            avito_adapter=FakeAdapter(_result()),
+        )
+
+        service.run()
+
+        candidate = session.query(DealerListingCandidate).one()
+        assert candidate.raw_payload['page_evidence'] == 'catalogue.png'
+        assert candidate.raw_payload['page_evidence_manifest'] == 'catalogue.png.json'
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_overlapping_dealer_discovery_is_rejected(tmp_path):
     import app.service.dealer_discovery as discovery_module
 

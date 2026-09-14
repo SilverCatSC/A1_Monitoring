@@ -1,5 +1,17 @@
 # Журнал изменений
 
+## M4 — объяснимая сверка Offer — 2026-09-14
+
+- Добавлена read-only очередь Offer в API и dashboard: цена, VIN, год, НДС Avito,
+  снятые/missing/candidate/ghost Offer и техническая неполнота имеют факт,
+  приоритет, действие и ссылку на доказательство.
+- Ghost Offer требует page evidence + manifest свежего dealer discovery; active
+  direct-card без M3 manifest не становится бизнес-фактом.
+- Снятие объявления формулируется как статус Offer, а не продажа автомобиля.
+  Очередь не изменяет links, Vehicle/Offer или исходные таблицы.
+- Версия повышена до `0.13.0`; добавлены regression tests для сверки и evidence
+  dealer candidate. Живая приёмка площадок не выполнялась.
+
 ## M3 — контракт доказательств — 2026-09-14
 
 - Для новых PNG выдачи, точной карточки и direct-card добавлен companion manifest

@@ -14,6 +14,7 @@ from app.scraper.seller import SELLER_SOURCES, inspect_direct_link
 from app.service.analytics import local_time, money
 from app.service.dealer_discovery import DealerDiscoveryService
 from app.service.filters import _listing_family
+from app.service.offer_reconciliation import offer_review_queue
 
 LABELS = {'verified': 'Есть в каталоге продавца', 'review_required': 'Нужно проверить ссылку',
           'removed': 'Есть отметка о снятии / продаже', 'unavailable': 'Сверка недоступна',
@@ -248,6 +249,7 @@ def reconciliation_context(db):
                      'conflict': bool(override and canonical_listing_key(record.source, override.last_source_url)
                                       != canonical_listing_key(record.source, override.url))})
     rows.sort(key=lambda row: (row['record'].state == 'verified', row['name'], row['record'].source.value))
+    review_queue = offer_review_queue(db)
     return {'rows': rows, 'total': len(rows), 'issues': sum(r['record'].state != 'verified' or r['changed'] for r in rows),
             'last_time': local_time(records[0].checked_at) if records else None,
-            'sources': SELLER_SOURCES, 'labels': LABELS}
+            'sources': SELLER_SOURCES, 'labels': LABELS, 'review_queue': review_queue}

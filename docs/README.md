@@ -26,6 +26,7 @@
 - [Production roadmap](production/ROADMAP.md) — реперные точки, gates и текущий фокус разработки.
 - [Stable identity](production/STABLE_IDENTITY.md) — M2-модель Vehicle/Offer, миграция и ручная перевыкладка.
 - [Evidence contract](production/EVIDENCE_CONTRACT.md) — M3-screenshot manifests, integrity и fail-closed collector rules.
+- [Offer reconciliation](production/OFFER_RECONCILIATION.md) — M4-очередь цены, НДС, статуса и ghost/missing Offer.
 
 ## Справочные материалы предыдущей реализации
 

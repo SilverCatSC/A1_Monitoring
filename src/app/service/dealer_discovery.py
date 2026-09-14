@@ -87,6 +87,7 @@ class DealerDiscoveryService:
                     record.candidates_found = len(result.hits)
                     record.error = result.error or ('Catalogue end not proven within the page limit' if strict and not result.exhausted else None)
                     record.diagnostics = result.diagnostics
+                    self._attach_page_evidence(result.hits, result.diagnostics)
                     self._apply_observed_hits(
                         source,
                         dealer_url,
@@ -113,6 +114,16 @@ class DealerDiscoveryService:
                     self.progress({'event': 'dealer_catalogue_finished', 'source': source.value, 'candidates': record.candidates_found,
                                    'complete': record.complete, 'error': record.error})
         return summary
+
+    @staticmethod
+    def _attach_page_evidence(hits, diagnostics) -> None:
+        """Keep a positive catalogue candidate linked to its M3 page evidence."""
+        for hit in hits:
+            evidence = diagnostics.get(f'page_{hit.page_number}_evidence')
+            manifest = diagnostics.get(f'page_{hit.page_number}_evidence_manifest')
+            if evidence and manifest:
+                hit.raw['page_evidence'] = evidence
+                hit.raw['page_evidence_manifest'] = manifest
 
     def _apply_observed_hits(
         self, source, dealer_url, hits, observed_at, *, deactivate_missing: bool, run_id=None

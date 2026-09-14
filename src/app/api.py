@@ -60,6 +60,7 @@ from app.service.feedback import (
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import ScanAlreadyRunning, ScanConfigurationError
+from app.service.offer_reconciliation import offer_review_queue
 from app.service.reconciliation import reconciliation_context
 from app.service.report import (
     dashboard_context,
@@ -207,6 +208,11 @@ def settings_html(request: Request, db: Session = Depends(get_db)):
 @router.get('/dashboard/reconciliation', response_class=HTMLResponse)
 def reconciliation_html(request: Request, db: Session = Depends(get_db)):
     return templates.TemplateResponse(request=request, name='reconciliation.html', context={'data': reconciliation_context(db)})
+
+
+@router.get('/reconciliation/review-queue')
+def reconciliation_review_queue(db: Session = Depends(get_db)):
+    return offer_review_queue(db)
 
 
 @router.get('/dashboard/company-site', response_class=HTMLResponse)
@@ -518,6 +524,25 @@ def dealer_candidates(source: str | None = None, active: bool | None = True, db:
             for row in rows
         ]
     }
+
+
+@router.get('/dealer/candidates/{candidate_id}/evidence')
+def dealer_candidate_evidence(candidate_id: str, db: Session = Depends(get_db)):
+    candidate = db.get(DealerListingCandidate, candidate_id)
+    if candidate is None:
+        raise HTTPException(status_code=404, detail='dealer candidate not found')
+    raw = candidate.raw_payload or {}
+    try:
+        path = resolve_named_evidence(raw.get('page_evidence'), settings.evidence_dir)
+        read_evidence_manifest(path.name, settings.evidence_dir)
+    except EvidenceAccessError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return FileResponse(
+        path,
+        media_type='image/png',
+        filename=path.name,
+        content_disposition_type='inline',
+    )
 
 
 @router.post('/import', response_model=ImportResponse)

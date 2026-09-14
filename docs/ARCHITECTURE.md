@@ -79,6 +79,10 @@ candidate-связи старых URL без переписывания `listing
 доказательность молча. [Evidence contract](production/EVIDENCE_CONTRACT.md)
 фиксирует schema, API и fixtures.
 
+С 0.13 M4 строит read-only очередь Offer из последней сверки: она отделяет
+расхождения цены/VIN/года/НДС от missing/ghost публикаций и технической неполноты.
+Ни один finding не меняет связь автоматически; см. [Offer reconciliation](production/OFFER_RECONCILIATION.md).
+
 ## Поддержка
 
 Продуктовые правила — BIBLE.md. Определения вычислений — METRICS.md. Схема
