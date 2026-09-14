@@ -105,3 +105,16 @@ M7. Windows/MSI runtime remains an unaccepted fallback rather than a current
 release gate.
 The latest v6 marketplace cycle remains a valid `partial` result pending link
 reconciliation; see [AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
+
+## Controlled MacBook cycle after VPN owner authorization
+
+After owner authorization, a fresh one-page-per-engine controlled cycle passed
+the MacBook GUI, VPN-admission, service, recovery and visible-browser gates.
+It recorded cycle `527c4ad1-20fd-4967-a814-31ce75fea124` as `partial` with
+zero technical errors, 22 links requiring review and 14 incomplete direct-card
+records; no automatic retry was started. The complete privacy-safe record,
+including the recovery-path repair immediately preceding the run, is in
+[M7_CONTROLLED_CYCLE_2026-09-14.md](M7_CONTROLLED_CYCLE_2026-09-14.md).
+
+This is evidence that the controlled host path works, not M7 acceptance.
+Manual reconciliation and owner sign-off remain required.

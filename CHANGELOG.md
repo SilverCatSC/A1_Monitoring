@@ -1,5 +1,19 @@
 # Журнал изменений
 
+## M7 — MacBook controlled-cycle evidence — 2026-09-14
+
+- После owner authorization и strict private VPN admission MacBook выполнил
+  ровно один cautious cycle `527c4ad1-20fd-4967-a814-31ce75fea124` через
+  visible host Chrome. VPSUS не менялся и не переподключался; Auto.ru и Avito
+  были уже заданы как direct-mode exceptions.
+- Runner корректно завершил цикл `partial` без автоповтора: технических ошибок
+  `0`, но `22` ссылок требуют сверки и `14` direct-card записей неполны.
+  Это корректный review result, не доказательство completed/M7 acceptance.
+- В `48de30f` исправлен Mac recovery path: он использует закрытый loopback DSN
+  Docker из `.env`, а не container-only `localhost:5432`; повторный run прошёл
+  recovery до browser scan. Privacy-safe evidence:
+  [M7_CONTROLLED_CYCLE_2026-09-14.md](docs/production/M7_CONTROLLED_CYCLE_2026-09-14.md).
+
 ## M6.12 — macOS unlocked-session semantics — 2026-09-14
 
 - На разблокированном текущем Mac `CGSSessionScreenIsLocked` отсутствует, а
