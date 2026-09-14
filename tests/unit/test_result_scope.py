@@ -149,6 +149,47 @@ def test_avito_other_city_page_is_results_not_parser_uncertainty(tmp_path, monke
     assert result.diagnostics['page_2'] == 0
 
 
+def test_avito_waits_for_late_listing_cards(tmp_path, monkeypatch):
+    for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'avito_page_delay_seconds'):
+        monkeypatch.setattr(settings, key, 0)
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            page = await browser.new_page()
+
+            async def route_page(route):
+                html = (
+                    '<span data-marker="page-title/count">1</span>'
+                    '<div data-marker="catalog-serp" id="catalogue"></div>'
+                    '<script>setTimeout(() => { document.getElementById("catalogue").innerHTML = '
+                    "'<div data-marker=\\\"item\\\" data-item-id=\\\"1000000001\\\"><a data-marker=\\\"item-title\\\" "
+                    "href=\\\"https://www.avito.ru/moskva/avtomobili/car_1000000001\\\">Машина</a></div>'; }, 50);</script>"
+                )
+                await route.fulfill(content_type='text/html', body=html)
+
+            await page.route('**/*', route_page)
+
+            @asynccontextmanager
+            async def local_page(_playwright):
+                yield page
+
+            monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
+            try:
+                return await AvitoAdapter().scan_filter(
+                    'https://www.avito.ru/moskva/avtomobili/', max_pages=3
+                )
+            finally:
+                await browser.close()
+
+    result = asyncio.run(exercise())
+    assert result.complete is True
+    assert result.exhausted is True
+    assert result.error is None
+    assert len(result.hits) == 1
+
+
 def test_auto_ru_model_filter_requests_list_catalogue(tmp_path, monkeypatch):
     for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'auto_ru_page_delay_seconds'):
         monkeypatch.setattr(settings, key, 0)

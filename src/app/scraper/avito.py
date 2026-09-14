@@ -6,6 +6,7 @@ from collections.abc import Callable
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 
 from app.config import settings
@@ -24,6 +25,13 @@ from app.scraper.browser_session import browser_page
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import pagination_state, primary_cards
 from app.scraper.seller import catalogue_html, seller_page_matches
+
+AVITO_CARD_SELECTOR = (
+    '[data-marker^="item_list_with_filters/item"][data-item-id], '
+    '[data-marker="catalog-serp"] article, article[data-marker="item"], '
+    'div.js-catalog-item-enum[data-item-id], div[data-marker="item"]'
+)
+AVITO_LATE_RENDER_WAIT_SECONDS = 6
 
 
 class AvitoAdapter:
@@ -90,6 +98,19 @@ class AvitoAdapter:
                         if http_status is None or http_status < 400:
                             await page.mouse.wheel(0, 1600)
                             await asyncio.sleep(settings.avito_page_delay_seconds)
+                            # Avito can render the result list after the initial page
+                            # delay.  Wait once for a recognised card before declaring
+                            # a parser uncertainty, while keeping an explicit bounded
+                            # timeout for true empty or changed pages.
+                            if await page.locator(AVITO_CARD_SELECTOR).count() == 0:
+                                try:
+                                    await page.wait_for_selector(
+                                        AVITO_CARD_SELECTOR,
+                                        state='attached',
+                                        timeout=AVITO_LATE_RENDER_WAIT_SECONDS * 1000,
+                                    )
+                                except PlaywrightTimeoutError:
+                                    pass
                         html = await page.content()
                         diagnostics[f'page_{page_number}_requested_url'] = url
                         diagnostics[f'page_{page_number}_final_url'] = page.url
@@ -224,9 +245,7 @@ class AvitoAdapter:
 
     def _extract(self, html: str, page_number: int, *, moscow_only=False) -> list[ListingHit]:
         cards = primary_cards(html,
-            '[data-marker^="item_list_with_filters/item"][data-item-id], '
-            '[data-marker="catalog-serp"] article, article[data-marker="item"], '
-            'div.js-catalog-item-enum[data-item-id], div[data-marker="item"]',
+            AVITO_CARD_SELECTOR,
             root_selector='[data-marker="catalog-serp"]',
         )
         results: list[ListingHit] = []
