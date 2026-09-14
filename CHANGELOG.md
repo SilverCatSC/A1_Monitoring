@@ -1,5 +1,18 @@
 # Журнал изменений
 
+## M5 — operator release — 2026-09-14
+
+- Добавлены серверные роли `admin`, `operator`, `marketing`, `sales_director`.
+  При включённой аутентификации роль определяется только `ADMIN_*` и
+  secret-backed `AUTH_USERS_JSON`; отправленное браузером имя не повышает права.
+- Маркетинг создаёт ticket и ведёт его до `fixed`, РОП подтверждает только
+  `fixed → confirmed`, а admin/operator выполняют все допустимые переходы.
+  Подтверждение и смена marketplace-link ограничены admin/operator.
+- Ticket для M4 finding создаётся только для текущей сверки и хранит
+  `reconciliation_id` / `finding_code`; добавлен read-only отчёт по исключениям.
+- Добавлена аддитивная миграция `20260914_0009`; версия повышена до `0.14.0`.
+  Офлайн tests не являются живой приёмкой ролей, площадок или Windows.
+
 ## M4 — объяснимая сверка Offer — 2026-09-14
 
 - Добавлена read-only очередь Offer в API и dashboard: цена, VIN, год, НДС Avito,

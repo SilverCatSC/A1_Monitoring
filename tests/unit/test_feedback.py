@@ -1,10 +1,13 @@
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
+from fastapi import HTTPException
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.api import create_reconciliation_feedback
 from app.models import (
     Base,
     EngineType,
@@ -12,10 +15,14 @@ from app.models import (
     FeedbackStatus,
     Listing,
     ListingObservation,
+    ListingReconciliation,
     ManagerFeedback,
     ScanRun,
     SearchFilter,
 )
+from app.schemas import OfferFindingFeedbackCreate
+from app.security import AuthenticatedActor
+from app.service.exception_report import offer_exception_report
 from app.service.feedback import FeedbackService, FeedbackValidationError
 from app.service.report import feedback_queue_context
 
@@ -151,3 +158,99 @@ def test_feedback_queue_template_escapes_content_and_has_workflow(session):
     assert '&lt;img src=x onerror=alert(1)&gt;' in html
     assert "method:'PATCH'" in html
     assert 'Очередь проверки и подтверждения исправлений' in html
+
+
+def _reconciliation(session, *, details=None):
+    listing = Listing(
+        id='reconciliation-listing',
+        vehicle_signature='reconciliation-listing',
+        source_auto_ru='https://auto.ru/cars/used/sale/mercedes/v/1132311022/',
+        price_hint=10_000_000,
+        is_active=True,
+    )
+    session.add(listing)
+    session.flush()
+    record = ListingReconciliation(
+        id='reconciliation',
+        batch_id='batch',
+        listing_id=listing.id,
+        source=EngineType.AUTO_RU,
+        state='verified',
+        url=listing.source_auto_ru,
+        reason='fixture',
+        details=details
+        or {
+            'direct_inspection': {
+                'state': 'active',
+                'status_code': 'active',
+                'evidence': 'direct.png',
+                'evidence_manifest': 'direct.png.json',
+                'card': {'price': 11_000_000},
+            }
+        },
+    )
+    session.add(record)
+    session.commit()
+    return listing, record
+
+
+def _actor_request(username='marketing', role='marketing'):
+    return SimpleNamespace(
+        state=SimpleNamespace(actor=AuthenticatedActor(username=username, role=role))
+    )
+
+
+def test_reconciliation_feedback_requires_current_finding_and_preserves_link(session, monkeypatch):
+    _, record = _reconciliation(session)
+    monkeypatch.setattr('app.api.settings.auth_enabled', True)
+
+    result = create_reconciliation_feedback(
+        record.id,
+        OfferFindingFeedbackCreate(finding_code='price_mismatch', message='Проверить карточку'),
+        _actor_request(),
+        session,
+    )
+
+    ticket = session.get(ManagerFeedback, result['feedback_id'])
+    assert (ticket.reconciliation_id, ticket.finding_code) == (record.id, 'price_mismatch')
+    assert ticket.manager_name == 'marketing'
+    assert ticket.category == 'price_error'
+
+    with pytest.raises(HTTPException, match='finding is no longer current'):
+        create_reconciliation_feedback(
+            record.id,
+            OfferFindingFeedbackCreate(finding_code='missing_offer', message='Не должно создаваться'),
+            _actor_request(),
+            session,
+        )
+
+
+def test_exception_report_keeps_fact_and_feedback_as_separate_layers(session):
+    _, record = _reconciliation(session)
+    ticket_id = FeedbackService(session).create(
+        message='Цена передана в маркетинг',
+        reconciliation_id=record.id,
+        finding_code='price_mismatch',
+        severity='high',
+        category='price_error',
+        manager_name='marketing',
+    )
+
+    report = offer_exception_report(session)
+    item = next(row for row in report['exceptions'] if row['code'] == 'price_mismatch')
+    assert item['open_feedback_count'] == 1
+    assert item['feedback'][0]['id'] == ticket_id
+    assert report['summary']['findings_with_feedback'] == 1
+
+
+def test_feedback_queue_only_offers_transitions_allowed_for_role(session):
+    feedback_id = FeedbackService(session).create(message='Проверить цену')
+    marketing = feedback_queue_context(session, role='marketing')
+    assert set(marketing['rows'][0]['allowed_next']) == {'checking', 'assigned'}
+
+    FeedbackService(session).update_status(feedback_id, 'checking', actor='operator')
+    director = feedback_queue_context(session, role='sales_director')
+    assert director['rows'][0]['allowed_next'] == []
+    FeedbackService(session).update_status(feedback_id, 'fixed', actor='operator')
+    director = feedback_queue_context(session, role='sales_director')
+    assert director['rows'][0]['allowed_next'] == ['confirmed']

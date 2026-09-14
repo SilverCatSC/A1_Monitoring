@@ -9,6 +9,7 @@ from app.models import (
     FeedbackStatus,
     Listing,
     ListingObservation,
+    ListingReconciliation,
     ManagerFeedback,
     SearchFilter,
 )
@@ -46,6 +47,8 @@ class FeedbackService:
         listing_id: str | None = None,
         filter_id: str | None = None,
         observed_id: str | None = None,
+        reconciliation_id: str | None = None,
+        finding_code: str | None = None,
         severity: str = 'medium',
         category: str = 'other',
         manager_name: str | None = None,
@@ -71,6 +74,18 @@ class FeedbackService:
                 raise FeedbackValidationError('filter does not match observation')
             listing_id = observation.listing_id
             filter_id = observation.filter_id
+        if reconciliation_id:
+            reconciliation = self.db.query(ListingReconciliation).filter(
+                ListingReconciliation.id == reconciliation_id
+            ).one_or_none()
+            if reconciliation is None:
+                raise FeedbackValidationError('reconciliation not found')
+            if listing_id and listing_id != reconciliation.listing_id:
+                raise FeedbackValidationError('listing does not match reconciliation')
+            listing_id = reconciliation.listing_id
+        clean_finding_code = (finding_code or '').strip() or None
+        if clean_finding_code and not reconciliation_id:
+            raise FeedbackValidationError('finding code requires reconciliation')
         if listing_id and not self.db.query(Listing).filter(Listing.id == listing_id).first():
             raise FeedbackValidationError('listing not found')
         if filter_id and not self.db.query(SearchFilter).filter(SearchFilter.id == filter_id).first():
@@ -81,6 +96,8 @@ class FeedbackService:
             filter_id=filter_id,
             run_id=observation.run_id if observation else None,
             observed_id=observed_id,
+            reconciliation_id=reconciliation_id,
+            finding_code=clean_finding_code,
             severity=severity,
             category=category,
             message=clean_message,

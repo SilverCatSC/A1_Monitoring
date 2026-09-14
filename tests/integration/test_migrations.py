@@ -28,8 +28,12 @@ def test_migration_builds_clean_database(tmp_path):
             'offer_vehicle_links',
         } <= tables
         with engine.connect() as connection:
+            feedback_columns = {
+                row['name'] for row in inspect(engine).get_columns('manager_feedback')
+            }
+            assert {'reconciliation_id', 'finding_code'} <= feedback_columns
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                '20260914_0008'
+                '20260914_0009'
             )
     finally:
         engine.dispose()
@@ -66,7 +70,7 @@ def test_migration_adopts_pre_alembic_schema_without_data_loss(tmp_path):
                 text("SELECT state FROM offer_vehicle_links WHERE method = 'legacy_backfill'")
             ).scalar_one() == 'candidate'
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                '20260914_0008'
+                '20260914_0009'
             )
     finally:
         engine.dispose()

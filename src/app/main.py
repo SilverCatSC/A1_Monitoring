@@ -11,7 +11,11 @@ from app.api import router
 from app.config import settings
 from app.db import init_db
 from app.scheduler import start_scheduler
-from app.security import valid_basic_authorization, validate_security_configuration
+from app.security import (
+    AuthenticatedActor,
+    authenticate_basic_authorization,
+    validate_security_configuration,
+)
 
 
 @asynccontextmanager
@@ -22,6 +26,7 @@ async def lifespan(_app: FastAPI):
         username=settings.admin_username,
         password=settings.admin_password,
         network_profile=settings.network_profile,
+        auth_users_json=settings.auth_users_json,
     )
     init_db()
     scheduler = (
@@ -46,16 +51,21 @@ async def basic_auth(request, call_next):
         '/api/v1/health',
         '/api/v1/ready',
     }:
-        if not valid_basic_authorization(
+        actor = authenticate_basic_authorization(
             request.headers.get('authorization'),
-            settings.admin_username,
-            settings.admin_password,
-        ):
+            admin_username=settings.admin_username,
+            admin_password=settings.admin_password,
+            auth_users_json=settings.auth_users_json,
+        )
+        if actor is None:
             return JSONResponse(
                 {'detail': 'authentication required'},
                 status_code=401,
                 headers={'WWW-Authenticate': 'Basic realm="A1 Search Monitor"'},
             )
+        request.state.actor = actor
+    elif not settings.auth_enabled:
+        request.state.actor = AuthenticatedActor(username='stage', role='admin')
     return await call_next(request)
 
 

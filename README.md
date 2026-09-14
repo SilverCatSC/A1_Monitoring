@@ -4,7 +4,7 @@
 Программа связывает реестр маркетинга с объявлениями, проверяет выдачу по фильтрам,
 открывает прямые карточки и сохраняет историю с доказательствами для отдела продаж.
 
-Версия приложения: **0.13.0**. Аудит и перенос: **14 сентября 2026**.
+Версия приложения: **0.14.0**. Аудит и перенос: **14 сентября 2026**.
 Основная папка исходников: `/Users/filaret/Desktop/Monitoring`.
 Целевая эксплуатация: MSI, Windows 11, Intel Core Ultra 5 125U, 16 ГБ RAM.
 
@@ -24,6 +24,7 @@
 | Идентичность без VIN и ручная перевыкладка | [M2 Stable identity](docs/production/STABLE_IDENTITY.md) |
 | Evidence, blocked/CAPTCHA и безопасная смена вёрстки | [M3 Evidence contract](docs/production/EVIDENCE_CONTRACT.md) |
 | Цена, НДС, статус, missing/ghost Offer и действия | [M4 Offer reconciliation](docs/production/OFFER_RECONCILIATION.md) |
+| Роли, обратная связь и отчёт по исключениям | [M5 Operator release](docs/production/OPERATOR_RELEASE.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
 
 ## Текущее состояние

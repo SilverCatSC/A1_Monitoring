@@ -1,5 +1,6 @@
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from fastapi import HTTPException
@@ -33,6 +34,7 @@ from app.scraper.base import (
     is_marketplace_search_url,
 )
 from app.scraper.seller import direct_page_status, seller_page_matches
+from app.security import AuthenticatedActor
 from app.service.dealer_discovery import DealerDiscoveryService
 from app.service.filters import CANONICAL_FILTERS
 from app.service.monitor import MonitorService
@@ -48,6 +50,7 @@ def db(tmp_path, monkeypatch):
     for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'scan_filter_pause_min_seconds', 'scan_filter_pause_max_seconds'):
         monkeypatch.setattr(settings, key, 0)
     monkeypatch.setattr(settings, 'network_profile', 'local_browser')
+    monkeypatch.setattr(settings, 'auth_enabled', False)
     monkeypatch.setattr(settings, 'scan_enabled_engines', 'auto_ru')
     monkeypatch.setattr('app.service.reconciliation.SELLER_SOURCES', {'auto_ru': [DEALER]})
     engine = create_engine(f'sqlite:///{tmp_path / "preflight.db"}')
@@ -88,6 +91,18 @@ def reconcile(db, scan_result, inspector=no_status):
     adapter = Adapter(scan_result)
     service = SellerReconciliationService(db, discovery=DealerDiscoveryService(db, auto_adapter=adapter), inspector=inspector)
     return service.run(), adapter
+
+
+def operator_request():
+    return SimpleNamespace(
+        state=SimpleNamespace(actor=AuthenticatedActor(username='operator', role='operator'))
+    )
+
+
+def marketing_request():
+    return SimpleNamespace(
+        state=SimpleNamespace(actor=AuthenticatedActor(username='marketing', role='marketing'))
+    )
 
 
 def test_fresh_membership_proves_link_but_does_not_create_visibility(db):
@@ -195,25 +210,48 @@ def test_operator_confirmation_is_pinned_and_requires_new_preflight(db):
     reconcile(db, result([NEW]))
     record = db.query(ListingReconciliation).one()
     payload = ReconciliationConfirm(url=NEW, actor='Оператор', reason='Сверен автомобиль')
-    confirm_reconciliation(record.id, payload, db)
+    confirm_reconciliation(record.id, payload, operator_request(), db)
     assert db.get(Listing, 'car').source_auto_ru == NEW
     assert db.query(ListingLinkOverride).one().url == NEW
     assert reconciliation_context(db)['rows'][0]['changed'] is True
     with pytest.raises(HTTPException) as error:
-        confirm_reconciliation(record.id, payload, db)
+        confirm_reconciliation(record.id, payload, operator_request(), db)
     assert error.value.status_code == 409
+
+
+def test_marketing_cannot_confirm_a_replacement_link(db):
+    reconcile(db, result([NEW]))
+    record = db.query(ListingReconciliation).one()
+    with pytest.raises(HTTPException) as error:
+        confirm_reconciliation(
+            record.id,
+            ReconciliationConfirm(url=NEW, actor='marketing', reason='Проверено'),
+            marketing_request(),
+            db,
+        )
+    assert error.value.status_code == 403
 
 
 def test_confirmation_rejects_unrelated_url_and_expired_snapshot(db):
     reconcile(db, result([NEW]))
     record = db.query(ListingReconciliation).one()
     with pytest.raises(HTTPException) as error:
-        confirm_reconciliation(record.id, ReconciliationConfirm(url=OLD, actor='Оператор', reason='wrong candidate'), db)
+        confirm_reconciliation(
+            record.id,
+            ReconciliationConfirm(url=OLD, actor='Оператор', reason='wrong candidate'),
+            operator_request(),
+            db,
+        )
     assert error.value.status_code == 422
     record.checked_at = datetime.now(UTC) - timedelta(days=2)
     db.commit()
     with pytest.raises(HTTPException) as error:
-        confirm_reconciliation(record.id, ReconciliationConfirm(url=NEW, actor='Оператор', reason='old'), db)
+        confirm_reconciliation(
+            record.id,
+            ReconciliationConfirm(url=NEW, actor='Оператор', reason='old'),
+            operator_request(),
+            db,
+        )
     assert error.value.status_code == 409
     assert db.query(ListingLinkOverride).count() == 0
 
@@ -224,7 +262,12 @@ def test_confirmation_cannot_take_another_active_cars_link(db):
     db.add(Listing(id='other', vehicle_signature='other', source_auto_ru=NEW))
     db.commit()
     with pytest.raises(HTTPException) as error:
-        confirm_reconciliation(record.id, ReconciliationConfirm(url=NEW, actor='Оператор', reason='Проверено'), db)
+        confirm_reconciliation(
+            record.id,
+            ReconciliationConfirm(url=NEW, actor='Оператор', reason='Проверено'),
+            operator_request(),
+            db,
+        )
     assert error.value.status_code == 409
     assert db.get(Listing, 'car').source_auto_ru == OLD
     assert db.query(ListingLinkOverride).count() == 0

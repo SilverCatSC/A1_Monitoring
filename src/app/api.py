@@ -9,6 +9,13 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 
+from app.access import (
+    ROLE_LABELS,
+    can_create_feedback,
+    can_transition_feedback,
+    current_actor,
+    require_roles,
+)
 from app.config import settings
 from app.db import get_db
 from app.importer.service import SourceImporter, SourceImportError
@@ -36,6 +43,7 @@ from app.schemas import (
     ImportResponse,
     KPIResponse,
     ListingLinkUpdate,
+    OfferFindingFeedbackCreate,
     ReconciliationConfirm,
     TriggerCycleResponse,
     TriggerScanResponse,
@@ -51,6 +59,7 @@ from app.service.evidence import (
     resolve_named_evidence,
     resolve_observation_evidence,
 )
+from app.service.exception_report import offer_exception_report
 from app.service.feedback import (
     ALLOWED_CATEGORIES,
     ALLOWED_SEVERITIES,
@@ -207,12 +216,22 @@ def settings_html(request: Request, db: Session = Depends(get_db)):
 
 @router.get('/dashboard/reconciliation', response_class=HTMLResponse)
 def reconciliation_html(request: Request, db: Session = Depends(get_db)):
-    return templates.TemplateResponse(request=request, name='reconciliation.html', context={'data': reconciliation_context(db)})
+    actor = current_actor(request)
+    data = reconciliation_context(db)
+    data['can_create_feedback'] = can_create_feedback(actor.role)
+    data['actor_name'] = actor.username
+    data['actor_role'] = actor.role
+    return templates.TemplateResponse(request=request, name='reconciliation.html', context={'data': data})
 
 
 @router.get('/reconciliation/review-queue')
 def reconciliation_review_queue(db: Session = Depends(get_db)):
     return offer_review_queue(db)
+
+
+@router.get('/reconciliation/exceptions-report')
+def reconciliation_exceptions_report(db: Session = Depends(get_db)):
+    return offer_exception_report(db)
 
 
 @router.get('/dashboard/company-site', response_class=HTMLResponse)
@@ -226,7 +245,15 @@ def company_site_html(request: Request, db: Session = Depends(get_db)):
 
 
 @router.post('/dealer/reconciliation/{check_id}/confirm')
-def confirm_reconciliation(check_id: str, payload: ReconciliationConfirm, db: Session = Depends(get_db)):
+def confirm_reconciliation(
+    check_id: str,
+    payload: ReconciliationConfirm,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = require_roles(request, 'admin', 'operator')
+    if not settings.auth_enabled and not (payload.actor or '').strip():
+        raise HTTPException(status_code=422, detail='actor is required when authentication is disabled')
     try:
         with cycle_lock(db):
             record = db.get(ListingReconciliation, check_id)
@@ -247,8 +274,13 @@ def confirm_reconciliation(check_id: str, payload: ReconciliationConfirm, db: Se
                 other_url = other.source_auto_ru if record.source == EngineType.AUTO_RU else other.source_avito
                 if canonical_listing_key(record.source, other_url) == canonical_listing_key(record.source, payload.url):
                     raise HTTPException(status_code=409, detail='Это объявление уже связано с другим активным автомобилем')
-            ListingRegistryService(db).update_link(listing.id, source=record.source, url=payload.url,
-                actor=payload.actor, reason=f'Сверка {record.id}: {payload.reason}')
+            ListingRegistryService(db).update_link(
+                listing.id,
+                source=record.source,
+                url=payload.url,
+                actor=actor.username if settings.auth_enabled else payload.actor.strip(),
+                reason=f'Сверка {record.id}: {payload.reason}',
+            )
             db.commit()
             return {'status': 'saved', 'listing_id': listing.id}
     except ScanAlreadyRunning as exc:
@@ -287,6 +319,7 @@ def feedback_queue_html(
     page: int = 1,
     db: Session = Depends(get_db),
 ):
+    actor = current_actor(request)
     allowed_statuses = {'open', 'all', *(item.value for item in FeedbackStatus)}
     if status not in allowed_statuses:
         raise HTTPException(status_code=422, detail='unsupported feedback status')
@@ -304,8 +337,12 @@ def feedback_queue_html(
                 severity=severity,
                 category=category,
                 page=page,
+                role=actor.role,
             ),
             'auth_enabled': settings.auth_enabled,
+            'actor_name': actor.username,
+            'actor_role': actor.role,
+            'actor_role_label': ROLE_LABELS.get(actor.role, actor.role),
         },
     )
 
@@ -651,14 +688,20 @@ def list_listings(
 
 
 @router.patch('/listings/{listing_id}/links')
-def update_listing_link(listing_id: str, payload: ListingLinkUpdate, db: Session = Depends(get_db)):
+def update_listing_link(
+    listing_id: str,
+    payload: ListingLinkUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = require_roles(request, 'admin', 'operator')
     try:
         with cycle_lock(db):
             listing = ListingRegistryService(db).update_link(
                 listing_id,
                 source=payload.source,
                 url=payload.url,
-                actor=payload.actor,
+                actor=actor.username if settings.auth_enabled else payload.actor,
                 reason=payload.reason,
             )
             db.commit()
@@ -675,7 +718,14 @@ def update_listing_link(listing_id: str, payload: ListingLinkUpdate, db: Session
 
 
 @router.post('/feedback')
-def create_feedback(payload: FeedbackCreate, db: Session = Depends(get_db)):
+def create_feedback(
+    payload: FeedbackCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = current_actor(request)
+    if not can_create_feedback(actor.role):
+        raise HTTPException(status_code=403, detail='your role cannot create feedback')
     service = FeedbackService(db)
     try:
         feedback_id = service.create(
@@ -685,12 +735,69 @@ def create_feedback(payload: FeedbackCreate, db: Session = Depends(get_db)):
             observed_id=payload.observed_id,
             severity=payload.severity,
             category=payload.category,
-            manager_name=payload.manager_name,
+            manager_name=actor.username if settings.auth_enabled else payload.manager_name,
             source=payload.source,
         )
     except FeedbackValidationError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
-    return {'feedback_id': feedback_id, 'status': 'created'}
+    return {'feedback_id': feedback_id, 'status': 'created', 'actor': actor.username, 'role': actor.role}
+
+
+@router.post('/reconciliation/{reconciliation_id}/feedback')
+def create_reconciliation_feedback(
+    reconciliation_id: str,
+    payload: OfferFindingFeedbackCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Open a ticket only for a current, explainable M4 finding."""
+    actor = current_actor(request)
+    if not can_create_feedback(actor.role):
+        raise HTTPException(status_code=403, detail='your role cannot create feedback')
+    finding = next(
+        (
+            item
+            for item in offer_review_queue(db)['findings']
+            if item.get('reconciliation_id') == reconciliation_id
+            and item.get('code') == payload.finding_code
+        ),
+        None,
+    )
+    if finding is None:
+        raise HTTPException(
+            status_code=409,
+            detail='finding is no longer current; refresh reconciliation before creating feedback',
+        )
+    category = {
+        'price_mismatch': 'price_error',
+        'vin_mismatch': 'data_error',
+        'year_mismatch': 'data_error',
+        'vat_not_disclosed': 'description_error',
+        'vat_ambiguous': 'description_error',
+        'missing_offer': 'visibility_error',
+        'missing_offer_link': 'visibility_error',
+        'replacement_candidate': 'visibility_error',
+        'offer_not_verified_in_catalogue': 'visibility_error',
+    }.get(payload.finding_code, 'other')
+    try:
+        feedback_id = FeedbackService(db).create(
+            message=payload.message,
+            reconciliation_id=reconciliation_id,
+            finding_code=payload.finding_code,
+            severity=finding['severity'],
+            category=category,
+            manager_name=actor.username,
+            source=finding['source'],
+        )
+    except FeedbackValidationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {
+        'feedback_id': feedback_id,
+        'status': 'created',
+        'finding_code': payload.finding_code,
+        'actor': actor.username,
+        'role': actor.role,
+    }
 
 
 @router.get('/feedback')
@@ -736,19 +843,40 @@ def list_feedback(status: str | None = None, db: Session = Depends(get_db)):
 
 
 @router.patch('/feedback/{feedback_id}')
-def update_feedback(feedback_id: str, payload: FeedbackUpdate, db: Session = Depends(get_db)):
+def update_feedback(
+    feedback_id: str,
+    payload: FeedbackUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    actor = current_actor(request)
+    item = db.get(ManagerFeedback, feedback_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail='feedback not found')
+    try:
+        target = FeedbackStatus(payload.status)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail='unsupported feedback status') from exc
+    if not can_transition_feedback(role=actor.role, current=item.status, target=target):
+        raise HTTPException(status_code=403, detail='your role cannot perform this feedback transition')
     try:
         item = FeedbackService(db).update_status(
             feedback_id,
             payload.status,
-            actor=payload.actor,
+            actor=actor.username if settings.auth_enabled else (payload.actor or ''),
             note=payload.note,
             assignee=payload.assignee,
         )
     except FeedbackValidationError as exc:
         code = 404 if str(exc) == 'feedback not found' else 422
         raise HTTPException(status_code=code, detail=str(exc)) from exc
-    return {'id': item.id, 'status': item.status.value, 'assignee': item.assignee}
+    return {
+        'id': item.id,
+        'status': item.status.value,
+        'assignee': item.assignee,
+        'actor': actor.username,
+        'role': actor.role,
+    }
 
 
 @router.get('/status/imports')

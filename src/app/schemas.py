@@ -53,7 +53,7 @@ class ListingLinkUpdate(BaseModel):
 
 class ReconciliationConfirm(BaseModel):
     url: str = Field(max_length=3000)
-    actor: str = Field(min_length=1, max_length=150)
+    actor: str | None = Field(default=None, max_length=150)
     reason: str = Field(min_length=1, max_length=2000)
 
 
@@ -68,9 +68,15 @@ class FeedbackCreate(BaseModel):
     source: str | None = None
 
 
+class OfferFindingFeedbackCreate(BaseModel):
+    finding_code: str = Field(min_length=1, max_length=120)
+    message: str = Field(min_length=1, max_length=4000)
+    severity: str = 'medium'
+
+
 class FeedbackUpdate(BaseModel):
     status: str
-    actor: str
+    actor: str | None = None
     note: str | None = None
     assignee: str | None = None
 

@@ -41,6 +41,16 @@ def _apply_compatibility_migrations() -> None:
         connection.exec_driver_sql(
             'ALTER TABLE manager_feedback ADD COLUMN IF NOT EXISTS assignee VARCHAR'
         )
+        connection.exec_driver_sql(
+            'ALTER TABLE manager_feedback ADD COLUMN IF NOT EXISTS reconciliation_id VARCHAR'
+        )
+        connection.exec_driver_sql(
+            'ALTER TABLE manager_feedback ADD COLUMN IF NOT EXISTS finding_code VARCHAR'
+        )
+        connection.exec_driver_sql(
+            'CREATE INDEX IF NOT EXISTS ix_manager_feedback_reconciliation_id '
+            'ON manager_feedback (reconciliation_id)'
+        )
 
 
 def get_db() -> Generator[Session, None, None]:

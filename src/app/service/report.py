@@ -7,6 +7,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy import or_
 
+from app.access import can_transition_feedback
 from app.config import BUSINESS_TRUSTED_NETWORK_PROFILES, PRODUCTION_NETWORK_PROFILES, settings
 from app.models import (
     AbsenceEpisode,
@@ -661,6 +662,7 @@ def feedback_queue_context(
     category: str | None = None,
     page: int = 1,
     page_size: int = 50,
+    role: str = 'admin',
 ) -> dict:
     safe_page = max(page, 1)
     safe_page_size = min(max(page_size, 10), 100)
@@ -725,6 +727,7 @@ def feedback_queue_context(
                 'allowed_next': [
                     item.value
                     for item in sorted(ALLOWED_TRANSITIONS[ticket.status], key=lambda item: item.value)
+                    if can_transition_feedback(role=role, current=ticket.status, target=item)
                 ],
             }
             for ticket in tickets

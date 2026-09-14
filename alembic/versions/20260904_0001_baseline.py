@@ -31,6 +31,8 @@ def upgrade() -> None:
         'search_filters',
         'listings',
         'listing_link_events',
+        'listing_link_overrides',
+        'listing_reconciliations',
         'vehicle_filter_expectations',
         'scan_runs',
         'listing_observations',

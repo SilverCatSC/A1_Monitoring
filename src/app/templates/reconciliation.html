@@ -1,18 +1,101 @@
-{% extends 'base.html' %}{% set active_page = 'reconciliation' %}
+{% extends 'base.html' %}
+{% set active_page = 'reconciliation' %}
 {% block title %}Сверка ссылок{% endblock %}
 {% block content %}
-<header class="page-heading"><div><span class="eyebrow">ДО ПОИСКОВОГО МОНИТОРИНГА</span><h1>Сверка с каталогами продавца</h1><p class="muted">Перевыкладка объявления не равна непоказу автомобиля в поиске</p></div></header>
+{% set actor_name = data.actor_name|default('stage') %}
+{% set actor_role = data.actor_role|default('admin') %}
+<header class="page-heading">
+  <div>
+    <span class="eyebrow">ДО ПОИСКОВОГО МОНИТОРИНГА</span>
+    <h1>Сверка с каталогами продавца</h1>
+    <p class="muted">Перевыкладка объявления не равна непоказу автомобиля в поиске</p>
+  </div>
+</header>
+
 <div class="notice">Модель и цена помогают подобрать кандидатов, но не доказывают, что это тот же автомобиль. Сверьте VIN, комплектацию и фотографии перед подтверждением. Google-таблица не изменяется; локально подтверждённая ссылка защищена от перезаписи импортом.</div>
-<section class="panel"><div class="section-head"><h2>{{ data.issues }} связей требуют внимания</h2><span class="muted">{{ data.total }} связей · {{ data.last_time or 'Сверка ещё не запускалась' }}{% if data.last_time %} МСК{% endif %}</span></div><p>Этап запускается автоматически перед каждым полным мониторингом через видимый Chrome. Старая ссылка, отметка о снятии, CAPTCHA и неполный каталог не становятся подтверждённым непоказом.</p><details><summary>Проверяемые каталоги</summary>{% for source, urls in data.sources.items() %}{% for url in urls %}<p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ 'Auto.ru' if source == 'auto_ru' else 'Avito' }} · {{ 'Коммерческие' if '/lcv/' in url else 'Автомобили' }}</a></p>{% endfor %}{% endfor %}</details></section>
-{% set queue = data.review_queue %}<section class="panel"><div class="section-head"><div><h2>Очередь Offer: {{ queue.summary.total }} проверок</h2><p class="muted">Это объяснимые факты, а не автоматические изменения ссылок или статусов автомобилей.</p></div><a class="button secondary" href="/api/v1/reconciliation/review-queue" target="_blank">JSON очереди</a></div>{% for item in queue.findings %}{% set values = item['values'] %}<div class="insight"><div><strong>{% if item.listing_id %}<a href="/api/v1/dashboard/listings/{{ item.listing_id }}">{{ item.listing_name }}</a>{% else %}Новая публикация из каталога{% endif %} · {{ 'Auto.ru' if item.source == 'auto_ru' else 'Avito' }}</strong><p>{{ item.summary }}</p><p class="helper"><strong>Действие:</strong> {{ item.action }}</p>{% if values.registry_price is defined or values.card_price is defined %}<p class="helper">Цена реестра: {{ values.registry_price or '—' }} · карточка: {{ values.card_price or '—' }}</p>{% endif %}{% if values.candidate_title %}<p class="helper">Кандидат: {{ values.candidate_title }}{% if values.candidate_price %} · {{ '{:,.0f}'.format(values.candidate_price).replace(',', ' ') }} ₽{% endif %}</p>{% endif %}{% if item.proof %}<a href="{{ item.proof }}" target="_blank">Открыть доказательство →</a>{% endif %}</div><span class="badge {{ 'technical_error' if item.severity == 'high' else 'absent_uncertain' }}">{{ 'Высокий' if item.severity == 'high' else 'Средний' if item.severity == 'medium' else 'Низкий' }} приоритет</span></div>{% else %}<p class="empty">По последним проверяемым данным открытых расхождений Offer нет.</p>{% endfor %}</section>
-{% for item in data.rows %}{% set r = item.record %}<section class="panel">
-<div class="section-head"><div><a class="table-link" href="/api/v1/dashboard/listings/{{ r.listing_id }}">{{ item.name }}</a><span class="subline">{{ item.vin }} · {{ 'Auto.ru' if r.source.value == 'auto_ru' else 'Avito' }} · {{ item.time }} МСК</span></div><span class="badge {{ 'found' if r.state == 'verified' and not item.changed else 'technical_error' }}">{{ item.label }}</span></div>
-<p class="helper">{{ r.reason }}</p>{% if item.current_url %}<p><a href="{{ item.current_url }}" target="_blank" rel="noopener noreferrer">Текущая ссылка на объявление</a></p>{% endif %}
-{% if item.direct %}<div class="insight"><div><strong>Прямая карточка: {{ item.direct.reason }}</strong>{% if item.direct.card %}<p>{{ item.direct.card.title or '' }}{% if item.direct.card.price %} · {{ '{:,.0f}'.format(item.direct.card.price).replace(',', ' ') }} ₽{% endif %}{% if item.direct.card.vat_status %} · {{ item.direct.card.vat_status }}{% endif %}</p>{% endif %}{% if item.direct_proof %}<a href="{{ item.direct_proof }}" target="_blank">Открыть скриншот карточки →</a>{% endif %}</div></div>{% endif %}
-{% if item.override %}<p class="helper">Локальная связь подтверждена: {{ item.override.actor }}. {{ 'В таблице другая ссылка — подтверждённая связь сохранена.' if item.conflict else 'Подтверждённая ссылка защищена от импорта.' }}</p>{% endif %}
-{% if r.state != 'verified' and not item.changed %}<details><summary>Кандидаты на замену · {{ r.candidates|length }}</summary>
-{% for c in r.candidates %}<div class="insight"><div><a href="{{ c.url }}" target="_blank" rel="noopener noreferrer">{{ c.title or 'Открыть объявление' }}</a><p>{{ c.price }} · {{ c.basis }}</p></div></div>{% else %}<p>Надёжных кандидатов не найдено. После ручной проверки можно указать ссылку в <a href="/api/v1/dashboard/settings">настройках</a>.</p>{% endfor %}
-{% if r.candidates %}<form class="confirmation-form" data-check-id="{{ r.id }}"><label>Подтверждённое объявление<select name="url" required><option value="">Выберите после проверки автомобиля</option>{% for c in r.candidates %}<option value="{{ c.url }}">{{ c.title or c.id }} · {{ c.price }}</option>{% endfor %}</select></label><label>Кто проверил<input name="actor" required maxlength="150"></label><label>На основании чего установлена связь<textarea name="reason" required maxlength="2000" placeholder="VIN, сверка комплектации, подтверждение ответственного менеджера"></textarea></label><label class="check"><input type="checkbox" required> Подтверждаю: это именно этот автомобиль, а не похожая машина</label><button type="submit">Сохранить подтверждённую связь</button><p class="confirmation-result" role="status"></p></form>{% endif %}</details>{% endif %}
-</section>{% else %}<section class="panel empty">Запустите обычный локальный мониторинг. Сначала здесь появится результат сверки каталогов продавца.</section>{% endfor %}
+
+<section class="panel">
+  <div class="section-head">
+    <h2>{{ data.issues }} связей требуют внимания</h2>
+    <span class="muted">{{ data.total }} связей · {{ data.last_time or 'Сверка ещё не запускалась' }}{% if data.last_time %} МСК{% endif %}</span>
+  </div>
+  <p>Этап запускается автоматически перед каждым полным мониторингом через видимый Chrome. Старая ссылка, отметка о снятии, CAPTCHA и неполный каталог не становятся подтверждённым непоказом.</p>
+  <details><summary>Проверяемые каталоги</summary>
+    {% for source, urls in data.sources.items() %}{% for url in urls %}
+    <p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">{{ 'Auto.ru' if source == 'auto_ru' else 'Avito' }} · {{ 'Коммерческие' if '/lcv/' in url else 'Автомобили' }}</a></p>
+    {% endfor %}{% endfor %}
+  </details>
+</section>
+
+{% set queue = data.review_queue %}
+<section class="panel">
+  <div class="section-head">
+    <div>
+      <h2>Очередь Offer: {{ queue.summary.total }} проверок</h2>
+      <p class="muted">Это объяснимые факты, а не автоматические изменения ссылок или статусов автомобилей.</p>
+    </div>
+    <div>
+      <a class="button secondary" href="/api/v1/reconciliation/review-queue" target="_blank">JSON очереди</a>
+      <a class="button secondary" href="/api/v1/reconciliation/exceptions-report" target="_blank">Отчёт по исключениям</a>
+    </div>
+  </div>
+  <p class="helper">Исполнитель: {{ actor_name }} · {{ actor_role }}. Создание обращения фиксирует finding и автора; оно не исправляет данные площадки и не подтверждает Offer.</p>
+  {% for item in queue.findings %}
+  {% set values = item['values'] %}
+  <div class="insight">
+    <div>
+      <strong>{% if item.listing_id %}<a href="/api/v1/dashboard/listings/{{ item.listing_id }}">{{ item.listing_name }}</a>{% else %}Новая публикация из каталога{% endif %} · {{ 'Auto.ru' if item.source == 'auto_ru' else 'Avito' }}</strong>
+      <p>{{ item.summary }}</p>
+      <p class="helper"><strong>Действие:</strong> {{ item.action }}</p>
+      {% if values.registry_price is defined or values.card_price is defined %}<p class="helper">Цена реестра: {{ values.registry_price or '—' }} · карточка: {{ values.card_price or '—' }}</p>{% endif %}
+      {% if values.candidate_title %}<p class="helper">Кандидат: {{ values.candidate_title }}{% if values.candidate_price %} · {{ '{:,.0f}'.format(values.candidate_price).replace(',', ' ') }} ₽{% endif %}</p>{% endif %}
+      {% if item.proof %}<a href="{{ item.proof }}" target="_blank">Открыть доказательство →</a>{% endif %}
+      {% if data.can_create_feedback and item.reconciliation_id %}
+      <form class="offer-feedback-form" data-reconciliation-id="{{ item.reconciliation_id }}" data-finding-code="{{ item.code }}">
+        <label>Что передать в работу<textarea name="message" required maxlength="4000" placeholder="Контекст для маркетинга или РОП; evidence останется привязанным к finding"></textarea></label>
+        <button type="submit">Создать обращение</button>
+        <p class="offer-feedback-result" role="status"></p>
+      </form>
+      {% elif not item.reconciliation_id %}
+      <p class="helper">Для publication без привязанной сверки нельзя создать ticket как будто она относится к известному автомобилю.</p>
+      {% endif %}
+    </div>
+    <span class="badge {{ 'technical_error' if item.severity == 'high' else 'absent_uncertain' }}">{{ 'Высокий' if item.severity == 'high' else 'Средний' if item.severity == 'medium' else 'Низкий' }} приоритет</span>
+  </div>
+  {% else %}<p class="empty">По последним проверяемым данным открытых расхождений Offer нет.</p>{% endfor %}
+</section>
+
+{% for item in data.rows %}
+{% set r = item.record %}
+<section class="panel">
+  <div class="section-head">
+    <div><a class="table-link" href="/api/v1/dashboard/listings/{{ r.listing_id }}">{{ item.name }}</a><span class="subline">{{ item.vin }} · {{ 'Auto.ru' if r.source.value == 'auto_ru' else 'Avito' }} · {{ item.time }} МСК</span></div>
+    <span class="badge {{ 'found' if r.state == 'verified' and not item.changed else 'technical_error' }}">{{ item.label }}</span>
+  </div>
+  <p class="helper">{{ r.reason }}</p>
+  {% if item.current_url %}<p><a href="{{ item.current_url }}" target="_blank" rel="noopener noreferrer">Текущая ссылка на объявление</a></p>{% endif %}
+  {% if item.direct %}
+  <div class="insight"><div><strong>Прямая карточка: {{ item.direct.reason }}</strong>
+    {% if item.direct.card %}<p>{{ item.direct.card.title or '' }}{% if item.direct.card.price %} · {{ '{:,.0f}'.format(item.direct.card.price).replace(',', ' ') }} ₽{% endif %}{% if item.direct.card.vat_status %} · {{ item.direct.card.vat_status }}{% endif %}</p>{% endif %}
+    {% if item.direct_proof %}<a href="{{ item.direct_proof }}" target="_blank">Открыть скриншот карточки →</a>{% endif %}
+  </div></div>{% endif %}
+  {% if item.override %}<p class="helper">Локальная связь подтверждена: {{ item.override.actor }}. {{ 'В таблице другая ссылка — подтверждённая связь сохранена.' if item.conflict else 'Подтверждённая ссылка защищена от импорта.' }}</p>{% endif %}
+  {% if r.state != 'verified' and not item.changed %}
+  <details><summary>Кандидаты на замену · {{ r.candidates|length }}</summary>
+    {% for candidate in r.candidates %}<div class="insight"><div><a href="{{ candidate.url }}" target="_blank" rel="noopener noreferrer">{{ candidate.title or 'Открыть объявление' }}</a><p>{{ candidate.price }} · {{ candidate.basis }}</p></div></div>{% else %}<p>Надёжных кандидатов не найдено. После ручной проверки можно указать ссылку в <a href="/api/v1/dashboard/settings">настройках</a>.</p>{% endfor %}
+    {% if r.candidates %}
+    <form class="confirmation-form" data-check-id="{{ r.id }}">
+      <label>Подтверждённое объявление<select name="url" required><option value="">Выберите после проверки автомобиля</option>{% for candidate in r.candidates %}<option value="{{ candidate.url }}">{{ candidate.title or candidate.id }} · {{ candidate.price }}</option>{% endfor %}</select></label>
+      {% if actor_role in ['admin', 'operator'] %}
+      <label>Кто проверил<input name="actor" required maxlength="150" value="{{ actor_name if actor_name != 'stage' else '' }}" {% if actor_name != 'stage' %}readonly{% endif %}></label>
+      <label>На основании чего установлена связь<textarea name="reason" required maxlength="2000" placeholder="VIN, сверка комплектации, подтверждение ответственного менеджера"></textarea></label>
+      <label class="check"><input type="checkbox" required> Подтверждаю: это именно этот автомобиль, а не похожая машина</label><button type="submit">Сохранить подтверждённую связь</button><p class="confirmation-result" role="status"></p>
+      {% else %}<p class="helper">Ссылку может подтверждать только оператор мониторинга или администратор.</p>{% endif %}
+    </form>
+    {% endif %}
+  </details>
+  {% endif %}
+</section>
+{% else %}<section class="panel empty">Запустите обычный локальный мониторинг. Сначала здесь появится результат сверки каталогов продавца.</section>{% endfor %}
 {% endblock %}
 {% block scripts %}<script src="/static/reconciliation.js" defer></script>{% endblock %}

@@ -4,6 +4,8 @@ import pytest
 
 from app.security import (
     SecurityConfigurationError,
+    authenticate_basic_authorization,
+    configured_users,
     valid_basic_authorization,
     validate_security_configuration,
 )
@@ -61,3 +63,38 @@ def test_stage_can_run_without_auth_but_is_not_production():
     validate_security_configuration(
         environment='stage', enabled=False, username=None, password=None
     )
+
+
+def test_configured_roles_are_server_owned_and_require_valid_accounts():
+    users = configured_users(
+        admin_username='admin',
+        admin_password='long-random-password',
+        auth_users_json=(
+            '{"marketing":{"password":"marketing-secret-16","role":"marketing"},'
+            '"director":{"password":"director-secret-16","role":"sales_director"}}'
+        ),
+    )
+    assert users['admin'].role == 'admin'
+    assert users['marketing'].role == 'marketing'
+    actor = authenticate_basic_authorization(
+        _header('director', 'director-secret-16'),
+        admin_username='admin',
+        admin_password='long-random-password',
+        auth_users_json=(
+            '[{"username":"director","password":"director-secret-16","role":"sales_director"}]'
+        ),
+    )
+    assert actor is not None
+    assert (actor.username, actor.role) == ('director', 'sales_director')
+    with pytest.raises(SecurityConfigurationError, match='supported role'):
+        configured_users(
+            admin_username=None,
+            admin_password=None,
+            auth_users_json='[{"username":"unknown","password":"password","role":"owner"}]',
+        )
+    with pytest.raises(SecurityConfigurationError, match='supported role'):
+        configured_users(
+            admin_username=None,
+            admin_password=None,
+            auth_users_json='[{"username":"operator"}]',
+        )

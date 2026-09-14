@@ -90,11 +90,30 @@ Drom и новый сайт не подключались. Fixtures доказы
 Очередь read-only, не меняет links и не подтверждает business status. Live
 контроль площадок и owner approval по findings не выполнялись.
 
-## Следующий фокус: M5 — operator release
+## M5 завершён в коде: operator release
 
-Следующий этап добавит роли, lifecycle решения и отчёт по исключениям, чтобы
-маркетинг и РОП работали с очередью сами. Изменение связей останется отдельным
-подтверждённым действием оператора.
+Выполнено в `0.14.0`:
+
+1. При `AUTH_ENABLED=true` Basic-auth выдаёт серверную роль из `ADMIN_*` и
+   secret-backed `AUTH_USERS_JSON`; клиентское имя в форме не может повысить
+   полномочия.
+2. Маркетинг создаёт feedback и ведёт его до `fixed`; РОП подтверждает только
+   `fixed → confirmed`; admin/operator управляют полным разрешённым lifecycle.
+3. Подтверждение или ручная смена marketplace-link доступны только
+   admin/operator. Наличие ticket не подтверждает связь Offer и Vehicle.
+4. M4 finding создаёт ticket только пока finding остаётся текущим; сохраняются
+   `reconciliation_id`, `finding_code`, автор и история переходов.
+5. `/reconciliation/exceptions-report` сопоставляет текущие findings и tickets
+   read-only. В нём feedback остаётся процессом человека, а finding — фактом.
+
+Офлайн-gate проверяет роли, миграцию, lifecycle и устаревший finding. Реальная
+настройка пользователей, живое принятие ролей и доступ к площадкам не выполнялись.
+
+## Следующий фокус: M6 — operations
+
+Следующий этап добавит управляемые retry/resume, расписание, backup/restore,
+метрики и allowlist публикации. Он не должен считать офлайн-тест восстановлением
+реального production-инцидента.
 
 ## Рабочий ритм
 

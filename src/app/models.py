@@ -532,6 +532,10 @@ class ManagerFeedback(Base):
     observed_id: Mapped[str | None] = mapped_column(
         ForeignKey('listing_observations.id'), index=True, nullable=True
     )
+    reconciliation_id: Mapped[str | None] = mapped_column(
+        ForeignKey('listing_reconciliations.id'), index=True, nullable=True
+    )
+    finding_code: Mapped[str | None] = mapped_column(String, nullable=True)
     category: Mapped[str] = mapped_column(String, default='other', nullable=False)
     severity: Mapped[str] = mapped_column(String, default='medium')
     message: Mapped[str] = mapped_column(Text, nullable=False)

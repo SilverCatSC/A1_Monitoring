@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     auth_enabled: bool = Field(default=False, alias='AUTH_ENABLED')
     admin_username: str | None = Field(default=None, alias='ADMIN_USERNAME')
     admin_password: str | None = Field(default=None, alias='ADMIN_PASSWORD')
+    auth_users_json: str | None = Field(default=None, alias='AUTH_USERS_JSON')
     database_dsn: str = Field(default='sqlite:///./a1_monitor.db', alias='DATABASE_DSN')
     source_import_source: str = Field(default='csv', alias='SOURCE_IMPORT_SOURCE')
     source_csv_path: str | None = Field(default=None, alias='SOURCE_CSV_PATH')
@@ -81,7 +82,7 @@ class Settings(BaseSettings):
         default=100, alias='SELLER_DETAIL_CHECKS_LIMIT', ge=0, le=250
     )
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
-    app_version: str = '0.13.0'
+    app_version: str = '0.14.0'
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60
 
@@ -102,7 +103,7 @@ class Settings(BaseSettings):
             raise ValueError(f'network_profile must be one of: {", ".join(sorted(allowed))}')
         return normalized
 
-    @field_validator('admin_username', 'admin_password', mode='before')
+    @field_validator('admin_username', 'admin_password', 'auth_users_json', mode='before')
     @classmethod
     def _empty_credentials_to_none(cls, value: str | None) -> str | None:
         if value is None:

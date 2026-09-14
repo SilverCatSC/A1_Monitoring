@@ -83,6 +83,10 @@ candidate-связи старых URL без переписывания `listing
 расхождения цены/VIN/года/НДС от missing/ghost публикаций и технической неполноты.
 Ни один finding не меняет связь автоматически; см. [Offer reconciliation](production/OFFER_RECONCILIATION.md).
 
+С 0.14 M5 связывает актуальный finding с human feedback и применяет серверные
+роли к lifecycle и ручной смене ссылок. Ticket не подменяет факт сверки;
+см. [Operator release](production/OPERATOR_RELEASE.md).
+
 ## Поддержка
 
 Продуктовые правила — BIBLE.md. Определения вычислений — METRICS.md. Схема
