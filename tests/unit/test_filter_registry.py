@@ -287,7 +287,8 @@ def test_all_avito_filters_use_moscow_only_and_keep_model_paths(session):
         parts = urlsplit(definition.url)
         query = parse_qs(parts.query)
         assert parts.path.startswith('/moskva/avtomobili/'), definition.key
-        assert query['radius'] == query['searchRadius'] == query['localPriority'] == ['0']
+        assert query['radius'] == query['searchRadius'] == ['0']
+        assert query['localPriority'] == ['1']
         assert definition.geo_radius_km == 0
         assert _canonical_url_contract_matches(definition)
         entity = session.query(SearchFilter).filter(
@@ -310,7 +311,7 @@ def test_avito_moscow_rule_replaces_conflicting_radius_and_preserves_other_param
     fixed = _moscow_only(replace(definition, url=old_url, geo_radius_km=None))
     query = parse_qs(urlsplit(fixed.url).query)
     assert query == {
-        'radius': ['0'], 'searchRadius': ['0'], 'localPriority': ['0'],
+        'radius': ['0'], 'searchRadius': ['0'], 'localPriority': ['1'],
         's': ['104'], 'context': ['kept'],
     }
     assert _canonical_url_contract_matches(fixed)
@@ -321,7 +322,7 @@ def test_avito_moscow_rule_replaces_conflicting_radius_and_preserves_other_param
     lambda url: url.replace('/moskva/', '/all/'),
     lambda url: url.replace('radius=0', 'radius=200'),
     lambda url: url.replace('searchRadius=0', 'searchRadius=200'),
-    lambda url: url.replace('localPriority=0', 'localPriority=1'),
+    lambda url: url.replace('localPriority=1', 'localPriority=0'),
     lambda url: url + '&radius=200',
 ])
 def test_avito_contract_rejects_national_expanded_or_ambiguous_geography(bad_change):

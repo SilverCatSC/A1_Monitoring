@@ -16,7 +16,7 @@ class FilterValidationError(ValueError):
     pass
 
 
-CATALOG_VERSION = 'a1-monitoring-rules-2026-09-09-v5'
+CATALOG_VERSION = 'a1-monitoring-rules-2026-09-14-v6'
 
 
 @dataclass(frozen=True)
@@ -121,7 +121,7 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'avito_sprinter_all',
         EngineType.AVITO,
         'Mercedes-Benz Sprinter — все',
-        'https://www.avito.ru/moskva/avtomobili/mercedes-benz/sprinter-ASgBAgICAkTgtg3omCjitg38sCg?cd=1&context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6IkxldFUxbDlDT2dydHZ2RzUiO31XyraKJgAAAA&localPriority=0&radius=0&searchRadius=0',
+        'https://www.avito.ru/moskva/avtomobili/mercedes-benz/sprinter-ASgBAgICAkTgtg3omCjitg38sCg?cd=1&context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6IkxldFUxbDlDT2dydHZ2RzUiO31XyraKJgAAAA&localPriority=1&radius=0&searchRadius=0',
         'sprinter',
         'all',
     ),
@@ -129,7 +129,7 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'avito_maybach_s_new',
         EngineType.AVITO,
         'Mercedes-Maybach S-Класс — новые',
-        'https://www.avito.ru/moskva/avtomobili/novyy/mercedes-benz/maybach_s-klass-ASgBAgICA0SGFMbmAeC2DeiYKOK2DcqqKA?context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6IjBIR3pQR3BNSHhOQkJ2SEoiO316dUh8JgAAAA&localPriority=0&radius=0&searchRadius=0',
+        'https://www.avito.ru/moskva/avtomobili/novyy/mercedes-benz/maybach_s-klass-ASgBAgICA0SGFMbmAeC2DeiYKOK2DcqqKA?context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6IjBIR3pQR3BNSHhOQkJ2SEoiO316dUh8JgAAAA&localPriority=1&radius=0&searchRadius=0',
         'maybach_s',
         'new',
     ),
@@ -161,7 +161,7 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'avito_hongqi_hq9_new',
         EngineType.AVITO,
         'Hongqi HQ9 — новые',
-        'https://www.avito.ru/moskva/avtomobili/novyy/hongqi/hq9-ASgBAgICA0SGFMbmAeC2Dabw4wLitg3o1LsR?context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6ImxpZzd3Y1Z0amZmdHVsdlYiO32gzRRyJgAAAA&localPriority=0&radius=0&searchRadius=0',
+        'https://www.avito.ru/moskva/avtomobili/novyy/hongqi/hq9-ASgBAgICA0SGFMbmAeC2Dabw4wLitg3o1LsR?context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6ImxpZzd3Y1Z0amZmdHVsdlYiO32gzRRyJgAAAA&localPriority=1&radius=0&searchRadius=0',
         'hongqi_hq9',
         'new',
     ),
@@ -175,7 +175,7 @@ def _moscow_only(definition: CanonicalFilterDefinition) -> CanonicalFilterDefini
         geography = {'geo_radius': '0', 'rid': '213'}
     elif definition.source == EngineType.AVITO:
         parts = parts._replace(path=re.sub(r'^/(?:all|moskva)/', '/moskva/', parts.path))
-        geography = {'localPriority': '0', 'radius': '0', 'searchRadius': '0'}
+        geography = {'localPriority': '1', 'radius': '0', 'searchRadius': '0'}
     else:
         return definition
     query = [
@@ -294,7 +294,7 @@ def _canonical_url_contract_matches(definition: CanonicalFilterDefinition) -> bo
     if definition.source == EngineType.AUTO_RU:
         expected = {'geo_radius': '0', 'rid': '213'}
     elif definition.source == EngineType.AVITO:
-        expected = {'localPriority': '0', 'radius': '0', 'searchRadius': '0'}
+        expected = {'localPriority': '1', 'radius': '0', 'searchRadius': '0'}
     else:
         return False
     return all(query.get(key) == [value] for key, value in expected.items())
