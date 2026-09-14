@@ -1,5 +1,22 @@
 # Журнал изменений
 
+## M6.7 — проверенный Mac preflight и восстановление dashboard — 2026-09-14
+
+- На Mac/stage применён `25c55fe`: при Alembic `20260914_0011` и версии
+  приложения `0.14.0` loopback `/api/v1/health`/`/api/v1/ready`, `/api/v1/dashboard` и
+  `/api/v1/dashboard/settings` подтвердили успешный ответ. Исправление сохраняет
+  существующую PostgreSQL-метку `review_required` для нового observation state,
+  не переписывая исторические значения.
+- Первый фактический `./scripts/run_monitoring_host_macos.sh --preflight`
+  завершился `preflight_succeeded` (2026-09-14T15:38:07Z–15:38:08Z) с
+  kernel `fcntl` lock и моделью `readiness_only_no_cycle`. Он проверил host
+  readiness без создания monitoring cycle, Chrome, marketplace traffic,
+  изменения VPSUS/VPN либо TCC browser-control.
+- Это устраняет техническую dashboard-преграду и даёт evidence готовности
+  Mac-host, но M7 по-прежнему **не принят**: остаются проверка VPSUS в обычном
+  Chrome, controlled marketplace cycle, TCC/Desktop gate, owner review перед
+  LaunchAgent `--apply` и evidence первого scheduler trigger.
+
 ## M6.6 — MacBook primary-host decision — 2026-09-14
 
 - По решению владельца основной production host изменён с планируемого MSI/Windows

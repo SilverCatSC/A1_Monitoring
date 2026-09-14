@@ -75,6 +75,20 @@ Chrome, не обращается к Auto.ru или Avito, не меняет VPS
 маршрут VPSUS, доступ Chrome к проекту/площадкам, корректность парсера или M7
 acceptance; для этого остаются отдельные gates ниже.
 
+### Проверенный запуск
+
+На текущем Mac/stage `--preflight` был фактически выполнен 2026-09-14 с
+`15:38:07Z` по `15:38:08Z`. Privacy-safe status зафиксировал
+`preflight_succeeded`, `kernel_fcntl` lock и
+`execution_model=readiness_only_no_cycle`. Это подтверждает именно
+GUI/unlocked-host readiness с локальными `app`/`db`/`backup`; мониторинговый
+cycle, Chrome и marketplace traffic этим запуском не создавались.
+
+Проверка не меняет перечень обязательных gates: нужен отдельный evidence
+VPSUS/browser route, controlled cycle, TCC/Desktop результат и owner review
+перед применением LaunchAgent. Не интерпретировать этот короткий preflight как
+проверку Chrome, VPN или production scheduler.
+
 До отдельного MacBook gate оператор использует только ручной one-cycle запуск;
 `local_scan.sh --watch` остаётся foreground-loop открытого Terminal и не
 считается production scheduler. Нельзя запускать `--watch`, host-runner и

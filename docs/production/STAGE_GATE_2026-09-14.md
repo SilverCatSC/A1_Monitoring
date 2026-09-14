@@ -24,6 +24,18 @@ scan, external export, publication or VPN-route change was made in this gate.
   the lock-aware application route; `active_count` became zero. Details:
   [INTERRUPTED_CYCLE_RECOVERY_2026-09-14.md](INTERRUPTED_CYCLE_RECOVERY_2026-09-14.md).
 
+## Post-repair runtime verification
+
+After deployment of `25c55fe`, the same Mac/stage still reports app `0.14.0`
+and Alembic `20260914_0011`. Loopback `/api/v1/health` and `/api/v1/ready` succeeded; the
+previously failing `/api/v1/dashboard` and `/api/v1/dashboard/settings` routes
+both returned HTTP `200`.
+
+The repair aligns SQLAlchemy's `REVIEW_REQUIRED` member with the existing
+PostgreSQL enum label `review_required`, while historical enum labels and data
+remain untouched. This verification did not start a marketplace scan, change a
+VPN route, publish data, or create role accounts.
+
 ## Boundary
 
 This closes the backup/restore technical gate for the current Mac/stage only.
