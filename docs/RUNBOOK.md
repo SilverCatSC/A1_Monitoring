@@ -31,7 +31,8 @@ git diff --check
 Локальный stage:
 
 ```bash
-./scripts/deploy.sh
+./scripts/deploy.sh --preflight
+./scripts/deploy.sh --apply  # only after explicit owner approval and clean worktree
 ./scripts/smoke_stage.sh
 ```
 
