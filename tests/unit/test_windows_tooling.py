@@ -121,6 +121,21 @@ def test_app_compose_service_has_a_loopback_healthcheck():
     assert "http://127.0.0.1:8000/api/v1/health" in compose
 
 
+def test_legacy_live_acceptance_fails_closed_for_the_macos_primary_host():
+    root = Path(__file__).resolve().parents[2]
+    script_path = root / 'scripts' / 'live_acceptance.sh'
+    legacy = script_path.read_text(encoding='utf-8')
+
+    assert script_path.stat().st_mode & stat.S_IXUSR
+    assert 'LIVE_ACCEPTANCE_DEPRECATED reason=container_scan_not_valid_for_macos_primary_host' in legacy
+    assert 'run_monitoring_host_macos.sh --preflight' in legacy
+    assert 'docs/production/ACCEPTANCE_M7.md' in legacy
+    assert 'source .env' not in legacy
+    assert 'curl ' not in legacy
+    assert 'POST /api/v1/scan' in legacy  # explanatory comment; it is never executed
+    assert 'exit 2' in legacy
+
+
 def test_windows_host_runner_requires_interactive_desktop_and_is_single_cycle():
     root = Path(__file__).resolve().parents[2]
     runner = (root / 'scripts' / 'run_monitoring_host_windows.ps1').read_text(encoding='utf-8')

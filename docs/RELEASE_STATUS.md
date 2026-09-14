@@ -204,9 +204,11 @@ PostgreSQL и backup продолжают работать в Docker; реаль
   backup, restore и отсутствие traceback.
 - Stage scheduler теперь fail-safe отключён; без `SCHEDULER_ENABLED=true` он не
   выполняет живой цикл при старте приложения.
-- Отдельный `live_acceptance.sh` проверяет сетевой профиль, полноту каталога,
-  новый ScanRun, technical-состояния и screenshot evidence; на текущем stage он
-  ожидаемо заблокирован как `network_profile_local_vpn` до сетевого обращения.
+- Исторический `live_acceptance.sh` ранее пытался проверить сетевой профиль,
+  полноту каталога и новый ScanRun через container `POST /scan`. Для основного
+  MacBook этот путь теперь намеренно deprecated/fail-closed: он не читает `.env`
+  и не создаёт сетевого обращения. Актуальная приёмка использует видимый host
+  Chrome только по [M7 runbook](production/ACCEPTANCE_M7.md).
 - Исторический срез 0.7: 98 тестов; актуальный срез 0.9.0 указан в начале документа.
 - Caddy cloud override подготовлен для HTTPS.
 

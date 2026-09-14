@@ -13,7 +13,8 @@ Mac/stage deployment evidence: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.
 
 Версия `1.0.0` возможна, только если есть независимые записи пяти фактов:
 
-1. рабочий split-tunnel для ChatGPT, Auto.ru и Avito на этом компьютере;
+1. рабочий split-tunnel для ChatGPT, Auto.ru и Avito на этом компьютере,
+   с owner-approved policy и доказательством для IPv4 и IPv6;
 2. успешный checksum backup и isolated restore-test на целевой среде;
 3. shadow-run с контрольной выборкой и evidence по площадкам;
 4. если owner включит расписание — один MacBook host-runner / LaunchAgent trigger
@@ -65,7 +66,9 @@ direct/bypass rule либо фактический egress каждого дом�
 открытыми. Полная privacy-safe запись — в
 [VPN gate](VPN_GATE_2026-09-14.md).
 
-После подтверждения оператор фиксирует screenshot/текст настроек и выполняет один
+До проверки owner фиксирует intended path (`VPN exit` или `direct physical
+connection`) для каждого сервиса, его нужных subdomains и обеих IP families.
+После этого оператор фиксирует screenshot/текст настроек и выполняет один
 контролируемый доступ в обычном Chrome:
 
 | Цель | Ожидаемый маршрут | Критерий |
@@ -109,6 +112,12 @@ revision Alembic — не dump, не `.env`. Restore создаёт и удал�
    снятая карточка остаётся статусом Offer.
 5. Проверить M4/M5: finding объясним, ticket не меняет link автоматически,
    marketing не подтверждает `fixed`, а РОП не перескакивает статусы.
+
+`scripts/live_acceptance.sh` намеренно выведен из этого пути: его прежний
+container `POST /scan` не может управлять или подтверждать видимый host Chrome,
+TCC/Desktop либо маршрут VPSUS основного MacBook. Скрипт теперь fail-closed и
+не читает `.env`, не вызывает API и не начинает обход. Он не является fallback
+для этой приёмки.
 
 Для admission нужен `completed` только если правила M1 действительно соблюдены;
 `partial` допустим как корректный отрицательный результат реализации, но не
