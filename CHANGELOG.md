@@ -11,6 +11,10 @@
   `--apply`, отдельного owner review и evidence первого trigger; автоматический
   retry `partial` запрещён. Windows PowerShell/Task Scheduler сохранён как
   непринятый fallback, а не обязательный release gate.
+- Для host-runner зафиксирован безопасный `--preflight`: GUI/unlocked console,
+  Docker app/db/backup и local readiness проверяются без цикла, Chrome,
+  marketplace traffic, VPN-изменений или доказательства TCC browser-control.
+  Это host evidence, не M7 acceptance.
 - Finder `.command` launchers теперь имеют документированный preflight
   executable-bit; пока он не подтверждён, оператор использует Terminal и не
   считает запуск двойным кликом принятым.

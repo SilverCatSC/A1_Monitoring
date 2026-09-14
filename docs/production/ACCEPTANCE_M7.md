@@ -112,7 +112,18 @@ the Avito contract is verified, while link reconciliation remains open.
 ещё не принято. Не включать `SCHEDULER_ENABLED=true`: web-контейнер не может
 надёжно управлять видимым Chrome в GUI-сессии macOS.
 
-Сначала выполнить plan-only проверку
+Сначала допустим только host-only preflight:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --preflight
+```
+
+Он проверяет GUI/unlocked console, Docker `app`/`db`/`backup` и local readiness,
+но не создаёт cycle, не открывает Chrome, не обращается к площадкам, не меняет
+VPN и не проверяет TCC browser-control. Его результат нужен как техническое
+evidence host, но сам по себе не закрывает даже этот Gate и не разрешает scan.
+
+После этого выполнить plan-only проверку
 `scripts/register_monitoring_launchagent_macos.sh --at HH:MM`. Только после
 отдельного owner review допустим явный `--apply`. Ожидаемый per-user GUI
 LaunchAgent `com.silvercatsc.a1monitoring.interactive-cycle` должен запускать

@@ -123,6 +123,17 @@ scheduler или LaunchDaemon. Поставленные static-only скрипт
 `scripts/register_monitoring_launchagent_macos.sh` предназначены для ровно одного
 cautious цикла с видимым Chrome в активной пользовательской сессии.
 
+До plan-only LaunchAgent-проверки допустим безопасный host preflight:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --preflight
+```
+
+Он проверяет GUI/unlocked console, Docker `app`/`db`/`backup` и local readiness.
+Он не создаёт cycle, не открывает Chrome, не посещает Auto.ru/Avito, не меняет
+VPSUS и не доказывает TCC browser-control. Это техническое evidence host, а не
+M7 acceptance и не разрешение включать расписание.
+
 Регистратор по умолчанию показывает план; только явный `--apply` может создать
 `com.silvercatsc.a1monitoring.interactive-cycle`. Он не запускает scan при
 регистрации. `RunAtLoad=false` и `KeepAlive=false`; `--watch` остаётся ручным

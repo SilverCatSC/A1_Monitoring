@@ -45,6 +45,19 @@ class ObservationState(str, enum.Enum):
     TECHNICAL_ERROR = 'technical_error'
 
 
+def _observation_state_database_values(enum_class: type[ObservationState]) -> list[str]:
+    """Match the append-only PostgreSQL enum without rewriting older labels.
+
+    The original enum labels are member names. ``review_required`` was added
+    later as a lower-case database label, so it must use its member value while
+    every historical state continues to bind to its existing name.
+    """
+    return [
+        state.value if state is ObservationState.REVIEW_REQUIRED else state.name
+        for state in enum_class
+    ]
+
+
 class FeedbackStatus(str, enum.Enum):
     NEW = 'new'
     CHECKING = 'checking'
@@ -478,7 +491,8 @@ class ListingObservation(Base):
     absolute_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     found: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     state: Mapped[ObservationState] = mapped_column(
-        Enum(ObservationState), default=ObservationState.ABSENT_UNCERTAIN
+        Enum(ObservationState, values_callable=_observation_state_database_values),
+        default=ObservationState.ABSENT_UNCERTAIN,
     )
     listing_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     title: Mapped[str | None] = mapped_column(String, nullable=True)

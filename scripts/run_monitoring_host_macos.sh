@@ -19,6 +19,9 @@ LOCK_HELPER="$ROOT_DIR/scripts/with_monitoring_host_lock_macos.py"
 ENGINES='auto_ru,avito'
 PAGES=3
 PACE='cautious'
+PREFLIGHT_ONLY=0
+ENGINES_WAS_SET=0
+PAGES_WAS_SET=0
 RUNNER_STARTED_AT=''
 RUNNER_PHASE='startup'
 SCAN_EXIT_CODE=-1
@@ -29,10 +32,16 @@ LOCK_FD="${A1_MONITORING_HOST_LOCK_FD:-}"
 
 usage() {
     cat <<'EOF'
-Usage: scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10]
+Usage: scripts/run_monitoring_host_macos.sh [--preflight]
+       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10]
 
 Runs one cautious monitoring cycle through the signed-in macOS user's visible
 Chrome session. It never enters recurring mode or retries a partial result.
+
+--preflight performs no monitoring cycle: it checks the unlocked signed-in GUI
+session, holds the same host lock, starts app/db/backup, and waits for HTTP
+readiness. It does not open Chrome, recover cycles, or contact marketplaces.
+It cannot be combined with scan parameters.
 EOF
 }
 
@@ -52,12 +61,22 @@ parse_arguments() {
             --engines)
                 [[ $# -ge 2 ]] || { usage >&2; exit 64; }
                 ENGINES="$2"
+                ENGINES_WAS_SET=1
                 shift 2
                 ;;
             --pages)
                 [[ $# -ge 2 ]] || { usage >&2; exit 64; }
                 PAGES="$2"
+                PAGES_WAS_SET=1
                 shift 2
+                ;;
+            --preflight)
+                if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
+                    safe_message 'HOST_RUNNER_REFUSED reason=duplicate_preflight'
+                    exit 64
+                fi
+                PREFLIGHT_ONLY=1
+                shift
                 ;;
             --help|-h)
                 usage
@@ -76,6 +95,11 @@ parse_arguments() {
     esac
     if [[ ! "$PAGES" =~ ^([1-9]|10)$ ]]; then
         safe_message 'HOST_RUNNER_REFUSED reason=invalid_pages'
+        exit 64
+    fi
+    if [[ "$PREFLIGHT_ONLY" -eq 1 ]] && \
+        { [[ "$ENGINES_WAS_SET" -eq 1 ]] || [[ "$PAGES_WAS_SET" -eq 1 ]]; }; then
+        safe_message 'HOST_RUNNER_REFUSED reason=preflight_does_not_accept_scan_parameters'
         exit 64
     fi
 }
@@ -143,10 +167,11 @@ write_status() {
     local phase="$2"
     local scan_exit_code="$3"
     local finished="$4"
-    local temporary_path finished_value
+    local temporary_path finished_value execution_model run_kind
 
     case "$state" in
-        starting|running|succeeded|partial|failed|interrupted) ;;
+        starting|running|succeeded|partial|failed|interrupted|\
+        preflight_succeeded|preflight_failed|preflight_interrupted) ;;
         *) return 1 ;;
     esac
     case "$finished" in
@@ -158,19 +183,32 @@ write_status() {
     temporary_path="$(/usr/bin/mktemp "$ARTIFACTS_DIR/.monitoring_host_runner_macos_status.XXXXXX")"
     finished_value=false
     [[ "$finished" == true ]] && finished_value=true
+    if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
+        run_kind='preflight'
+        execution_model='readiness_only_no_cycle'
+    else
+        run_kind='full_scan'
+        execution_model='one_cycle_per_invocation'
+    fi
 
     {
         printf '{'
         printf '"schema_version":1,'
         printf '"runner":"macos_interactive_host",'
-        printf '"execution_model":"one_cycle_per_invocation",'
+        printf '"run_kind":"%s",' "$run_kind"
+        printf '"execution_model":"%s",' "$execution_model"
+        if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
+            printf '"preflight_only":true,'
+        fi
         printf '"state":"%s",' "$state"
         printf '"phase":"%s",' "$phase"
         printf '"started_at_utc":"%s",' "$RUNNER_STARTED_AT"
         printf '"updated_at_utc":"%s",' "$(utc_timestamp)"
-        printf '"engines":"%s",' "$ENGINES"
-        printf '"pages":%s,' "$PAGES"
-        printf '"pace":"%s",' "$PACE"
+        if [[ "$PREFLIGHT_ONLY" -eq 0 ]]; then
+            printf '"engines":"%s",' "$ENGINES"
+            printf '"pages":%s,' "$PAGES"
+            printf '"pace":"%s",' "$PACE"
+        fi
         printf '"lock_mode":"kernel_fcntl"'
         if [[ "$scan_exit_code" -ge 0 ]]; then
             printf ',"scan_exit_code":%s' "$scan_exit_code"
@@ -190,8 +228,13 @@ cleanup() {
     trap - EXIT
     set +e
     if [[ "$LOCK_HELD" == '1' && "$FINAL_STATUS_WRITTEN" -eq 0 ]]; then
-        terminal_state='failed'
-        [[ "$SIGNALLED" -eq 1 ]] && terminal_state='interrupted'
+        if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
+            terminal_state='preflight_failed'
+            [[ "$SIGNALLED" -eq 1 ]] && terminal_state='preflight_interrupted'
+        else
+            terminal_state='failed'
+            [[ "$SIGNALLED" -eq 1 ]] && terminal_state='interrupted'
+        fi
         write_status "$terminal_state" "$RUNNER_PHASE" "$SCAN_EXIT_CODE" true || \
             safe_message 'HOST_RUNNER_STATUS_WRITE_FAILED'
     fi
@@ -249,6 +292,21 @@ main() {
     if ! run_quietly "$PYTHON" scripts/doctor.py --http --wait; then
         safe_message 'HOST_RUNNER_FAILED phase=readiness'
         return 1
+    fi
+
+    if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
+        # A preflight is intentionally a readiness-only proof. Recheck the
+        # console state after Docker/readiness work, but do not recover old
+        # cycles, invoke Chrome, create a cycle, or contact a marketplace.
+        RUNNER_PHASE='console_recheck'
+        write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
+        require_console_gui_user
+
+        RUNNER_PHASE='preflight_finished'
+        write_status preflight_succeeded "$RUNNER_PHASE" "$SCAN_EXIT_CODE" true
+        FINAL_STATUS_WRITTEN=1
+        safe_message 'HOST_RUNNER_PREFLIGHT_OK no_cycle_created=true'
+        return 0
     fi
 
     RUNNER_PHASE='recover_open_cycles'

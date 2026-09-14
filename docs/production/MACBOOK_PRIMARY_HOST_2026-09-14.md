@@ -57,6 +57,24 @@ Terminal, Google Chrome и launchd-процесса. Нельзя автомат
 Disk Access, снимать блокировку экрана или менять TCC-настройки ради этой
 проверки.
 
+## Безопасный host preflight — отдельное доказательство готовности
+
+Предусмотренный режим:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --preflight
+```
+
+Он проверяет, что есть корректный незаблокированный console GUI user, Docker
+app/db/backup доступны в ожидаемом локальном контуре, а локальный readiness
+отвечает. Этот режим **не создаёт** `MonitoringCycle`/`ScanRun`, не открывает
+Chrome, не обращается к Auto.ru или Avito, не меняет VPSUS/VPN и не выполняет
+проверку фактического browser-control через TCC.
+
+Поэтому успешный `--preflight` — лишь evidence готовности host. Он не доказывает
+маршрут VPSUS, доступ Chrome к проекту/площадкам, корректность парсера или M7
+acceptance; для этого остаются отдельные gates ниже.
+
 До отдельного MacBook gate оператор использует только ручной one-cycle запуск;
 `local_scan.sh --watch` остаётся foreground-loop открытого Terminal и не
 считается production scheduler. Нельзя запускать `--watch`, host-runner и

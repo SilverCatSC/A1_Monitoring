@@ -52,6 +52,8 @@ cd /Users/filaret/Desktop/Monitoring
 | `stop_local_ai.sh` | Останавливает только процесс, чей PID и команда подтверждены |
 | `run_ai_review_macos.sh` | Делит последний прогон по машинам и снимкам, запускает последовательный Hermes QA |
 | `run_full_monitoring_macos.sh` | Обход двух площадок, затем Hermes QA и read-only аудит Ouroboros |
+| `run_monitoring_host_macos.sh` | Static-only host runner; `--preflight` проверяет GUI host/Docker/readiness без цикла или Chrome |
+| `register_monitoring_launchagent_macos.sh` | Plan-only per-user LaunchAgent registrar; требуется явный `--apply` |
 | `hermes_maintenance_macos.sh` | Изолированный исполнитель Hermes для инженерного контура |
 | `run_ouroboros_maintenance_macos.sh` | Запускает Ouroboros с проектным HOME и отключённой телеметрией |
 | `check_full_system_macos.sh` | Проверяет приложение, инструменты, модель, checksum и локальный endpoint |

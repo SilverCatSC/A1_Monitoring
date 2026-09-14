@@ -163,6 +163,12 @@ cd /Users/filaret/Desktop/Monitoring
 Полный порядок — в
 [MacBook primary-host decision](../production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
+До регистрации можно выполнить `./scripts/run_monitoring_host_macos.sh --preflight`.
+Он проверяет незаблокированную GUI-консоль, Docker `app`/`db`/`backup` и local
+readiness, но не создаёт cycle, не открывает Chrome, не посещает площадки, не
+изменяет VPN и не подтверждает TCC browser-control. Это evidence готовности
+host, а не M7 acceptance.
+
 Windows `local_scan_windows.ps1 -Watch`, host-runner и Task Scheduler остаются
 непринятым fallback-путём. Если он понадобится, отдельная процедура приведена в
 [Windows handoff](../WINDOWS_11_INSTALL.md).

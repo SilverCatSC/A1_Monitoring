@@ -61,6 +61,18 @@ per-user GUI LaunchAgent и `run_monitoring_host_macos.sh`, а не container sc
 review этот LaunchAgent остаётся plan-only; детали —
 [MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
+Перед плановой регистрацией можно выполнить host-only preflight:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --preflight
+```
+
+Он проверяет незаблокированную GUI-консоль текущего пользователя, Docker
+`app`/`db`/`backup` и локальный readiness. Он не создаёт cycle, не открывает
+Chrome, не посещает Auto.ru/Avito, не изменяет VPN и не доказывает TCC browser
+control. Успех — диагностическое evidence готовности host, а не разрешение на
+scan, `--apply` LaunchAgent или M7 acceptance.
+
 ## 3. Ручные операции
 
 ```bash
