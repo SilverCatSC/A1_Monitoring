@@ -46,13 +46,17 @@ curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/progress
 ```
 
-При `NETWORK_PROFILE=local_vpn|unknown`, неполном каталоге или отсутствии
-ожиданий live-gate обязан завершиться `LIVE_ACCEPTANCE_BLOCKED` до POST `/scan`.
-Сам API повторяет сетевой gate и возвращает HTTP 422 до создания `ScanRun`, если
-клиент попытается вызвать `/scan` или `/cycle` напрямую.
+`--watch` в этом блоке — ручной foreground-loop, не service scheduler. Не
+запускать его одновременно с другим worker или Task Scheduler. `NETWORK_PROFILE`
+маркирует происхождение запуска, но не доказывает VPN-маршрут: до live cycle
+подтвердить VPSUS split-tunnel в обычном Chrome, не выключая VPN или ChatGPT.
+Сам API повторяет применимые gate и возвращает HTTP 422 до создания `ScanRun`,
+если клиент попытается вызвать `/scan` или `/cycle` напрямую.
 
 Startup сначала выполняет `alembic upgrade head`, затем запускает web. Scheduler
-в web-контейнере остаётся `false`: площадки проверяет только локальный worker.
+в web-контейнере остаётся `false`: он не является решением для host Chrome.
+Windows production schedule после отдельного MSI gate должен запускать один
+interactive host-runner, а не container scheduler или вложенный `--watch`.
 
 ## 3. Ручные операции
 
@@ -126,7 +130,9 @@ docker-compose exec -T db psql -U monitor -d a1_search_monitor -c \
 5. Обновить parser на сохранённой fixture.
 6. Прогнать suite и один контрольный фильтр.
 
-VPN-результат нельзя экстраполировать на production без VPN.
+Результат с непроверенным маршрутом нельзя экстраполировать на production.
+Сравнивать нужно через тот же подтверждённый split-tunnel и browser egress;
+не отключать VPSUS или ChatGPT ради получения «чистого» результата.
 
 ### Нулевые результаты по всем фильтрам
 

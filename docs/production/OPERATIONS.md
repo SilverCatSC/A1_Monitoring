@@ -51,19 +51,43 @@ terminal cycles untouched. The returned failed cycle becomes eligible for an
 explicit ordinary retry. If a cycle is live, recovery returns conflict rather
 than guessing that it is stale.
 
-## Расписание
+## Расписание и host Chrome
 
-При `SCHEDULER_ENABLED=true` scheduler запускает обычный полный цикл с
-`SCAN_INTERVAL_MINUTES`. Job coalesces пропущенные интервалы, допускает только
-один экземпляр и журналирует ошибку scheduler. Это предотвращает параллельные
-процессы, но не является подтверждением, что Chrome, VPN-маршрут или площадка
-доступны.
+`SCHEDULER_ENABLED=true` внутри web-контейнера **не является решением для
+видимого host Chrome**. Он может коалесцировать интервалы и предотвращать второй
+container job, но не получает интерактивный Windows desktop, состояние VPSUS или
+право управлять Chrome-профилем пользователя. Поэтому для реальных marketplace
+циклов `SCHEDULER_ENABLED` остаётся `false`; не включайте его как обход отсутствия
+host-runner.
 
-В production включать scheduler только после:
+`local_scan_windows.ps1 -Watch` также не является production scheduler: это
+ручной foreground-loop в открытом PowerShell. Он заканчивается при logoff/сне и
+не должен работать параллельно с другой ручной командой либо Task Scheduler.
 
-1. Проверки `NETWORK_PROFILE=local_browser`, видимого Chrome и источника.
-2. Проверки, что приложение поднято в единственном экземпляре.
-3. Контролируемого shadow-run и review статусов `/status/operations`.
+Production-контракт Windows использует отдельный
+`run_monitoring_host_windows.ps1`: ровно один cautious scan в интерактивном
+desktop (не Session 0), межсессионный mutex, preflight HTTP, безопасное recovery
+только abandoned cycles и privacy-safe
+`artifacts/monitoring_host_runner_status.json`. При занятом mutex это штатный
+`HOST_RUNNER_SKIPPED_ACTIVE`, а не повод запускать второй worker или retry.
+
+`register_monitoring_task_windows.ps1` без `-Apply` только показывает план;
+с `-Apply` отдельно создаёт ежедневную `\A1Monitoring\InteractiveCycle` для
+текущего пользователя с
+`LogonType=Interactive`, `RunLevel=Limited`, `MultipleInstances=IgnoreNew` и
+`RestartCount=0`. Регистрация не запускает scan; trigger запускает один
+host-runner, не `--watch` и не автоматический retry.
+
+Включение этой задачи допустимо только после:
+
+1. подтверждённого split-tunnel для ChatGPT, Auto.ru и Avito в обычном Chrome;
+2. успешного ручного Windows controlled cycle с видимым Chrome;
+3. проверки, что `--watch`, container scheduler и иные workers остановлены;
+4. owner review плана задачи и статуса после первого trigger.
+
+До этих фактов host-runner/Task Scheduler остаются M7 gate, а не принятым
+production-расписанием. Детальная Windows-процедура:
+[WINDOWS_11_INSTALL.md](../WINDOWS_11_INSTALL.md#host-runner-и-windows-task-scheduler--только-после-gate-4).
 
 ## Publication allowlist
 

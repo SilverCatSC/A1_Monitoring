@@ -1,11 +1,12 @@
 # Установочные скрипты A1 Monitoring для macOS
 
-Актуально на 09.09.2026. Основная платформа: Apple Silicon Mac, 16 ГБ памяти.
+Актуально для Mac/stage на 14.09.2026. Windows/MSI — целевой production-контур,
+который пока не прошёл живую приёмку.
 
 ## Одна команда для полной установки
 
 ```bash
-cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
+cd /Users/filaret/Desktop/Monitoring
 ./scripts/install_all_macos.sh
 ```
 
@@ -67,7 +68,9 @@ cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
 
 ## Реальный запуск
 
-Отключите VPN, затем:
+Сохраните VPSUS включённым и подтвердите split-tunnel: ChatGPT/Codex продолжает
+работать по согласованному маршруту, Auto.ru/Avito — по direct browser rules.
+Не выключайте VPN и не закрывайте ChatGPT как workaround, затем:
 
 ```bash
 ./Запустить\ мониторинг.command

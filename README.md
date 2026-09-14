@@ -54,7 +54,11 @@ cd /Users/filaret/Desktop/Monitoring
 ```
 
 Видимый Chrome использует отдельный постоянный профиль. Перед живым прогоном
-должен работать прямой доступ к площадкам. CAPTCHA требует действия оператора.
+VPSUS остаётся включённым: ChatGPT/Codex продолжает работать по согласованному
+VPN/direct-маршруту, а Auto.ru и Avito открываются в обычном Chrome по
+подтверждённым direct-правилам. Не выключайте VPN и не закрывайте ChatGPT как
+workaround. CAPTCHA требует действия оператора. Граница проверки —
+[VPSUS split-tunnel gate](docs/production/VPN_GATE_2026-09-14.md).
 
 Windows после переноса файлов и установки окружения:
 
@@ -68,6 +72,11 @@ Set-ExecutionPolicy -Scope Process Bypass
 Полный сценарий с локальными Hermes/Ouroboros:
 `scripts/run_full_monitoring_windows.ps1`; на Mac — `scripts/run_full_monitoring_macos.sh`.
 Они требуют дополнительной AI-установки и имеют ограничения из аудита.
+
+Windows-команды выше — только ручной controlled cycle. `--watch` остаётся
+foreground-циклом открытого PowerShell; container scheduler не управляет host
+Chrome. Отдельные host-runner/Task Scheduler допустимы лишь после живой MSI
+приёмки по [Windows handoff](docs/WINDOWS_11_INSTALL.md#host-runner-и-windows-task-scheduler--только-после-gate-4).
 
 Дашборд: [127.0.0.1:18000](http://127.0.0.1:18000/api/v1/dashboard).
 Карточки отдела продаж: [Автомобили](http://127.0.0.1:18000/api/v1/dashboard/listings).
@@ -84,10 +93,10 @@ AI: Hermes, Ouroboros, llama.cpp, Qwen3.5-9B Q4_K_M с vision-проекторо
 История PostgreSQL и автоматические backups находятся в Docker volumes,
 **не внутри папки проекта**. `.env`, runtime и рабочие данные исключены из Git.
 
-Перенос выполнен перемещением, без второй копии 10 ГБ. Старый путь
-`/Users/filaret/Desktop/a1_search_monitor_noapi_product` — совместимая символическая
-ссылка на `Monitoring`. Она пока нужна старым shebang, AI-настройкам и JSON-путям.
-См. [акт переноса](docs/operations/MIGRATION_2026-09-14.md).
+Канонический путь — `/Users/filaret/Desktop/Monitoring`. Прежний путь
+`/Users/filaret/Desktop/a1_search_monitor_noapi_product` остаётся только
+compatibility symlink для исторических локальных артефактов и не должен появляться
+в новых командах или Windows-инструкциях. См. [акт переноса](docs/operations/MIGRATION_2026-09-14.md).
 
 ## Проверка кода
 

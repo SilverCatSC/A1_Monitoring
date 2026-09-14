@@ -38,8 +38,10 @@ Mac/stage deployment evidence: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.
 ## Gate 1 — VPSUS split-tunnel
 
 Текущее правило «исключение» не считается доказательством маршрута: разные версии
-VPN-клиента трактуют его как bypass или как proxy-route. До изменения переключателя
-или reconnect требуется явное подтверждение владельца.
+VPN-клиента трактуют его как bypass или как proxy-route. VPSUS остаётся включённым;
+не выключать VPN и не закрывать ChatGPT/Codex как workaround для monitoring. До
+изменения переключателя, bypass-правила или reconnect требуется явное подтверждение
+владельца.
 
 Current Mac routing evidence is recorded in
 [VPN_GATE_2026-09-14.md](VPN_GATE_2026-09-14.md). It is a configuration and
@@ -109,7 +111,10 @@ the Avito contract is verified, while link reconciliation remains open.
 - `alembic upgrade head` применён, dashboard открывается на loopback;
 - Windows backup/restore реально выполнены;
 - видимый Chrome и controlled cycle не исчерпывают RAM и не зависают;
-- restart scheduler не создаёт параллельные циклы;
+- `SCHEDULER_ENABLED` в контейнере остаётся false; host-runner и
+  `\A1Monitoring\InteractiveCycle` не создают параллельные циклы, выполняются
+  только в интерактивной пользовательской сессии, не запускают вложенный `--watch`
+  и имеют `RestartCount=0`;
 - retry создаёт новый `cycle_id` с `retry_of_cycle_id`, а не меняет прежний
   manifest.
 

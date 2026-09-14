@@ -1,13 +1,15 @@
 # Локальное окружение
 
-Основная машина по решению владельца от 10.09.2026 — MSI / Windows 11 / 16 ГБ.
-[Основная инструкция Windows](WINDOWS_11_INSTALL.md). Mac ниже — резервный вариант.
+Целевой production-контур — MSI / Windows 11 / 16 ГБ, но его живой runtime ещё не
+принят. Mac/stage является текущей проверенной технической средой в ограниченных
+границах. [Основная инструкция Windows](WINDOWS_11_INSTALL.md).
 
 ## MSI / Windows 11
 
 Полная актуальная инструкция: [Установка и запуск Windows 11](WINDOWS_11_INSTALL.md).
-Используйте PowerShell 7. Исходники пока не опубликованы в целевом репозитории;
-новая установка не переносит историю с Mac автоматически.
+Используйте PowerShell 7 и согласованный commit из
+[A1_Monitoring](https://github.com/SilverCatSC/A1_Monitoring). Новая установка не
+переносит историю с Mac автоматически.
 
 Основной рабочий компьютер — MSI с Windows 11, Intel Core Ultra 5 125U и 16 ГБ RAM.
 Откройте PowerShell в корне репозитория:
@@ -31,8 +33,9 @@ Python 3.12 и Google Chrome. Скрипт создаёт `.venv312`, устан
 .\scripts\start_windows.ps1 -OpenDashboard
 ```
 
-Живой мониторинг выполняется только после отключения VPN и проверки, что Chrome
-открывается в отдельном профиле:
+Живой мониторинг выполняется после подтверждения VPSUS split-tunnel: VPN и
+ChatGPT/Codex остаются включёнными, а Auto.ru/Avito открываются в отдельном Chrome
+профиле по approved direct browser rules:
 
 ```powershell
 .\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
@@ -44,15 +47,24 @@ Python 3.12 и Google Chrome. Скрипт создаёт `.venv312`, устан
 .\scripts\run_full_monitoring_windows.ps1
 ```
 
-Повтор каждые шесть часов после завершения прошлого цикла:
+Ручной foreground-повтор каждые шесть часов после завершения прошлого цикла:
 
 ```powershell
 .\scripts\local_scan_windows.ps1 -Watch -IntervalMinutes 360 -Pace cautious
 ```
 
-Запускатель использует видимый Chrome, `NETWORK_PROFILE=local_browser`, loopback
-CDP и отдельный `artifacts/local_chrome_profile`. CAPTCHA остаётся ручным событием;
-401/403/429, таймаут и неизвестная выдача сохраняются как technical error.
+`--watch` не является Windows-службой: он требует открытого терминала и не может
+работать параллельно с host-runner/Task Scheduler. Запускатель использует видимый
+Chrome, `NETWORK_PROFILE=local_browser`, loopback CDP и отдельный
+`artifacts/local_chrome_profile`. CAPTCHA остаётся ручным событием; 401/403/429,
+таймаут и неизвестная выдача сохраняются как technical error.
+
+После ручной MSI-приёмки и owner review production-расписание использует ровно один
+`run_monitoring_host_windows.ps1` на trigger. План
+`register_monitoring_task_windows.ps1 -At HH:mm` без `-Apply` только описывает
+`\A1Monitoring\InteractiveCycle`; `-Apply` отдельно регистрирует интерактивную
+задачу с mutex, `MultipleInstances=IgnoreNew` и `RestartCount=0`. Это M7 gate,
+а не доказательство принятого Windows runtime.
 
 Остановка сервисов без удаления данных:
 
@@ -129,7 +141,8 @@ DB_PASSWORD. Пароль не печатается. Для существующ
 Стандартные порты: Web 127.0.0.1:18000, PostgreSQL 127.0.0.1:15433, Chrome CDP
 127.0.0.1:19222. Хост-worker задаёт DATABASE_DSN на loopback, контейнер использует db:5432.
 AUTH_ENABLED=false допустим только при этих локальных bind-адресах.
-SCHEDULER_ENABLED=false предотвращает фоновые обращения контейнера к площадкам.
+SCHEDULER_ENABLED=false предотвращает фоновые обращения контейнера к площадкам и
+не заменяет интерактивный host Chrome runner.
 
 ## Каждый день
 

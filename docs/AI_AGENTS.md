@@ -84,7 +84,7 @@ Ouroboros, после чего выгружается; повторной заг
 ## Установка и проверка без посещения площадок
 
 ```bash
-cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
+cd /Users/filaret/Desktop/Monitoring
 ./scripts/install_ai_tools_macos.sh
 ./scripts/download_local_model_macos.sh
 ./scripts/start_local_ai.sh

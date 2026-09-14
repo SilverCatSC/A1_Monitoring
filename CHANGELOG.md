@@ -1,5 +1,18 @@
 # Журнал изменений
 
+## M6.5 — Windows interactive host-runner contract — 2026-09-14
+
+- Added a Windows host-runner contract for exactly one cautious cycle in a
+  signed-in interactive desktop; it is mutex-protected, refuses Session 0 and
+  records a privacy-safe operational status without automatic marketplace retry.
+- Task registration is plan-only until explicit `-Apply`; the proposed
+  `\A1Monitoring\InteractiveCycle` is Interactive-only, ignores concurrent
+  triggers and has `RestartCount=0`. Container `SCHEDULER_ENABLED` remains
+  false because it cannot operate host Chrome.
+- Current runbooks use the VPSUS split-tunnel contract: ChatGPT/Codex stays
+  available while Auto.ru/Avito use approved direct browser rules. Windows/MSI
+  runtime remains unaccepted; no external Windows execution was performed.
+
 ## M6.4 — interruption-safe cycle ledger — 2026-09-14
 
 - `KeyboardInterrupt` and normalized `SIGTERM` now terminalize a registered

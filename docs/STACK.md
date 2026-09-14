@@ -1,10 +1,11 @@
 # Программный стек
 
-Рабочая версия 0.9.0. Реализованный операторский контур — Python 3.12 / macOS / ARM64,
-контейнеры Linux ARM64. По последнему решению владельца основной компьютер —
-MacBook Pro M2 Pro, 16 ГБ памяти. [Запуск на Mac](MACOS_INSTALL.md).
-Windows 11 на MSI остаётся запасным, ещё не проверенным вариантом;
-Windows-команды находятся в `scripts/*_windows.ps1`.
+Текущая staged-версия — 0.14.0. Реализованный и технически проверенный контур —
+Python 3.12 / macOS / ARM64, контейнеры Linux ARM64. MacBook Pro M2 Pro с 16 ГБ
+остаётся Mac/stage средой; [запуск на Mac](MACOS_INSTALL.md). Windows 11 на MSI —
+целевой production-контур, но ещё не прошёл живую приёмку. Его видимый Chrome
+запускается только через `scripts/*_windows.ps1` в интерактивной сессии, не через
+container scheduler.
 
 | Назначение | Технология / проверенная версия |
 | --- | --- |
@@ -15,10 +16,10 @@ Windows-команды находятся в `scripts/*_windows.ps1`.
 | HTML parsing | BeautifulSoup 4.15.0 |
 | Импорт | pandas 3.0.5, HTTPX 0.28.1 |
 | Данные | PostgreSQL 16, SQLAlchemy 2.0.52, psycopg2-binary 2.9.12 |
-| Миграции | Alembic 1.19.1; head 20260909_0006 |
+| Миграции | Alembic 1.19.1; stage head 20260914_0011 |
 | Тестирование | pytest 9.1.1, Ruff 0.16.6 |
 | Поставка | Docker Compose, Git, requirements.lock |
-| Запасной Windows-запуск | PowerShell 7, Docker Desktop/WSL2, Git for Windows, Chrome |
+| Целевой Windows-запуск | PowerShell 7, Docker Desktop/WSL2, Git for Windows, Chrome, interactive host-runner |
 | Публичный отчёт | Статический HTML/CSS/JS, GitHub Pages workflow |
 | Bitrix24 | Входящий webhook, `scripts/bitrix_publish.ps1`, dry-run по умолчанию |
 | Локальная инференс-модель | Qwen3.5-9B Q4_K_M + mmproj-F16 (текст, reasoning, изображения), llama.cpp/Metal, loopback `127.0.0.1:18080` |

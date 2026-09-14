@@ -1,8 +1,9 @@
 # Окружение и установка
 
-Проверено по файлам проекта 14.09.2026. Основной план эксплуатации — Windows 11
-на MSI / 16 ГБ. Существующая рабочая папка сейчас на Mac:
-`/Users/filaret/Desktop/Monitoring`.
+Проверено по файлам проекта 14.09.2026. Целевой production-контур — Windows 11
+на MSI / 16 ГБ; его живой runtime ещё **не принят**. Mac/stage подтверждён только
+в границах [stage gate](../production/STAGE_GATE_2026-09-14.md). Каноническая
+рабочая папка на Mac: `/Users/filaret/Desktop/Monitoring`.
 
 ## Компоненты
 
@@ -27,9 +28,11 @@
 1. Установить Git for Windows, Python 3.12 с launcher `py`, Google Chrome,
    Docker Desktop с WSL2 и PowerShell 7 (`pwsh.exe` нужен AI-установщику).
    Дождаться работающего Docker Engine.
-2. Подготовить `C:\work\A1_Monitoring`. Передать актуальную папку исходников с Mac
-   или клонировать **после отдельного подтверждённого push**. Сейчас локально
-   много незакоммиченных изменений: GitHub не считается полной копией.
+2. Подготовить `C:\work\A1_Monitoring` и клонировать согласованный commit из
+   [A1_Monitoring](https://github.com/SilverCatSC/A1_Monitoring). Проверить, что
+   `git status --short` пуст. Не использовать прежний macOS путь
+   `a1_search_monitor_noapi_product`: это compatibility symlink, а не рабочий
+   каталог новой установки.
 3. Не переносить Mac `.venv*`, исполняемые AI-окружения, cookies Chrome и
    платформенные binaries. Они создаются заново. Модели GGUF можно перенести с
    проверкой контрольных сумм; снимки/JSON нужны для истории отдельно от БД.
@@ -64,6 +67,19 @@ Set-ExecutionPolicy -Scope Process Bypass
 PowerShell на путях с пробелами: [аудит](../analysis/AUDIT_2026-09-14.md).
 Наличие установщика не означает проведённой приёмки на Windows.
 
+## Сеть перед живым обходом
+
+VPSUS остаётся включённым: не выключайте VPN и не закрывайте ChatGPT/Codex ради
+запуска Monitoring. До controlled cycle нужно подтвердить split-tunnel в обычном
+Chrome: ChatGPT доступен по согласованному VPN/direct-маршруту, а `auto.ru` и
+`avito.ru` — по утверждённым прямым browser rules. Сохраните только read-only
+свидетельство настроек и по одной обычной странице каждого домена. Нельзя менять
+VPN, reconnect или bypass-правила без отдельного подтверждения владельца.
+
+Результат текущей Mac-проверки и незакрытые границы описаны в
+[VPSUS split-tunnel gate](../production/VPN_GATE_2026-09-14.md); на MSI этот
+контроль повторяется и остаётся частью M7 acceptance.
+
 ## Существующий Mac
 
 Окружение перенесено вместе с проектом. Повторная загрузка модели не нужна.
@@ -90,12 +106,27 @@ cd /Users/filaret/Desktop/Monitoring
 | CDP Chrome | 19222, только localhost |
 | LLM | 18080, только localhost |
 | `COMPOSE_PROJECT_NAME` | `a1_search_monitor_noapi`, сохранить для прежних volumes |
-| `SCHEDULER_ENABLED` | false на момент переноса |
+| `SCHEDULER_ENABLED` | false: container scheduler не является host-Chrome scheduler |
 | NETWORK_PROFILE | Метка происхождения запуска; не настройка VPN |
 
 Не открывать CDP, БД и LLM-порт в локальную сеть/интернет. В текущем локальном
 окружении аутентификация приложения отключена; публикация такого сервиса наружу
 требует отдельной настройки доступа.
+
+## Повторный запуск на Windows
+
+`local_scan_windows.ps1 -Watch` — только ручной foreground-loop открытого
+PowerShell: он не переживает logoff/сон и не должен работать одновременно с другим
+worker. Для production-расписания не включать `SCHEDULER_ENABLED=true`: web-container
+не управляет видимым Chrome пользовательской сессии.
+
+После ручного MSI controlled cycle и owner review применяется отдельный
+`run_monitoring_host_windows.ps1`: один cautious scan, интерактивный desktop,
+межсессионный mutex и privacy-safe status. Планировщик должен регистрироваться
+скриптом `register_monitoring_task_windows.ps1` сначала без `-Apply`, затем отдельно
+с `-Apply`; задача запускается только как Interactive user и не вложенно с
+`--watch`. Это future gate, а не принятое расписание. Полный порядок — в
+[Windows handoff](../WINDOWS_11_INSTALL.md#host-runner-и-windows-task-scheduler--только-после-gate-4).
 
 ## Память
 

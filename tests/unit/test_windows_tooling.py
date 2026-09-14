@@ -110,3 +110,52 @@ def test_app_compose_service_has_a_loopback_healthcheck():
 
     assert 'healthcheck:' in compose
     assert "http://127.0.0.1:8000/api/v1/health" in compose
+
+
+def test_windows_host_runner_requires_interactive_desktop_and_is_single_cycle():
+    root = Path(__file__).resolve().parents[2]
+    runner = (root / 'scripts' / 'run_monitoring_host_windows.ps1').read_text(encoding='utf-8')
+
+    assert 'SessionId -eq 0' in runner
+    assert "identity.User.Value -eq 'S-1-5-18'" in runner
+    assert 'Get-Process -Name explorer' in runner
+    assert '[System.Threading.Mutex]::new($false, (Get-A1MutexName $Root))' in runner
+    assert '$mutex.WaitOne(0)' in runner
+    assert '[System.Threading.AbandonedMutexException]' in runner
+    assert 'HOST_RUNNER_SKIPPED_ACTIVE' in runner
+    assert '[System.IO.File]::WriteAllText(' in runner
+    assert '[System.IO.File]::Replace($temporaryPath, $script:StatusPath, $null)' in runner
+    assert '[System.IO.File]::Move($temporaryPath, $script:StatusPath)' in runner
+    assert "'-m', 'app.cli', 'recover-open-cycles'" in runner
+    assert runner.index("'-m', 'app.cli', 'recover-open-cycles'") < runner.index(
+        "'local_scan_windows.ps1'"
+    )
+    assert "$Pace = 'cautious'" in runner
+    assert "'-Pace' $Pace" in runner
+    assert 'HOST_RUNNER_PARTIAL: no automatic retry was started.' in runner
+
+
+def test_windows_task_registration_is_plan_only_and_never_autostarts_scan():
+    root = Path(__file__).resolve().parents[2]
+    registrar = (
+        root / 'scripts' / 'register_monitoring_task_windows.ps1'
+    ).read_text(encoding='utf-8')
+
+    assert 'SessionId -eq 0' in registrar
+    assert "identity.User.Value -eq 'S-1-5-18'" in registrar
+    assert 'Get-Process -Name explorer' in registrar
+    assert "if (-not $Apply)" in registrar
+    assert 'TASK_REGISTRATION_PLAN_ONLY' in registrar
+    assert registrar.index('if (-not $Apply)') < registrar.index(
+        'Ensure-A1TaskFolder -Path $TaskPath'
+    )
+    assert "CreateFolder('A1Monitoring', $null)" in registrar
+    assert registrar.index('Ensure-A1TaskFolder -Path $TaskPath') < registrar.index(
+        'Register-ScheduledTask -TaskPath $TaskPath'
+    )
+    assert '(Get-Date).Date.AddDays(1)' in registrar
+    assert 'New-ScheduledTaskTrigger -Daily -At $firstRun' in registrar
+    assert '-LogonType Interactive -RunLevel Limited' in registrar
+    assert '-MultipleInstances IgnoreNew -RestartCount 0' in registrar
+    assert 'Start-ScheduledTask' not in registrar
+    assert '--watch' not in registrar

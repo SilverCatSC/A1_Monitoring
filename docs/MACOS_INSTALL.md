@@ -1,14 +1,14 @@
 # A1 Monitoring: основной запуск на Mac
 
-Актуальное решение владельца от 09.09.2026: основная машина — **Mac**, не MSI.
-Проверено на MacBook Pro, Apple M2 Pro, 12 ядер, 16 ГБ общей памяти,
-macOS 26.6.2. Версия приложения — 0.9.0.
+Текущий Mac — staged-контур; Windows/MSI остаётся целевым production-контуром,
+но ещё не принят живым запуском. Проверено на MacBook Pro, Apple M2 Pro, 12 ядер,
+16 ГБ общей памяти, macOS 26.6.2. Текущая staged-версия приложения — 0.14.0.
 
 ## Что уже проверено
 
-09.09.2026 приложение пересобрано и запущено: `LOCAL_READY`, база доступна,
-миграции `20260909_0006 (head)`. В версии 0.9.0 пройдены **204 теста**, Ruff и проверка интерфейса
-на ширинах 1440/390 px, включая формы сверки и переходы между разделами.
+Абзац ниже фиксирует исторический результат 09.09.2026: `LOCAL_READY`, база
+доступна, миграции `20260909_0006 (head)`, 204 теста, Ruff и проверка интерфейса
+на ширинах 1440/390 px. Он не описывает текущий head и не заменяет stage/M7 evidence.
 Снимки интерфейса: `artifacts/ui_0_8/`.
 
 Это локальные проверки программы. **Нового живого обхода в этой сессии нет**:
@@ -27,7 +27,7 @@ Q00/Ouroboros, модель Qwen3.5-9B Q4 и vision-проектор. Требу
 свободного места:
 
 ```bash
-cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
+cd /Users/filaret/Desktop/Monitoring
 ./scripts/install_all_macos.sh
 ```
 
@@ -40,7 +40,7 @@ cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
 На уже настроенном Mac достаточно запуска приложения:
 
 ```bash
-cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
+cd /Users/filaret/Desktop/Monitoring
 ./scripts/start_local.sh
 ```
 
@@ -52,7 +52,7 @@ cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
 ## Повтор локальных тестов без обращения к площадкам
 
 ```bash
-cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
+cd /Users/filaret/Desktop/Monitoring
 .venv312/bin/python -m pytest -q
 .venv312/bin/python -m ruff check src tests scripts
 ./scripts/smoke_stage.sh
@@ -62,15 +62,18 @@ cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
 Проверяйте успешное завершение каждой команды. Эти тесты не подтверждают,
 что автомобиль действительно найден на Auto.ru или Avito.
 
-## Реальная проверка без ChatGPT и VPN
+## Реальная проверка с VPSUS split-tunnel
 
-После запуска приложения отключите VPN. ChatGPT/Codex можно закрыть — мониторинг
-не использует их для работы. Оставьте Docker и пользовательскую сессию запущенными.
+После запуска приложения не отключайте VPSUS и не закрывайте ChatGPT/Codex ради
+мониторинга. Подтвердите в обычном Chrome согласованный split-tunnel: ChatGPT
+доступен по утверждённому VPN/direct-маршруту, Auto.ru и Avito — по direct browser
+rules Monitoring. Не меняйте VPN, reconnect или bypass-правила без отдельного
+подтверждения владельца. Оставьте Docker и пользовательскую сессию запущенными.
 
 В Терминале:
 
 ```bash
-cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
+cd /Users/filaret/Desktop/Monitoring
 ./Запустить\ мониторинг.command
 ```
 
@@ -167,7 +170,7 @@ Ouroboros использует отдельные `artifacts/ouroboros_home`,
 
 ## Другие инструкции
 
-[Windows 11 — запасной вариант](WINDOWS_11_INSTALL.md), [стек](STACK.md),
+[Windows 11 — целевой, но ещё не принятый контур](WINDOWS_11_INSTALL.md), [стек](STACK.md),
 [правила продукта](archive/2026-09-10/BIBLE.md), [README](archive/2026-09-10/README.md).
 GitHub/Bitrix пока не опубликованы; перед публичным экспортом требуется отдельная
 проверка исключения внутренних данных, VIN и замечаний менеджеров.
