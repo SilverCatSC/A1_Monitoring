@@ -117,6 +117,14 @@ class Settings(BaseSettings):
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60
 
+    @field_validator('app_env')
+    @classmethod
+    def _validate_app_env(cls, value: str) -> str:
+        normalized = value.lower().strip()
+        if normalized not in {'development', 'stage', 'production'}:
+            raise ValueError('app_env must be development, stage or production')
+        return normalized
+
     @field_validator('source_import_source')
     @classmethod
     def _validate_source_import_source(cls, value: str) -> str:

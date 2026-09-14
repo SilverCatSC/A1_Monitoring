@@ -541,7 +541,8 @@ def reconciliation_evidence_manifest(
 
 
 @router.post('/scan', response_model=TriggerScanResponse)
-def trigger_scan(db: Session = Depends(get_db)):
+def trigger_scan(request: Request, db: Session = Depends(get_db)):
+    require_roles(request, 'admin', 'operator')
     service = MonitoringCycleService(db)
     started_at = datetime.datetime.now(datetime.UTC)
     try:
@@ -556,7 +557,8 @@ def trigger_scan(db: Session = Depends(get_db)):
 
 
 @router.post('/cycle', response_model=TriggerCycleResponse)
-def trigger_cycle(db: Session = Depends(get_db)):
+def trigger_cycle(request: Request, db: Session = Depends(get_db)):
+    require_roles(request, 'admin', 'operator')
     started_at = datetime.datetime.now(datetime.UTC)
     try:
         summary = MonitoringCycleService(db).run()
@@ -572,7 +574,8 @@ def trigger_cycle(db: Session = Depends(get_db)):
 
 
 @router.post('/dealer/discover')
-def discover_dealer_listings(db: Session = Depends(get_db)):
+def discover_dealer_listings(request: Request, db: Session = Depends(get_db)):
+    require_roles(request, 'admin', 'operator')
     try:
         return DealerDiscoveryService(db).run()
     except DiscoveryAlreadyRunning as exc:
@@ -628,7 +631,12 @@ def dealer_candidate_evidence(candidate_id: str, db: Session = Depends(get_db)):
 
 
 @router.post('/import', response_model=ImportResponse)
-def import_source(file_path: str | None = None, db: Session = Depends(get_db)):
+def import_source(
+    request: Request,
+    file_path: str | None = None,
+    db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator')
     source_path = file_path or settings.source_google_sheet_export_url or settings.source_csv_path
     if not source_path:
         raise HTTPException(status_code=400, detail='file_path required')
@@ -670,12 +678,18 @@ def canonical_filter_catalog_status(db: Session = Depends(get_db)):
 
 
 @router.post('/filters/catalog/sync')
-def sync_canonical_filter_catalog(db: Session = Depends(get_db)):
+def sync_canonical_filter_catalog(request: Request, db: Session = Depends(get_db)):
+    require_roles(request, 'admin', 'operator')
     return FilterRegistryService(db).sync_canonical_catalog()
 
 
 @router.post('/filters')
-def upsert_filter(payload: FilterUpsert, db: Session = Depends(get_db)):
+def upsert_filter(
+    payload: FilterUpsert,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator')
     try:
         return FilterRegistryService(db).upsert(
             source=payload.source,
@@ -690,7 +704,13 @@ def upsert_filter(payload: FilterUpsert, db: Session = Depends(get_db)):
 
 
 @router.patch('/filters/{filter_id}')
-def change_filter_state(filter_id: str, payload: FilterStateChange, db: Session = Depends(get_db)):
+def change_filter_state(
+    filter_id: str,
+    payload: FilterStateChange,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator')
     try:
         entity = FilterRegistryService(db).set_active(filter_id, payload.active)
     except FilterValidationError as exc:

@@ -25,7 +25,9 @@ cleanup_ai() {
 }
 trap cleanup_ai EXIT
 
-curl -fsS --max-time 10 "http://127.0.0.1:18000/api/v1/status/cycles/$CYCLE_ID" >/dev/null
+# The packet builder verifies the exact cycle through scripts/local_api.py. It
+# keeps a local Basic-auth header in memory when AUTH_ENABLED=true, rather than
+# exposing a credential in curl arguments or shell output.
 "$ROOT_DIR/.venv312/bin/python" "$ROOT_DIR/scripts/build_live_agent_packet.py" --cycle-id "$CYCLE_ID"
 "$ROOT_DIR/.venv312/bin/python" "$ROOT_DIR/scripts/build_ai_work_units.py"
 

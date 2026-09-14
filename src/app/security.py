@@ -14,6 +14,7 @@ class SecurityConfigurationError(RuntimeError):
 
 
 ROLES = frozenset({'admin', 'operator', 'marketing', 'sales_director'})
+REQUIRED_PRODUCTION_ROLES = ROLES
 
 
 @dataclass(frozen=True)
@@ -110,21 +111,26 @@ def validate_security_configuration(
     browser_cdp_url: str | None = None,
     host_cdp_scheduler_verified: bool = False,
 ) -> None:
+    environment = environment.lower().strip()
+    if environment not in {'development', 'stage', 'production'}:
+        raise SecurityConfigurationError('environment must be development, stage or production')
+    network_profile = network_profile.lower().strip()
     users = configured_users(
         admin_username=username,
         admin_password=password,
         auth_users_json=auth_users_json,
     )
-    if environment.lower() == 'production' and (
+    if environment == 'production' and (
         not enabled
         or not users
-        or not any(actor.role == 'admin' for actor in users.values())
+        or not REQUIRED_PRODUCTION_ROLES.issubset({actor.role for actor in users.values()})
         or any(len(actor.password) < 16 for actor in users.values())
     ):
         raise SecurityConfigurationError(
-            'production requires AUTH_ENABLED=true, an admin, and 16+ character passwords for all users'
+            'production requires AUTH_ENABLED=true, admin/operator/marketing/sales_director roles, '
+            'and 16+ character passwords for all users'
         )
-    if environment.lower() == 'production' and network_profile not in {
+    if environment == 'production' and network_profile not in {
         'local_browser',
         'cloud_no_vpn',
     }:

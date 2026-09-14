@@ -1,7 +1,10 @@
 import base64
+import json
 
 import pytest
+from pydantic import ValidationError
 
+from app.config import Settings
 from app.security import (
     SecurityConfigurationError,
     authenticate_basic_authorization,
@@ -14,6 +17,18 @@ from app.security import (
 def _header(username: str, password: str) -> str:
     token = base64.b64encode(f'{username}:{password}'.encode()).decode()
     return f'Basic {token}'
+
+
+def _production_users_json(*roles: str) -> str:
+    return json.dumps(
+        {
+            role: {
+                'password': f'{role}-password-at-least-16',
+                'role': role,
+            }
+            for role in roles
+        }
+    )
 
 
 def test_basic_authorization_requires_exact_credentials():
@@ -38,6 +53,7 @@ def test_production_refuses_disabled_or_weak_auth():
         username='admin',
         password='long-random-password',
         network_profile='cloud_no_vpn',
+        auth_users_json=_production_users_json('operator', 'marketing', 'sales_director'),
     )
     validate_security_configuration(
         environment='production',
@@ -45,7 +61,24 @@ def test_production_refuses_disabled_or_weak_auth():
         username='admin',
         password='long-random-password',
         network_profile='local_browser',
+        auth_users_json=_production_users_json('operator', 'marketing', 'sales_director'),
     )
+
+
+@pytest.mark.parametrize('missing_role', ('operator', 'marketing', 'sales_director'))
+def test_production_requires_every_m7_role(missing_role):
+    roles = {'operator', 'marketing', 'sales_director'}
+    roles.remove(missing_role)
+
+    with pytest.raises(SecurityConfigurationError, match='admin/operator/marketing/sales_director'):
+        validate_security_configuration(
+            environment=' production ',
+            enabled=True,
+            username='admin',
+            password='long-random-password',
+            network_profile='local_browser',
+            auth_users_json=_production_users_json(*sorted(roles)),
+        )
 
 
 def test_production_refuses_unverified_network_profile():
@@ -56,6 +89,7 @@ def test_production_refuses_unverified_network_profile():
             username='admin',
             password='long-random-password',
             network_profile='local_vpn',
+            auth_users_json=_production_users_json('operator', 'marketing', 'sales_director'),
         )
 
 
@@ -63,6 +97,13 @@ def test_stage_can_run_without_auth_but_is_not_production():
     validate_security_configuration(
         environment='stage', enabled=False, username=None, password=None
     )
+
+
+def test_app_environment_is_normalized_and_rejects_production_policy_bypasses():
+    assert Settings(APP_ENV=' Production ').app_env == 'production'
+    for invalid in ('prod', 'staging', 'production-ready', ''):
+        with pytest.raises(ValidationError, match='app_env must be development, stage or production'):
+            Settings(APP_ENV=invalid)
 
 
 def test_local_browser_scheduler_requires_verified_host_cdp_architecture():

@@ -6,13 +6,15 @@
 
 ## Модель доступа
 
-При `AUTH_ENABLED=true` приложение требует Basic-auth. Единственный обязательный
-admin остаётся в `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Дополнительные пользователи
-задаются в секретном окружении `AUTH_USERS_JSON`, но не в Git, `.env.example`,
-отчётах или ticket:
+При `AUTH_ENABLED=true` приложение требует Basic-auth. Для production/M7 startup
+fail-closed требует все четыре серверные роли: admin (обычно из
+`ADMIN_USERNAME` / `ADMIN_PASSWORD`), а также operator, marketing и
+sales_director. Пользователи из `AUTH_USERS_JSON` задаются в секретном окружении,
+но не в Git, `.env.example`, отчётах или ticket:
 
 ```json
 {
+  "operator": {"password": "длинный-секрет", "role": "operator"},
   "marketing": {"password": "длинный-секрет", "role": "marketing"},
   "sales-director": {"password": "длинный-секрет", "role": "sales_director"}
 }
@@ -22,18 +24,36 @@ admin остаётся в `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Дополнит�
 переноса секрета использовать manager окружения/CI или локальное хранилище
 секретов. Не вставлять реальные примеры в документацию, сообщения или коммиты.
 `AUTH_ENABLED=false` остаётся только для stage на loopback; он не создаёт
-production-доступ без входа.
+production-доступ без входа. Проверка гарантирует наличие ролей, но не
+подтверждает, что реальные люди и owner sign-off уже назначены.
 
 | Роль | Может | Не может |
 | --- | --- | --- |
-| `admin` | Все разрешённые переходы feedback, ручная смена и подтверждение ссылок | Автоматически признать candidate тем же Vehicle |
-| `operator` | Все разрешённые переходы feedback, ручная смена и подтверждение ссылок | Изменить первичный маркетинговый источник |
-| `marketing` | Создать feedback; `new → checking/assigned`; `checking/assigned → fixed` | Подтвердить исправление, сменить ссылку Offer |
-| `sales_director` | Создать feedback; подтвердить `fixed → confirmed` | Исправить/сменить ссылку или пропустить промежуточную проверку |
+| `admin` | Все разрешённые переходы feedback, controlled cycle/discovery/import, синхронизация и изменение фильтров, ручная смена и подтверждение ссылок | Автоматически признать candidate тем же Vehicle |
+| `operator` | Все разрешённые переходы feedback, controlled cycle/discovery/import, синхронизация и изменение фильтров, ручная смена и подтверждение ссылок | Изменить первичный маркетинговый источник |
+| `marketing` | Создать feedback; `new → checking/assigned`; `checking/assigned → fixed` | Запустить monitoring/import/discovery, изменить фильтры, подтвердить исправление или сменить ссылку Offer |
+| `sales_director` | Создать feedback; подтвердить `fixed → confirmed` | Запустить monitoring/import/discovery, изменить фильтры, исправить/сменить ссылку или пропустить промежуточную проверку |
 
 Разрешения применяются сервером к текущей роли. Поля «кто выполняет» и «кто
 проверил» нужны для stage-совместимости и истории, но при включённой аутентификации
 не являются источником полномочий.
+
+При включённой аутентификации сервер возвращает `403` для roles вне
+`admin`/`operator` на operational и registry-mutations: `POST /scan`, `POST
+/cycle`, `POST /dealer/discover`, `POST /import`, `POST /filters/catalog/sync`,
+`POST /filters` и `PATCH /filters/{id}`. Это не отменяет отдельные M7-gates для
+видимого Chrome, VPSUS и controlled cycle.
+
+## Локальные технические проверки при Basic-auth
+
+`doctor.py`, `check_ui.py` и `build_live_agent_packet.py` продолжают работать
+после `AUTH_ENABLED=true`: они читают `ADMIN_USERNAME` / `ADMIN_PASSWORD` только
+внутри локального процесса, создают Basic header или browser context только в
+памяти и обращаются исключительно к `127.0.0.1`, `::1` или `localhost` с явным
+портом. Header, пароль и Base64-token не передаются в shell arguments, не
+печатаются и не идут через redirect или удалённый `--api-url`. При включённой
+аутентификации без локальной admin-пары проверка fail-closed; создавать или
+подставлять секрет ради зелёного check нельзя.
 
 ## Работа с исключением
 

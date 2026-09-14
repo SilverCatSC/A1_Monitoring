@@ -6,22 +6,41 @@ from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlsplit
 
-from doctor import env_values
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from playwright.async_api import async_playwright
+
+if __package__:
+    from .local_api import env_values, local_api_credentials, local_api_request
+else:
+    from local_api import env_values, local_api_credentials, local_api_request
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 async def main():
-    base = f'http://127.0.0.1:{env_values().get("APP_BIND_PORT", "18000")}'
+    values = env_values()
+    base = f'http://127.0.0.1:{values.get("APP_BIND_PORT", "18000")}'
+    try:
+        # Validate the target before creating a context that may hold local
+        # Basic-auth credentials. The test must never navigate to a remote URL.
+        local_api_request(base + '/api/v1/ready')
+        credentials = local_api_credentials(values)
+    except (ValueError, RuntimeError) as exc:
+        raise SystemExit(f'UI_CHECK_REFUSED reason={exc}') from exc
     output = ROOT / 'artifacts' / 'ui_0_8'
     output.mkdir(parents=True, exist_ok=True)
     failures = []
     async with async_playwright() as p:
         browser = await p.chromium.launch(channel='chrome', headless=True)
         try:
-            context = await browser.new_context()
+            context_options = {}
+            if credentials is not None:
+                context_options['http_credentials'] = {
+                    'username': credentials[0],
+                    'password': credentials[1],
+                    'origin': base,
+                }
+            context = await browser.new_context(**context_options)
             async def local_only(route):
                 if urlsplit(route.request.url).netloc == urlsplit(base).netloc:
                     await route.continue_()

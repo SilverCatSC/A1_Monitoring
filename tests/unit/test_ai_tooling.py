@@ -84,6 +84,8 @@ def test_hermes_review_requires_vehicle_keys_from_the_evidence_packet() -> None:
     assert 'build_ai_work_units.py' in script
     assert 'run_ai_work_units.py' in script
     assert 'validate_staged_review.py' in script
+    assert 'scripts/local_api.py' in script
+    assert 'curl -fsS --max-time 10 "http://127.0.0.1:18000/api/v1/status/cycles/$CYCLE_ID"' not in script
 
 
 def test_local_model_server_is_low_concurrency_and_multimodal() -> None:

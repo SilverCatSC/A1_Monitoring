@@ -1,4 +1,12 @@
 services:
+  # This overlay is the only Internet-facing Compose path. Do not inherit a
+  # local stage/no-auth profile: app startup must fail closed without real
+  # production credentials and an allowed production network profile.
+  app:
+    environment:
+      APP_ENV: "production"
+      AUTH_ENABLED: "true"
+
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped

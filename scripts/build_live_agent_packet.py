@@ -8,7 +8,11 @@ import json
 from datetime import UTC, datetime
 from pathlib import Path
 from urllib.parse import quote
-from urllib.request import urlopen
+
+if __package__:
+    from .local_api import env_values, local_api_auth_headers, local_api_request, open_local_api
+else:
+    from local_api import env_values, local_api_auth_headers, local_api_request, open_local_api
 
 
 def _read_json(path: Path) -> dict:
@@ -78,8 +82,8 @@ def build_packet(
     }
 
 
-def _get_json(url: str) -> dict:
-    with urlopen(url, timeout=10) as response:
+def _get_json(url: str, *, headers: dict[str, str]) -> dict:
+    with open_local_api(local_api_request(url, headers=headers), timeout=10) as response:
         value = json.loads(response.read().decode('utf-8'))
     if not isinstance(value, dict):
         raise ValueError(f'{url} must return a JSON object')
@@ -89,7 +93,11 @@ def _get_json(url: str) -> dict:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument('--cycle-id', required=True)
-    parser.add_argument('--api-url', default='http://127.0.0.1:18000/api/v1')
+    parser.add_argument(
+        '--api-url',
+        default='http://127.0.0.1:18000/api/v1',
+        help='Loopback A1 API URL; local credentials are never sent to a remote host.',
+    )
     parser.add_argument('--head-audit', type=Path, default=Path('artifacts/head_table_audits/latest.json'))
     parser.add_argument('--company-site-audit', type=Path, default=Path('artifacts/company_site_audits/latest.json'))
     parser.add_argument('--output-dir', type=Path, default=Path('artifacts/agent_reviews'))
@@ -99,11 +107,14 @@ def main() -> int:
     if not cycle_id:
         raise ValueError('cycle-id must not be empty')
     api_url = args.api_url.rstrip('/')
+    protected_headers = local_api_auth_headers(env_values())
     safe_cycle_id = quote(cycle_id, safe='')
     packet = build_packet(
         cycle_id=cycle_id,
-        cycle=_get_json(f'{api_url}/status/cycles/{safe_cycle_id}'),
-        scan=_get_json(f'{api_url}/status/scans/latest?cycle_id={safe_cycle_id}'),
+        cycle=_get_json(f'{api_url}/status/cycles/{safe_cycle_id}', headers=protected_headers),
+        scan=_get_json(
+            f'{api_url}/status/scans/latest?cycle_id={safe_cycle_id}', headers=protected_headers
+        ),
         head_table_audit=_read_json(args.head_audit),
         company_site_audit=_read_json(args.company_site_audit),
     )

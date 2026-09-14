@@ -117,7 +117,9 @@ cd /Users/filaret/Desktop/Monitoring
 Полный сценарий передаёт `cycle_id` сам. При ручном запуске `build_live_agent_packet.py`,
 `run_ai_review_*` и `run_ouroboros_live_audit_*` обязаны получить один и тот же
 завершённый `cycle_id`; сборка откажется от частичного цикла или смешанных
-`latest`-артефактов.
+`latest`-артефактов. При `AUTH_ENABLED=true` packet builder использует только
+in-memory локальный Basic-auth для loopback API; не передавайте пароль в `curl`,
+`--api-url`, shell history или вывод терминала.
 
 ## Реальный цикл
 
