@@ -102,3 +102,11 @@ def test_deploy_requires_explicit_apply_and_checks_schema_state():
     assert 'alembic heads' in deploy_sh
     assert '"${COMPOSE[@]}" up -d --build app db backup' in deploy_sh
     assert 'DEPLOY_OK health=' in deploy_sh
+
+
+def test_app_compose_service_has_a_loopback_healthcheck():
+    root = Path(__file__).resolve().parents[2]
+    compose = (root / 'docker-compose.yml').read_text(encoding='utf-8')
+
+    assert 'healthcheck:' in compose
+    assert "http://127.0.0.1:8000/api/v1/health" in compose

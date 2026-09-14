@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 from typing import List
+from urllib.parse import urlparse
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -9,6 +11,32 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_browser', 'local_no_vpn', 'cloud_no_vpn'})
 BUSINESS_TRUSTED_NETWORK_PROFILES = SCAN_ALLOWED_NETWORK_PROFILES
 PRODUCTION_NETWORK_PROFILES = frozenset({'local_browser', 'cloud_no_vpn'})
+
+
+def is_non_loopback_cdp_url(value: str | None) -> bool:
+    """Return whether a CDP endpoint can point outside the current process.
+
+    A container cannot use its own loopback address to reach the visible host
+    browser. This is deliberately a structural check only; the deployment
+    operator must separately attest that the host-side CDP route was verified.
+    """
+    if not value:
+        return False
+    try:
+        parsed = urlparse(value)
+        port = parsed.port
+    except ValueError:
+        return False
+    host = (parsed.hostname or '').rstrip('.').lower()
+    if parsed.scheme not in {'http', 'https'} or not host or port is None:
+        return False
+    if host in {'localhost', 'localhost.localdomain'}:
+        return False
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return True
+    return not address.is_loopback and not address.is_unspecified
 
 
 class Settings(BaseSettings):
@@ -45,6 +73,9 @@ class Settings(BaseSettings):
     scan_interval_minutes: int = Field(default=360, alias='SCAN_INTERVAL_MINUTES', ge=1)
     scan_enabled_engines: str = Field(default='auto_ru,avito', alias='SCAN_ENABLED_ENGINES')
     scheduler_enabled: bool = Field(default=False, alias='SCHEDULER_ENABLED')
+    host_cdp_scheduler_verified: bool = Field(
+        default=False, alias='HOST_CDP_SCHEDULER_VERIFIED'
+    )
     playwright_headless: bool = Field(default=True, alias='PLAYWRIGHT_HEADLESS')
     browser_cdp_url: str | None = Field(default=None, alias='BROWSER_CDP_URL')
     request_timeout_seconds: int = Field(default=25, alias='REQUEST_TIMEOUT_SECONDS', ge=5)

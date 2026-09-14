@@ -6,6 +6,8 @@ import hmac
 import json
 from dataclasses import dataclass
 
+from app.config import is_non_loopback_cdp_url
+
 
 class SecurityConfigurationError(RuntimeError):
     pass
@@ -104,6 +106,9 @@ def validate_security_configuration(
     password: str | None,
     network_profile: str = 'unknown',
     auth_users_json: str | None = None,
+    scheduler_enabled: bool = False,
+    browser_cdp_url: str | None = None,
+    host_cdp_scheduler_verified: bool = False,
 ) -> None:
     users = configured_users(
         admin_username=username,
@@ -126,6 +131,19 @@ def validate_security_configuration(
         raise SecurityConfigurationError(
             'production requires NETWORK_PROFILE=local_browser or cloud_no_vpn '
             'after connectivity verification'
+        )
+    if (
+        scheduler_enabled
+        and network_profile.lower().strip() == 'local_browser'
+        and (
+            not host_cdp_scheduler_verified
+            or not is_non_loopback_cdp_url(browser_cdp_url)
+        )
+    ):
+        raise SecurityConfigurationError(
+            'SCHEDULER_ENABLED=true with NETWORK_PROFILE=local_browser requires '
+            'HOST_CDP_SCHEDULER_VERIFIED=true and a non-loopback BROWSER_CDP_URL '
+            'with an explicit port'
         )
 
 

@@ -65,6 +65,45 @@ def test_stage_can_run_without_auth_but_is_not_production():
     )
 
 
+def test_local_browser_scheduler_requires_verified_host_cdp_architecture():
+    base = {
+        'environment': 'stage',
+        'enabled': False,
+        'username': None,
+        'password': None,
+        'network_profile': 'local_browser',
+        'scheduler_enabled': True,
+    }
+    with pytest.raises(SecurityConfigurationError, match='HOST_CDP_SCHEDULER_VERIFIED'):
+        validate_security_configuration(
+            **base,
+            browser_cdp_url='http://host.docker.internal:19222',
+            host_cdp_scheduler_verified=False,
+        )
+    with pytest.raises(SecurityConfigurationError, match='non-loopback'):
+        validate_security_configuration(
+            **base,
+            browser_cdp_url='http://127.0.0.1:19222',
+            host_cdp_scheduler_verified=True,
+        )
+    validate_security_configuration(
+        **base,
+        browser_cdp_url='http://host.docker.internal:19222',
+        host_cdp_scheduler_verified=True,
+    )
+
+
+def test_scheduler_guard_does_not_change_stage_local_vpn_behavior():
+    validate_security_configuration(
+        environment='stage',
+        enabled=False,
+        username=None,
+        password=None,
+        network_profile='local_vpn',
+        scheduler_enabled=True,
+    )
+
+
 def test_configured_roles_are_server_owned_and_require_valid_accounts():
     users = configured_users(
         admin_username='admin',

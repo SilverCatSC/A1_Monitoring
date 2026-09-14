@@ -27,6 +27,9 @@ async def lifespan(_app: FastAPI):
         password=settings.admin_password,
         network_profile=settings.network_profile,
         auth_users_json=settings.auth_users_json,
+        scheduler_enabled=settings.scheduler_enabled,
+        browser_cdp_url=settings.browser_cdp_url,
+        host_cdp_scheduler_verified=settings.host_cdp_scheduler_verified,
     )
     init_db()
     scheduler = (

@@ -37,6 +37,13 @@ services:
       - "127.0.0.1:${APP_BIND_PORT:-8000}:8000"
     command: >
       /bin/sh -c "alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    healthcheck:
+      test:
+        ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8000/api/v1/health', timeout=3).status == 200"]
+      interval: 15s
+      timeout: 5s
+      retries: 8
+      start_period: 30s
     volumes:
       # A local Chrome worker writes screenshots on the host; the dashboard
       # reads the same files through this bind mount.
