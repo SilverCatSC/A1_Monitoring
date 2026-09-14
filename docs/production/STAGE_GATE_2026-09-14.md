@@ -20,6 +20,9 @@ scan, external export, publication or VPN-route change was made in this gate.
 - Local secret and evidence boundaries were tightened after the gate: `.env` is
   owner-readable only and `artifacts` (including the persistent Chrome profile)
   is owner-traversable only. Loopback readiness remained successful afterwards.
+- The post-gate lifecycle deployment recovered one proven abandoned cycle through
+  the lock-aware application route; `active_count` became zero. Details:
+  [INTERRUPTED_CYCLE_RECOVERY_2026-09-14.md](INTERRUPTED_CYCLE_RECOVERY_2026-09-14.md).
 
 ## Boundary
 

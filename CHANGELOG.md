@@ -9,6 +9,9 @@
   lock is idle; actor, timestamp and recovery reason are retained.
 - Package metadata now matches runtime version `0.14.0`. Local `.env` and
   evidence/Chrome-profile directories are owner-only on the current Mac/stage.
+- The one historical open cycle was recovered through the new application route,
+  not direct SQL; the manifest remains immutable and operations now reports zero
+  active cycles.
 
 ## M7 pre-acceptance — v6 shadow cycle and link-review state — 2026-09-14
 

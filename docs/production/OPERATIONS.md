@@ -32,6 +32,9 @@ Auto.ru/Avito, поэтому это явное действие операто�
 
 ## Interrupted-cycle recovery
 
+The first real recovery record is
+[INTERRUPTED_CYCLE_RECOVERY_2026-09-14.md](INTERRUPTED_CYCLE_RECOVERY_2026-09-14.md).
+
 `KeyboardInterrupt` and a normalized `SIGTERM` now persist a terminal `failed`
 ledger record before the runner exits. If an older runner ended before that
 write, an admin/operator can perform a **non-scanning** recovery:
