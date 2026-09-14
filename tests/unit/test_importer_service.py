@@ -77,6 +77,28 @@ def test_import_snapshot_is_correlated_to_a_full_cycle(db_modules):
         session.close()
 
 
+def test_empty_import_is_quarantined_without_deactivating_last_good_registry(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter, SourceImportError
+    from app.models import Listing, SourceImportSnapshot
+
+    session = app_db.SessionLocal()
+    try:
+        session.add(Listing(id='existing', vehicle_signature='existing', is_active=True))
+        session.commit()
+
+        with pytest.raises(SourceImportError):
+            SourceImporter(session).run([], source_signature='empty', cycle_id='cycle-empty')
+
+        snapshot = session.query(SourceImportSnapshot).one()
+        assert snapshot.cycle_id == 'cycle-empty'
+        assert snapshot.blocked_by_schema_drift is True
+        assert snapshot.valid_rows == 0
+        assert session.get(Listing, 'existing').is_active is True
+    finally:
+        session.close()
+
+
 def test_importer_splits_current_combined_brand_model_header(db_modules):
     app_db, _ = db_modules
     from app.importer.service import SourceImporter

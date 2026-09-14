@@ -1,5 +1,12 @@
 # Журнал изменений
 
+## M1.5 — закрытие offline gate — 2026-09-14
+
+- Пустой импорт теперь закреплён regression test: снимок уходит в карантин с
+  `cycle_id`, а последний валидный реестр не деактивируется.
+- M1 закрыт как code/documentation milestone. Live acceptance, controlled resume
+  и Windows-приёмка не объявляются завершёнными и остаются в M6/M7.
+
 ## M1.4 — операторская очередь циклов — 2026-09-14
 
 - Добавлен `/status/cycles`: partial и failed попытки видны отдельно от latest
