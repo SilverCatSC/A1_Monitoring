@@ -56,6 +56,15 @@ Avito selected-radius configuration and its runtime evidence are recorded in
 [AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
 A fresh shadow-run must use this v6 filter catalogue.
 
+Отдельно подтверждена одновременная функциональная доступность в обычном Chrome:
+при оставленном включённым VPSUS загрузились ChatGPT, Auto.ru и Avito, в адресной
+строке которого был виден канонический selected-radius URL. Во время этой проверки не менялись
+настройки VPSUS, не выполнялись reconnect, scheduler или marketplace scan.
+Это подтверждает только пользовательскую проверку доступности, а не доказывает
+direct/bypass rule либо фактический egress каждого домена; Gate 1 и M7 остаются
+открытыми. Полная privacy-safe запись — в
+[VPN gate](VPN_GATE_2026-09-14.md).
+
 После подтверждения оператор фиксирует screenshot/текст настроек и выполняет один
 контролируемый доступ в обычном Chrome:
 

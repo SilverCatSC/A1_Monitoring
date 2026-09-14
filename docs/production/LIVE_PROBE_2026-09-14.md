@@ -40,6 +40,19 @@ local_scan в режиме probe. Этот режим не создаёт observ
 checksum backup, isolated restore-test и deploy preflight прошли; app version
 осталась 0.14.0, Alembic revision 20260914_0010.
 
+## Separate ordinary-Chrome observation
+
+Отдельная функциональная проверка в обычном Chrome при оставленном включённым
+VPSUS одновременно показала загруженные ChatGPT, Auto.ru и Avito, в адресной
+строке которого был виден канонический selected-radius URL. Она не была запуском `local_scan`,
+не создала monitoring cycle/observations, не меняла VPN-конфигурацию и не
+выполняла reconnect или scheduler. Полная privacy-safe запись и её ограничение
+находятся в [VPN gate](VPN_GATE_2026-09-14.md): это доступность сервисов для
+пользователя, а не доказательство конкретного split-tunnel policy или egress
+маршрута. Это более позднее browser evidence после `25c55fe` при Alembic
+`20260914_0011`; предыдущий раздел Deployment evidence остаётся исторической
+записью проверки на `20260914_0010`.
+
 ## Boundary
 
 Probe подтверждает, что текущие адаптеры могут прочитать по одной странице через
