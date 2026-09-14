@@ -123,20 +123,28 @@ M6 остаётся открытым до проверенных backup/restore,
 
 Backup пишет SHA-256 companion, restore-test сравнивает dump/Alembic/ключевые
 таблицы во временной БД. Public export требует свежий owner allowlist и создаёт
-только aggregate-only HTML. Реальные backup/restore, owner review HTML и Pages
-publish не выполнялись, поэтому M6 и `0.15.0` остаются открытыми.
+только aggregate-only HTML.
 
-Live attempt 14.09.2026 создал verified backup, но isolated restore не начался:
-running container остался на app `0.9.0` / Alembic `20260909_0006`, а current
-release требует `20260914_0010`. Сначала нужен отдельный controlled deploy,
-затем повтор backup/restore.
+Current Mac/stage technical gate 14.09.2026 закрыт: controlled deploy поднял
+app 0.14.0 / Alembic 20260914_0010; stage smoke, новый checksum backup и
+isolated restore-test прошли. Historical backup старой схемы также прошёл
+restore-test. Evidence: DEPLOYMENT_2026-09-14.md.
 
-## M7 подготовлен документально, но не начат
+M6 не получает version 0.15.0 до owner review aggregate-only export и живой
+Windows проверки backup-age и controlled retry. Export, Pages publish и
+внешняя публикация не выполнялись.
+
+## M7 начат на текущем Mac, но не завершён
 
 Единый [M7 acceptance runbook](ACCEPTANCE_M7.md) задаёт live stop-gates для
 VPSUS, backup/restore, Mac shadow-run, MSI/Windows и owner rollback decision.
-Его нельзя закрыть в CI или автоматическим агентом без утверждённой контрольной
-выборки и действий владельца.
+На текущем Mac подтверждены VPN routing, backup/restore и одностраничные
+read-only probes Auto.ru/Avito; evidence записано в VPN_GATE_2026-09-14.md
+и LIVE_PROBE_2026-09-14.md.
+
+M7 нельзя закрыть в CI или автоматическим агентом: нужны утверждённая owner
+контрольная выборка, полноценный shadow-run с ручной сверкой, реальные
+role accounts и отдельная MSI/Windows приёмка.
 
 ## Рабочий ритм
 
