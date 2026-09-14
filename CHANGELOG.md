@@ -1,5 +1,15 @@
 # Журнал изменений
 
+## M6.1 — controlled retry и операционные метрики — 2026-09-14
+
+- Повтор `partial`/`failed` цикла создаёт новый `MonitoringCycle` с
+  `retry_of_cycle_id`; старый roster manifest и наблюдения не переписываются.
+- Добавлен CLI `retry-cycle`, защищённый операторский маршрут и
+  `/status/operations`; scheduler coalesces пропуски и блокирует параллельный
+  job. Миграция `20260914_0010` добавляет retry provenance.
+- Backup/restore, allowlist публикации и живая приёмка Windows/Mac остаются
+  незавершёнными частями M6; версия не повышалась до `0.15.0`.
+
 ## M5 — operator release — 2026-09-14
 
 - Добавлены серверные роли `admin`, `operator`, `marketing`, `sales_director`.

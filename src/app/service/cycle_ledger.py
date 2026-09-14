@@ -34,17 +34,26 @@ class CycleLedgerService:
         self.db = db
         self.evidence_dir = Path(evidence_dir or settings.evidence_dir).resolve()
 
-    def start(self) -> MonitoringCycle:
+    def start(self, *, retry_of_cycle_id: str | None = None) -> MonitoringCycle:
+        if retry_of_cycle_id:
+            self.ensure_retryable(retry_of_cycle_id)
         cycle = MonitoringCycle(
             network_profile=settings.network_profile,
             app_version=settings.app_version,
             started_at=_utcnow(),
             status='preparing',
+            retry_of_cycle_id=retry_of_cycle_id,
         )
         self.db.add(cycle)
         # The record must survive an import transaction rollback.
         self.db.commit()
         return cycle
+
+    def ensure_retryable(self, cycle_id: str) -> MonitoringCycle:
+        parent = self._cycle(cycle_id)
+        if parent.status not in {'partial', 'failed'} or parent.finished_at is None:
+            raise CycleLedgerError('only a finished partial or failed cycle can be retried')
+        return parent
 
     def seal_roster(self, cycle_id: str, import_snapshot_id: str | None) -> dict:
         cycle = self._cycle(cycle_id)
@@ -73,6 +82,7 @@ class CycleLedgerService:
             'roster_count': cycle.roster_count,
             'roster_sha256': cycle.roster_sha256,
             'manifest_path': cycle.manifest_path,
+            'retry_of_cycle_id': cycle.retry_of_cycle_id,
         }
 
     def complete(self, cycle_id: str, summary: dict) -> dict:

@@ -23,6 +23,8 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser('scan')
 
     sub.add_parser('run-cycle')
+    retry_cycle = sub.add_parser('retry-cycle')
+    retry_cycle.add_argument('cycle_id')
     return parser
 
 
@@ -33,7 +35,7 @@ def main() -> None:
     if args.command == 'init':
         init_db()
         return
-    if args.command in {'serve', 'run-cycle', 'scan'}:
+    if args.command in {'serve', 'run-cycle', 'scan', 'retry-cycle'}:
         import uvicorn
 
         from app.main import app
@@ -46,6 +48,8 @@ def main() -> None:
                 MonitoringCycleService(db).run()
             elif args.command == 'run-cycle':
                 MonitoringCycleService(db).run()
+            elif args.command == 'retry-cycle':
+                MonitoringCycleService(db).retry(args.cycle_id)
         return
 
     if args.command == 'import-source':

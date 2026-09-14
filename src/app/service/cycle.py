@@ -58,7 +58,7 @@ class MonitoringCycleService:
         self.progress = progress_callback or (lambda event: None)
         self.before_browser = before_browser
 
-    def run(self) -> dict:
+    def run(self, *, retry_of_cycle_id: str | None = None) -> dict:
         if settings.network_profile not in SCAN_ALLOWED_NETWORK_PROFILES:
             raise ScanConfigurationError(f'scan requires a trusted local profile; current={settings.network_profile}')
         if not settings.browser_cdp_url:
@@ -66,7 +66,11 @@ class MonitoringCycleService:
         validate_scan_sources()
         with cycle_lock(self.db):
             ledger = CycleLedgerService(self.db)
-            cycle = ledger.start()
+            cycle = (
+                ledger.start(retry_of_cycle_id=retry_of_cycle_id)
+                if retry_of_cycle_id
+                else ledger.start()
+            )
             self.progress({'event': 'cycle_registered', 'cycle_id': cycle.id})
             try:
                 result = self._run(cycle.id, ledger)
@@ -76,6 +80,16 @@ class MonitoringCycleService:
                 raise
             cycle_summary = ledger.complete(cycle.id, result['completion'])
             return {**result, 'cycle': cycle_summary}
+
+    def retry(self, cycle_id: str) -> dict:
+        """Retry as a new cycle, retaining only parent provenance.
+
+        Marketplace and source facts can change between attempts. Reusing a
+        failed cycle's roster or adding new observations to its manifest would
+        make the evidence ambiguous, so this always starts a fresh cycle.
+        """
+        CycleLedgerService(self.db).ensure_retryable(cycle_id)
+        return self.run(retry_of_cycle_id=cycle_id)
 
     def _run(self, cycle_id: str, ledger: CycleLedgerService):
         evidence_removed = cleanup_evidence(

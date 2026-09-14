@@ -1,4 +1,5 @@
 import json
+from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import create_engine
@@ -47,6 +48,32 @@ def test_cycle_ledger_seals_an_immutable_privacy_bounded_roster(tmp_path, monkey
         assert session.get(MonitoringCycle, cycle.id).status == 'running'
         with pytest.raises(CycleLedgerError, match='already exists'):
             ledger.seal_roster(cycle.id, 'snapshot-1')
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_retry_creates_a_new_cycle_with_parent_provenance(tmp_path, monkeypatch):
+    engine = create_engine(f'sqlite:///{tmp_path / "retry.db"}')
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    monkeypatch.setattr('app.service.cycle_ledger.settings.network_profile', 'local_browser')
+    try:
+        ledger = CycleLedgerService(session, evidence_dir=str(tmp_path / 'evidence'))
+        parent = ledger.start()
+        parent.status = 'partial'
+        parent.finished_at = datetime.now(UTC)
+        session.commit()
+
+        retry = ledger.start(retry_of_cycle_id=parent.id)
+
+        assert retry.id != parent.id
+        assert retry.retry_of_cycle_id == parent.id
+        assert retry.status == 'preparing'
+        parent.status = 'completed'
+        session.commit()
+        with pytest.raises(CycleLedgerError, match='only a finished partial or failed'):
+            ledger.start(retry_of_cycle_id=parent.id)
     finally:
         session.close()
         engine.dispose()

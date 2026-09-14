@@ -51,7 +51,8 @@ from app.schemas import (
 from app.scraper.base import canonical_listing_key
 from app.service.analytics import STATES, activity_context, analytics_context
 from app.service.company_site_report import company_site_audit_context
-from app.service.cycle import MonitoringCycleService, cycle_lock
+from app.service.cycle import CycleConfigurationError, MonitoringCycleService, cycle_lock
+from app.service.cycle_ledger import CycleLedgerError
 from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
 from app.service.evidence import (
     EvidenceAccessError,
@@ -72,6 +73,7 @@ from app.service.monitor import ScanAlreadyRunning, ScanConfigurationError
 from app.service.offer_reconciliation import offer_review_queue
 from app.service.reconciliation import reconciliation_context
 from app.service.report import (
+    cycle_operational_metrics,
     dashboard_context,
     feedback_queue_context,
     kpi_overview,
@@ -152,6 +154,11 @@ def system_status(db: Session = Depends(get_db)):
     return operational_status(db)
 
 
+@router.get('/status/operations')
+def operations_status(db: Session = Depends(get_db)):
+    return cycle_operational_metrics(db)
+
+
 @router.get('/status/scans/latest')
 def latest_scan_status(cycle_id: str | None = None, db: Session = Depends(get_db)):
     if cycle_id is not None and db.get(MonitoringCycle, cycle_id) is None:
@@ -176,12 +183,30 @@ def monitoring_cycle_status(cycle_id: str, db: Session = Depends(get_db)):
         'manifest_path': cycle.manifest_path,
         'summary': cycle.summary,
         'error': cycle.error,
+        'retry_of_cycle_id': cycle.retry_of_cycle_id,
     }
 
 
 @router.get('/status/cycles')
 def monitoring_cycles_status(limit: int = 20, db: Session = Depends(get_db)):
     return recent_monitoring_cycles(db, limit=limit)
+
+
+@router.post('/cycles/{cycle_id}/retry')
+def retry_monitoring_cycle(
+    cycle_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """Start an explicit fresh retry through the same visible-browser guard."""
+    require_roles(request, 'admin', 'operator')
+    try:
+        result = MonitoringCycleService(db).retry(cycle_id)
+    except (CycleConfigurationError, ScanConfigurationError, ScanAlreadyRunning) as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except CycleLedgerError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return {'cycle': result['cycle'], 'retry_of_cycle_id': cycle_id}
 
 
 @router.get('/status/scans/progress')

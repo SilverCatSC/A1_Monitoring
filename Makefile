@@ -1,5 +1,5 @@
 PYTHON := .venv312/bin/python
-.PHONY: setup setup-full start check test lint doctor scan scan-core watch backup restore-test smoke ui-check public-report bitrix-dry-run
+.PHONY: setup setup-full start check test lint doctor scan scan-core watch retry-cycle backup restore-test smoke ui-check public-report bitrix-dry-run
 setup:
 	./scripts/setup.sh
 setup-full:
@@ -22,6 +22,9 @@ scan-core:
 	./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
 watch:
 	./scripts/local_scan.sh --watch --interval-minutes 360 --pace cautious
+retry-cycle:
+	@test -n "$(CYCLE_ID)" || (echo "Use: make retry-cycle CYCLE_ID=<partial-or-failed-cycle-id>" >&2; exit 2)
+	$(PYTHON) -m app.cli retry-cycle $(CYCLE_ID)
 backup:
 	./scripts/backup_now.sh
 restore-test:

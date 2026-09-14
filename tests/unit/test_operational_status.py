@@ -8,13 +8,20 @@ from app.models import (
     EngineType,
     Listing,
     ListingObservation,
+    MonitoringCycle,
     ObservationState,
     ScanRun,
     ScanRunStatus,
     SearchFilter,
     SourceImportSnapshot,
 )
-from app.service.report import dashboard_context, filter_statistics, kpi_overview, operational_status
+from app.service.report import (
+    cycle_operational_metrics,
+    dashboard_context,
+    filter_statistics,
+    kpi_overview,
+    operational_status,
+)
 
 
 def _session(tmp_path):
@@ -85,6 +92,44 @@ def test_status_separates_unconfigured_source_from_overdue_import(tmp_path):
         assert result['import']['state'] == 'overdue'
         assert result['sources'][0]['state'] == 'not_configured'
         assert result['sources'][0]['active_filters'] == 0
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_cycle_metrics_make_retry_queue_visible(tmp_path):
+    session, engine = _session(tmp_path)
+    now = datetime(2026, 9, 4, 12, 0, tzinfo=UTC)
+    try:
+        session.add_all(
+            [
+                MonitoringCycle(
+                    id='failed',
+                    status='failed',
+                    network_profile='local_browser',
+                    app_version='0.14.0',
+                    started_at=now - timedelta(minutes=20),
+                    finished_at=now - timedelta(minutes=10),
+                ),
+                MonitoringCycle(
+                    id='running',
+                    status='running',
+                    network_profile='local_browser',
+                    app_version='0.14.0',
+                    started_at=now - timedelta(minutes=2),
+                ),
+            ]
+        )
+        session.commit()
+
+        metrics = cycle_operational_metrics(session, now=now)
+        status = operational_status(session, now=now, enabled_sources=[])
+
+        assert metrics['retryable_cycle_ids'] == ['failed']
+        assert metrics['active_count'] == 1
+        assert metrics['failed_last_24h'] == 1
+        assert status['overall'] == 'action_required'
+        assert status['cycles']['retryable_count'] == 1
     finally:
         session.close()
         engine.dispose()

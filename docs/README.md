@@ -28,6 +28,7 @@
 - [Evidence contract](production/EVIDENCE_CONTRACT.md) — M3-screenshot manifests, integrity и fail-closed collector rules.
 - [Offer reconciliation](production/OFFER_RECONCILIATION.md) — M4-очередь цены, НДС, статуса и ghost/missing Offer.
 - [Operator release](production/OPERATOR_RELEASE.md) — M5-роли, feedback по finding и отчёт по исключениям.
+- [Operations](production/OPERATIONS.md) — M6 controlled retry, status и границы scheduler.
 
 ## Справочные материалы предыдущей реализации
 

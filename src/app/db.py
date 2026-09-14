@@ -51,6 +51,13 @@ def _apply_compatibility_migrations() -> None:
             'CREATE INDEX IF NOT EXISTS ix_manager_feedback_reconciliation_id '
             'ON manager_feedback (reconciliation_id)'
         )
+        connection.exec_driver_sql(
+            'ALTER TABLE monitoring_cycles ADD COLUMN IF NOT EXISTS retry_of_cycle_id VARCHAR'
+        )
+        connection.exec_driver_sql(
+            'CREATE INDEX IF NOT EXISTS ix_monitoring_cycles_retry_of_cycle_id '
+            'ON monitoring_cycles (retry_of_cycle_id)'
+        )
 
 
 def get_db() -> Generator[Session, None, None]:

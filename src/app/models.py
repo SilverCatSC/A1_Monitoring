@@ -77,6 +77,9 @@ class MonitoringCycle(Base):
     manifest_path: Mapped[str | None] = mapped_column(Text, nullable=True)
     summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    retry_of_cycle_id: Mapped[str | None] = mapped_column(
+        ForeignKey('monitoring_cycles.id'), index=True, nullable=True
+    )
 
 
 class SourceImportSnapshot(Base):

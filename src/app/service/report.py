@@ -414,6 +414,9 @@ def operational_status(
 
     states = {import_state, *(row['state'] for row in source_rows)}
     overall = 'healthy' if states == {'healthy'} else 'action_required'
+    cycles = cycle_operational_metrics(session, now=current)
+    if cycles['active_count'] or cycles['retryable_count']:
+        overall = 'action_required'
     return {
         'overall': overall,
         'checked_at': current,
@@ -426,6 +429,34 @@ def operational_status(
             'last_finished_at': import_time,
         },
         'sources': source_rows,
+        'cycles': cycles,
+    }
+
+
+def cycle_operational_metrics(session, *, now: datetime | None = None) -> dict:
+    """Expose cycle lineage and retry queue without pretending retry is a resume."""
+    current = _as_utc(now) or datetime.now(UTC)
+    rows = (
+        session.query(MonitoringCycle)
+        .order_by(MonitoringCycle.started_at.desc(), MonitoringCycle.id.desc())
+        .limit(100)
+        .all()
+    )
+    retryable = [row for row in rows if row.status in {'partial', 'failed'} and row.finished_at]
+    active = [row for row in rows if row.status in {'preparing', 'running'}]
+    latest = rows[0] if rows else None
+    return {
+        'latest_cycle_id': latest.id if latest else None,
+        'latest_status': latest.status if latest else 'never_run',
+        'latest_finished_at': latest.finished_at if latest else None,
+        'active_count': len(active),
+        'retryable_count': len(retryable),
+        'retryable_cycle_ids': [row.id for row in retryable[:20]],
+        'failed_last_24h': sum(
+            row.status == 'failed'
+            and (_as_utc(row.finished_at) or current) >= current - timedelta(hours=24)
+            for row in rows
+        ),
     }
 
 
@@ -523,6 +554,7 @@ def recent_monitoring_cycles(session, limit: int = 20) -> dict:
                 'manifest_path': row.manifest_path,
                 'summary': row.summary,
                 'error': row.error,
+                'retry_of_cycle_id': row.retry_of_cycle_id,
             }
             for row in rows
         ]
