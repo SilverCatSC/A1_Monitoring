@@ -86,5 +86,19 @@ def test_backup_and_restore_scripts_require_integrity_and_keep_restore_isolated(
         assert 'alembic_version' in script
         assert 'monitoring_cycles' in script
         assert 'manager_feedback' in script
+        assert 'source_missing=true' in script
+        assert 'to_regclass' in script
         assert 'dropdb --if-exists --force "$RESTORE_DB"' in script
         assert 'RESTORE_OK' in script
+
+
+def test_deploy_requires_explicit_apply_and_checks_schema_state():
+    root = Path(__file__).resolve().parents[2]
+    deploy_sh = (root / 'scripts' / 'deploy.sh').read_text(encoding='utf-8')
+
+    assert 'MODE="${1:---preflight}"' in deploy_sh
+    assert 'DEPLOY_PREFLIGHT_BLOCKED migration_required=true apply_not_requested=true' in deploy_sh
+    assert 'git status --short' in deploy_sh
+    assert 'alembic heads' in deploy_sh
+    assert '"${COMPOSE[@]}" up -d --build app db backup' in deploy_sh
+    assert 'DEPLOY_OK health=' in deploy_sh
