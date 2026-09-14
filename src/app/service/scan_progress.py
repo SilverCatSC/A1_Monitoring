@@ -31,7 +31,9 @@ class ScanProgressTracker:
     def __call__(self, payload: dict[str, Any]) -> None:
         event = {**payload, 'at': _timestamp()}
         name = str(event.get('event') or '')
-        if name == 'cycle_started':
+        if name == 'cycle_registered':
+            self.state['cycle_id'] = event.get('cycle_id')
+        elif name == 'cycle_started':
             self.state.update(
                 status='running',
                 started_at=event['at'],

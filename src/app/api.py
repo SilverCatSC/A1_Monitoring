@@ -69,6 +69,7 @@ from app.service.report import (
     listing_detail_context,
     observation_history_context,
     operational_status,
+    recent_monitoring_cycles,
     weekend_summary,
 )
 from app.service.scan_progress import read_scan_progress
@@ -165,6 +166,11 @@ def monitoring_cycle_status(cycle_id: str, db: Session = Depends(get_db)):
         'summary': cycle.summary,
         'error': cycle.error,
     }
+
+
+@router.get('/status/cycles')
+def monitoring_cycles_status(limit: int = 20, db: Session = Depends(get_db)):
+    return recent_monitoring_cycles(db, limit=limit)
 
 
 @router.get('/status/scans/progress')

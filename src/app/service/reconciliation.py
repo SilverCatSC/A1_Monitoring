@@ -204,7 +204,7 @@ class SellerReconciliationService:
             })
         self.db.commit()
         summary = dict(counters)
-        resolved_codes = {'active', 'sold', 'unpublished', 'closed', 'already_checked'}
+        resolved_codes = {'active', 'removed', 'sold', 'unpublished', 'closed', 'already_checked'}
         processed = sum(counters.values())
         resolved = sum(count for code, count in counters.items() if code in resolved_codes)
         review_required = counters.get('missing_link', 0)

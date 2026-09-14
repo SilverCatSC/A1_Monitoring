@@ -40,6 +40,18 @@ _local_scan_lock = threading.Lock()
 _POSTGRES_SCAN_LOCK_KEY = 4_101_001
 
 
+def validate_scan_sources() -> None:
+    configured_sources = set(settings.scan_engines)
+    valid_sources = {source.value for source in EngineType}
+    if not configured_sources:
+        raise ScanConfigurationError('scan requires at least one configured marketplace source')
+    unknown_sources = sorted(configured_sources - valid_sources)
+    if unknown_sources:
+        raise ScanConfigurationError(
+            f'unknown marketplace source(s): {", ".join(unknown_sources)}'
+        )
+
+
 class MonitorService:
     def __init__(
         self,
@@ -222,15 +234,7 @@ class MonitorService:
             raise ScanConfigurationError(
                 f'scan requires one of [{allowed}]; current={settings.network_profile}'
             )
-        configured_sources = set(settings.scan_engines)
-        valid_sources = {source.value for source in EngineType}
-        if not configured_sources:
-            raise ScanConfigurationError('scan requires at least one configured marketplace source')
-        unknown_sources = sorted(configured_sources - valid_sources)
-        if unknown_sources:
-            raise ScanConfigurationError(
-                f'unknown marketplace source(s): {", ".join(unknown_sources)}'
-            )
+        validate_scan_sources()
         with operation_lock(self.db, _POSTGRES_SCAN_LOCK_KEY, _local_scan_lock,
                             ScanAlreadyRunning, 'another scan cycle is already running'):
             try:

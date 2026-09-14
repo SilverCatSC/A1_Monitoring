@@ -8,11 +8,12 @@ from app.models import (
     Base,
     EngineType,
     ListingObservation,
+    MonitoringCycle,
     ObservationState,
     ScanRun,
     ScanRunStatus,
 )
-from app.service.report import latest_scan_runs_status, weekend_summary
+from app.service.report import latest_scan_runs_status, recent_monitoring_cycles, weekend_summary
 
 
 def test_weekend_summary_counts_episodes_overlapping_each_day(tmp_path):
@@ -152,6 +153,33 @@ def test_cycle_scoped_scan_status_does_not_mix_runs(tmp_path, monkeypatch):
         assert payload['cycle_id'] == 'old-cycle'
         assert payload['runs'][0]['id'] == 'old'
         assert payload['runs'][0]['cycle_id'] == 'old-cycle'
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_recent_monitoring_cycles_exposes_partial_reasons(tmp_path):
+    engine = create_engine(f'sqlite:///{tmp_path / "cycles.db"}')
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    try:
+        session.add_all([
+            MonitoringCycle(
+                id='old', status='completed', network_profile='local_browser', app_version='0.10.0',
+                started_at=datetime(2026, 9, 1, tzinfo=UTC), summary={'status': 'completed'},
+            ),
+            MonitoringCycle(
+                id='partial', status='partial', network_profile='local_browser', app_version='0.10.0',
+                started_at=datetime(2026, 9, 2, tzinfo=UTC),
+                summary={'status': 'partial', 'partial_reasons': ['links_need_review']},
+            ),
+        ])
+        session.commit()
+
+        payload = recent_monitoring_cycles(session)
+
+        assert [row['id'] for row in payload['cycles']] == ['partial', 'old']
+        assert payload['cycles'][0]['summary']['partial_reasons'] == ['links_need_review']
     finally:
         session.close()
         engine.dispose()

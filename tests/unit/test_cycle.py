@@ -149,6 +149,20 @@ def test_source_refresh_requires_a_configured_monitoring_table(monkeypatch):
         cycle_module.refresh_monitoring_source('db')
 
 
+def test_cycle_rejects_invalid_source_configuration_before_import(monkeypatch):
+    import pytest
+
+    import app.service.cycle as cycle_module
+
+    monkeypatch.setattr(cycle_module.settings, 'network_profile', 'local_browser')
+    monkeypatch.setattr(cycle_module.settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
+    monkeypatch.setattr(cycle_module.settings, 'scan_enabled_engines', '')
+    monkeypatch.setattr(cycle_module, 'refresh_monitoring_source', lambda *_args, **_kwargs: pytest.fail('must not import'))
+
+    with pytest.raises(cycle_module.ScanConfigurationError, match='at least one'):
+        cycle_module.MonitoringCycleService('db').run()
+
+
 def test_cycle_lock_covers_import_and_browser_and_releases_after_error():
     import pytest
 

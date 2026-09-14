@@ -27,6 +27,8 @@
    ненулевой код при неполноте.
 4. Head-table/site audits, AI work units и Ouroboros fail closed при смешанном
    `cycle_id`; partial core-цикл не запускает их вообще.
+5. `/status/cycles` показывает partial/failed попытки отдельно от latest run;
+   явное `removed` у прямой карточки не считается техническим сбоем проверки.
 
 Открыто до закрытия M1:
 

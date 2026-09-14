@@ -19,6 +19,7 @@ from app.models import (
     ListingObservation,
     ListingReconciliation,
     ManagerFeedback,
+    MonitoringCycle,
     ObservationState,
     ScanRun,
     ScanRunStatus,
@@ -497,6 +498,33 @@ def latest_scan_runs_status(session, cycle_id: str | None = None) -> dict:
         'network_profile': settings.network_profile,
         'latest_worker_profile': latest_worker_run.network_profile if latest_worker_run else None,
         'runs': rows,
+    }
+
+
+def recent_monitoring_cycles(session, limit: int = 20) -> dict:
+    """Small operator queue; a partial cycle is never hidden behind latest runs."""
+    safe_limit = min(max(limit, 1), 100)
+    rows = (
+        session.query(MonitoringCycle)
+        .order_by(MonitoringCycle.started_at.desc(), MonitoringCycle.id.desc())
+        .limit(safe_limit)
+        .all()
+    )
+    return {
+        'cycles': [
+            {
+                'id': row.id,
+                'status': row.status,
+                'started_at': row.started_at,
+                'finished_at': row.finished_at,
+                'network_profile': row.network_profile,
+                'roster_count': row.roster_count,
+                'manifest_path': row.manifest_path,
+                'summary': row.summary,
+                'error': row.error,
+            }
+            for row in rows
+        ]
     }
 
 

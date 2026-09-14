@@ -265,6 +265,20 @@ def test_post_search_direct_card_inspection_is_saved_for_report(db):
     assert reconciliation_context(db)['rows'][0]['direct_proof'].endswith('/evidence')
 
 
+def test_removed_direct_card_is_a_complete_direct_check(db):
+    preflight, _ = reconcile(db, result([OLD]))
+
+    async def removed(_source, _url, _progress):
+        return {'state': 'removed', 'status_code': 'removed', 'reason': 'Снято с публикации'}
+
+    summary = SellerReconciliationService(db, inspector=removed).inspect_current_cards(preflight)
+
+    assert summary['removed'] == 1
+    assert summary['completed'] == 1
+    assert summary['incomplete'] == 0
+    assert summary['technical_errors'] == 0
+
+
 def test_mixed_filter_scans_verified_car_without_false_absence_for_stale_link(db):
     db.add(Listing(id='other', vehicle_signature='other', source_auto_ru=NEW))
     db.flush()

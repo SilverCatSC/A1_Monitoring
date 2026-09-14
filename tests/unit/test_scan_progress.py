@@ -3,6 +3,7 @@ from app.service.scan_progress import ScanProgressTracker, read_scan_progress
 
 def test_progress_tracker_persists_filter_page_and_completion(tmp_path, capsys):
     tracker = ScanProgressTracker(str(tmp_path))
+    tracker({'event': 'cycle_registered', 'cycle_id': 'cycle-1'})
     tracker({'event': 'source_refresh_started'})
     tracker(
         {
@@ -65,6 +66,7 @@ def test_progress_tracker_persists_filter_page_and_completion(tmp_path, capsys):
     )
     payload = read_scan_progress(str(tmp_path))
     assert payload['status'] == 'running'
+    assert payload['cycle_id'] == 'cycle-1'
     assert payload['completed_filters'] == 1
     assert payload['current']['filter_name'] == 'V-Class'
     assert payload['current']['page'] == 1

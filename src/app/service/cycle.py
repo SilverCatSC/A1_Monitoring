@@ -12,7 +12,12 @@ from app.service.cycle_ledger import CycleLedgerService
 from app.service.evidence import cleanup_evidence
 from app.service.filters import FilterRegistryService
 from app.service.locks import operation_lock
-from app.service.monitor import MonitorService, ScanAlreadyRunning, ScanConfigurationError
+from app.service.monitor import (
+    MonitorService,
+    ScanAlreadyRunning,
+    ScanConfigurationError,
+    validate_scan_sources,
+)
 from app.service.reconciliation import SellerReconciliationService
 
 
@@ -58,6 +63,7 @@ class MonitoringCycleService:
             raise ScanConfigurationError(f'scan requires a trusted local profile; current={settings.network_profile}')
         if not settings.browser_cdp_url:
             raise ScanConfigurationError('Полный мониторинг требует видимого локального Chrome. Используйте scripts/local_scan.sh.')
+        validate_scan_sources()
         with cycle_lock(self.db):
             ledger = CycleLedgerService(self.db)
             cycle = ledger.start()

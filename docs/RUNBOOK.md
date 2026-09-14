@@ -9,6 +9,7 @@ docker-compose ps
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/health
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/ready
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/system/status
+curl -fsS 'http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/cycles?limit=20'
 docker-compose logs --tail=200 app
 ```
 
@@ -65,6 +66,11 @@ docker-compose exec -T app python -m app.cli import-source
 Текущий прогресс также хранится в `artifacts/evidence/scan_progress.json`; запись
 атомарная, dashboard опрашивает endpoint раз в секунду. После перезапуска worker
 файл перезаписывается новым циклом.
+
+`/status/cycles` — очередь полных попыток: разбирайте `partial_reasons` и `error`
+даже если `/status/scans/latest` уже показывает более старый успешный run. Для
+конкретной попытки используйте `/status/cycles/<cycle_id>` и
+`/status/scans/latest?cycle_id=<cycle_id>`; нельзя собирать отчёт из разных ID.
 
 Если все фильтры мгновенно завершаются ошибкой
 `Browser.setDownloadBehavior ... not supported`, проверить `/json/list` Chrome на
