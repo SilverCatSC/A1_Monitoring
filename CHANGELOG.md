@@ -1,5 +1,17 @@
 # Журнал изменений
 
+## M6.11 — VPSUS dual-stack reachability evidence — 2026-09-14
+
+- Read-only VPSUS UI now visibly confirms `avito.ru` and `auto.ru` in mode
+  «Напрямую»: the client describes that mode as bypassing VPN over the ordinary
+  internet connection. VPSUS remained connected; no rule was changed and no
+  reconnect occurred.
+- Fresh unauthenticated checks reached ChatGPT, Auto.ru and Avito over both
+  IPv4 and IPv6 (`403` from ChatGPT after TLS; `200` from both marketplaces).
+  This proves dual-stack service reachability, not public egress attribution;
+  owner policy declaration and the short-lived VPN admission record are still
+  required before a full cycle.
+
 ## M6.10 — MacBook lock-screen fail-closed correction — 2026-09-14
 
 - Обнаружена и устранена расходимость IOKit-сигналов: при
