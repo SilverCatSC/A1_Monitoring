@@ -8,7 +8,10 @@
   были уже заданы как direct-mode exceptions.
 - Runner корректно завершил цикл `partial` без автоповтора: технических ошибок
   `0`, но `22` ссылок требуют сверки и `14` direct-card записей неполны.
-  Это корректный review result, не доказательство completed/M7 acceptance.
+  Все 14 неполных direct-card связаны с отсутствующей валидной прямой ссылкой
+  в реестре; остальные 8 non-verified записей корректно классифицированы как
+  снятые/закрытые либо требующие review. Это корректный review result, не
+  доказательство completed/M7 acceptance.
 - В `48de30f` исправлен Mac recovery path: он использует закрытый loopback DSN
   Docker из `.env`, а не container-only `localhost:5432`; повторный run прошёл
   recovery до browser scan. Privacy-safe evidence:

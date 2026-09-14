@@ -34,6 +34,19 @@ or automatic retry occurred.
 | Links requiring reconciliation | `22` |
 | Incomplete direct-card records | `14` |
 
+### Aggregate reconciliation outcome
+
+| Source | Filter result | Seller-link / direct-card aggregate |
+| --- | --- | --- |
+| Auto.ru | `partial`: 5/9 filters, 7 pages, 0 technical errors | 22 verified; 6 records without a valid direct link; 5 cards explicitly reported sold; 1 catalogue-match review required |
+| Avito | `success`: 6/6 filters, 6 pages, 0 technical errors | 24 verified; 8 records without a valid direct link; 2 cards explicitly reported closed or removed |
+
+The 14 `missing_link` records explain all 14 incomplete direct-card results.
+The remaining eight non-verified records are classified as closed/removed or
+review-required, never as a confirmed sale or absence. These are registry and
+operator-reconciliation items, not a reason to weaken marketplace safeguards
+or rerun the cycle automatically.
+
 An earlier attempt stopped before Chrome or marketplace traffic at
 `recover_open_cycles`: the Mac runner had inherited the container-oriented
 `localhost:5432` DSN instead of the private Docker loopback port from `.env`.
