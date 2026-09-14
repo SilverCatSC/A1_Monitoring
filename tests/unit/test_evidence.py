@@ -5,28 +5,32 @@ from datetime import UTC, datetime, timedelta
 import pytest
 
 from app.models import EngineType, ListingObservation
-from app.scraper.base import ListingHit, capture_listing_card_evidence
+from app.scraper.base import ListingHit, capture_listing_card_evidence, capture_page_evidence
 from app.service.evidence import (
     EvidenceAccessError,
     cleanup_evidence,
     evidence_pages,
     has_card_evidence,
+    read_evidence_manifest,
     resolve_observation_evidence,
 )
 
 
 def test_evidence_cleanup_only_removes_expired_png_files(tmp_path):
     old_png = tmp_path / 'old.png'
+    old_manifest = tmp_path / 'old.png.json'
     fresh_png = tmp_path / 'fresh.png'
     old_text = tmp_path / 'keep.txt'
     for path in (old_png, fresh_png, old_text):
         path.write_text('fixture')
+    old_manifest.write_text('{}')
     old_timestamp = (datetime.now(UTC) - timedelta(days=100)).timestamp()
     os.utime(old_png, (old_timestamp, old_timestamp))
     os.utime(old_text, (old_timestamp, old_timestamp))
 
     assert cleanup_evidence(str(tmp_path), retention_days=90) == 1
     assert not old_png.exists()
+    assert not old_manifest.exists()
     assert fresh_png.exists()
     assert old_text.exists()
 
@@ -132,6 +136,14 @@ class _FakePage:
         return _FakeAnchors()
 
 
+class _FakeViewportPage:
+    url = 'https://auto.ru/moskva/cars/all/?page=1'
+
+    async def screenshot(self, *, path, **_kwargs):
+        with open(path, 'wb') as output:
+            output.write(b'page image')
+
+
 def test_exact_listing_card_screenshot_is_saved(tmp_path):
     hit = ListingHit(
         external_id='1234567890',
@@ -155,3 +167,30 @@ def test_exact_listing_card_screenshot_is_saved(tmp_path):
     assert stored is not None
     assert stored.startswith('auto_ru_card_1234567890_')
     assert (tmp_path / stored).read_bytes() == b'card image'
+
+
+def test_page_evidence_has_a_privacy_bounded_integrity_manifest(tmp_path):
+    stored = asyncio.run(
+        capture_page_evidence(
+            _FakeViewportPage(),
+            source=EngineType.AUTO_RU,
+            search_url='https://auto.ru/moskva/cars/all/?dealer=secret',
+            page_number=1,
+            evidence_dir=str(tmp_path),
+            purpose='search_page',
+            final_url=_FakeViewportPage.url,
+            http_status=200,
+        )
+    )
+
+    assert stored is not None
+    manifest = read_evidence_manifest(stored, str(tmp_path))
+    assert manifest['source'] == 'auto_ru'
+    assert manifest['purpose'] == 'search_page'
+    assert manifest['http_status'] == 200
+    assert manifest['screenshot_file'] == stored
+    assert 'secret' not in (tmp_path / f'{stored}.json').read_text(encoding='utf-8')
+
+    (tmp_path / stored).write_bytes(b'X' * len(b'page image'))
+    with pytest.raises(EvidenceAccessError, match='integrity'):
+        read_evidence_manifest(stored, str(tmp_path))

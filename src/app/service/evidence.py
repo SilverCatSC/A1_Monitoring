@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from app.models import ListingObservation
+from app.scraper.base import EVIDENCE_SCHEMA_VERSION, evidence_manifest_name
 
 
 class EvidenceAccessError(ValueError):
@@ -31,6 +35,34 @@ def resolve_named_evidence(stored: str | None, evidence_dir: str) -> Path:
     if not resolved.is_file() or resolved.is_symlink():
         raise EvidenceAccessError('invalid evidence file')
     return resolved
+
+
+def read_evidence_manifest(stored: str | None, evidence_dir: str) -> dict[str, Any]:
+    """Return only a manifest that belongs to an intact evidence image."""
+    image = resolve_named_evidence(stored, evidence_dir)
+    manifest = image.with_name(evidence_manifest_name(image.name))
+    if not manifest.is_file() or manifest.is_symlink():
+        raise EvidenceAccessError('evidence manifest not found')
+    try:
+        if manifest.stat().st_size > 32_000:
+            raise EvidenceAccessError('invalid evidence manifest')
+        payload = json.loads(manifest.read_text(encoding='utf-8'))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise EvidenceAccessError('invalid evidence manifest') from exc
+    if not isinstance(payload, dict):
+        raise EvidenceAccessError('invalid evidence manifest')
+    required = {
+        'schema_version', 'source', 'purpose', 'page_number', 'screenshot_file',
+        'screenshot_sha256', 'screenshot_bytes', 'captured_at',
+        'requested_url_sha256', 'final_url_sha256',
+    }
+    if not required <= payload.keys() or payload.get('schema_version') != EVIDENCE_SCHEMA_VERSION:
+        raise EvidenceAccessError('invalid evidence manifest')
+    if payload.get('screenshot_file') != image.name or payload.get('screenshot_bytes') != image.stat().st_size:
+        raise EvidenceAccessError('evidence manifest does not match image')
+    if payload.get('screenshot_sha256') != _sha256_file(image):
+        raise EvidenceAccessError('evidence image integrity check failed')
+    return payload
 
 
 def has_card_evidence(observation: ListingObservation) -> bool:
@@ -86,5 +118,16 @@ def cleanup_evidence(evidence_dir: str, retention_days: int) -> int:
         modified = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
         if modified < cutoff:
             path.unlink()
+            manifest = path.with_name(evidence_manifest_name(path.name))
+            if manifest.is_file() and not manifest.is_symlink():
+                manifest.unlink()
             removed += 1
     return removed
+
+
+def _sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()

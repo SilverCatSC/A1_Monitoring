@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import os
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -66,6 +68,8 @@ EMPTY_PAGE_MARKERS = (
     'items-not-found',
     'search-no-results',
 )
+
+EVIDENCE_SCHEMA_VERSION = 'evidence.v1'
 
 
 def classify_result_page(html: str, card_count: int) -> tuple[str, str | None]:
@@ -194,8 +198,11 @@ async def capture_page_evidence(
     search_url: str,
     page_number: int,
     evidence_dir: str,
+    purpose: str = 'search_page',
+    final_url: str | None = None,
+    http_status: int | None = None,
 ) -> str | None:
-    """Capture a viewport screenshot; evidence failure never changes the scan fact."""
+    """Capture a viewport screenshot and its immutable, privacy-bounded manifest."""
     try:
         root = Path(evidence_dir)
         root.mkdir(parents=True, exist_ok=True)
@@ -203,6 +210,15 @@ async def capture_page_evidence(
         timestamp = datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')
         path = root / f'{source.value}_{url_hash}_{timestamp}_p{page_number}.png'
         await page.screenshot(path=str(path), full_page=False)
+        _write_evidence_manifest(
+            path,
+            source=source,
+            purpose=purpose,
+            page_number=page_number,
+            requested_url=search_url,
+            final_url=final_url or getattr(page, 'url', None),
+            http_status=http_status,
+        )
         # The host worker and web container mount this directory at different
         # absolute paths, so database records keep a portable relative key.
         return path.name
@@ -253,6 +269,15 @@ async def capture_listing_card_evidence(
             try:
                 await card.first.scroll_into_view_if_needed(timeout=3000)
                 await card.first.screenshot(path=str(path), timeout=3000)
+                _write_evidence_manifest(
+                    path,
+                    source=source,
+                    purpose='search_listing_card',
+                    page_number=page_number,
+                    requested_url=search_url,
+                    final_url=getattr(page, 'url', None),
+                    listing_key=key,
+                )
                 hit.raw.pop('card_evidence_error', None)
                 return path.name
             except Exception as exc:
@@ -263,6 +288,56 @@ async def capture_listing_card_evidence(
         hit.raw['card_evidence_error'] = f'{type(exc).__name__}: {str(exc)[:300]}'
         return None
     return None
+
+
+def evidence_manifest_name(stored: str) -> str:
+    return f'{Path(stored).name}.json'
+
+
+def _write_evidence_manifest(
+    path: Path,
+    *,
+    source: EngineType,
+    purpose: str,
+    page_number: int,
+    requested_url: str,
+    final_url: str | None,
+    http_status: int | None = None,
+    listing_key: str | None = None,
+) -> None:
+    """Write metadata atomically beside a captured image without duplicating raw URLs."""
+    if not path.is_file() or path.is_symlink() or path.stat().st_size <= 0:
+        raise RuntimeError('screenshot file was not created')
+    payload: dict[str, Any] = {
+        'schema_version': EVIDENCE_SCHEMA_VERSION,
+        'source': source.value,
+        'purpose': purpose,
+        'page_number': page_number,
+        'screenshot_file': path.name,
+        'screenshot_sha256': _file_sha256(path),
+        'screenshot_bytes': path.stat().st_size,
+        'captured_at': datetime.now(UTC).isoformat(),
+        'requested_url_sha256': hashlib.sha256(requested_url.encode('utf-8')).hexdigest(),
+        'final_url_sha256': hashlib.sha256(str(final_url or '').encode('utf-8')).hexdigest(),
+    }
+    if http_status is not None:
+        payload['http_status'] = http_status
+    if listing_key:
+        payload['listing_key'] = listing_key
+    target = path.with_name(evidence_manifest_name(path.name))
+    serialized = json.dumps(payload, ensure_ascii=False, sort_keys=True, separators=(',', ':'))
+    with target.open('x', encoding='utf-8') as output:
+        output.write(serialized)
+        output.flush()
+        os.fsync(output.fileno())
+
+
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open('rb') as source:
+        for chunk in iter(lambda: source.read(1024 * 1024), b''):
+            digest.update(chunk)
+    return digest.hexdigest()
 
 
 def detect_filters_in_row(row: dict[str, Any]) -> list[SearchFilterDefinition]:

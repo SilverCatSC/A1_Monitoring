@@ -18,6 +18,7 @@ from app.scraper.base import (
     capture_listing_card_evidence,
     capture_page_evidence,
     classify_result_page,
+    evidence_manifest_name,
     is_marketplace_listing_url,
 )
 from app.scraper.browser_session import browser_page
@@ -102,9 +103,19 @@ class AutoRuAdapter:
                             search_url=search_url,
                             page_number=page_number,
                             evidence_dir=settings.evidence_dir,
+                            purpose='search_page',
+                            final_url=page.url,
+                            http_status=http_status,
                         )
                         if evidence_path:
                             diagnostics[f'page_{page_number}_evidence'] = evidence_path
+                            diagnostics[f'page_{page_number}_evidence_manifest'] = evidence_manifest_name(
+                                evidence_path
+                            )
+                        else:
+                            error = f'evidence capture failed page {page_number}'
+                            diagnostics[f'page_{page_number}_state'] = 'evidence_missing'
+                            break
                         if http_status is not None and http_status >= 400:
                             error = f'page {page_number}: RuntimeError: HTTP {http_status}'
                             diagnostics[f'page_{page_number}_state'] = 'technical_error'
@@ -131,9 +142,11 @@ class AutoRuAdapter:
                         if declared_offers is not None:
                             diagnostics[f'page_{page_number}_declared_offers'] = declared_offers
                         card_evidence = 0
+                        missing_card_evidence: list[str] = []
                         if page_state == 'results' and target_keys:
                             for hit in parsed:
-                                if canonical_listing_key(self.source, hit.url) not in target_keys:
+                                key = canonical_listing_key(self.source, hit.url)
+                                if key not in target_keys:
                                     continue
                                 card_path = await capture_listing_card_evidence(
                                     page,
@@ -145,7 +158,17 @@ class AutoRuAdapter:
                                 )
                                 if card_path:
                                     hit.raw['card_evidence'] = card_path
+                                    hit.raw['card_evidence_manifest'] = evidence_manifest_name(card_path)
                                     card_evidence += 1
+                                elif key:
+                                    missing_card_evidence.append(key)
+                        if missing_card_evidence:
+                            error = (
+                                f'listing-card evidence capture failed page {page_number}: '
+                                + ', '.join(sorted(missing_card_evidence))
+                            )
+                            diagnostics[f'page_{page_number}_state'] = 'evidence_missing'
+                            break
                         diagnostics[f'page_{page_number}'] = len(parsed)
                         diagnostics[f'page_{page_number}_state'] = page_state
                         pages_scanned += 1

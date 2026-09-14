@@ -96,6 +96,52 @@ def test_browser_traversal_stops_at_real_end_or_rejects_duplicate_pages(tmp_path
         assert 'pagination' in result.error
 
 
+def test_expected_hit_without_exact_card_evidence_fails_closed(tmp_path, monkeypatch):
+    for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'avito_page_delay_seconds'):
+        monkeypatch.setattr(settings, key, 0)
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
+
+    async def no_card_evidence(*_args, **_kwargs):
+        return None
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            page = await browser.new_page()
+
+            async def route_page(route):
+                html = (
+                    '<span data-marker="page-title/count">1</span>'
+                    '<div data-marker="catalog-serp">'
+                    + avito_card('1000000001')
+                    + '</div>'
+                )
+                await route.fulfill(content_type='text/html', body=html)
+
+            await page.route('**/*', route_page)
+
+            @asynccontextmanager
+            async def local_page(_playwright):
+                yield page
+
+            monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
+            monkeypatch.setattr('app.scraper.avito.capture_listing_card_evidence', no_card_evidence)
+            try:
+                return await AvitoAdapter().scan_filter(
+                    'https://www.avito.ru/moskva/avtomobili/',
+                    max_pages=1,
+                    target_keys={'avito:1000000001'},
+                )
+            finally:
+                await browser.close()
+
+    result = asyncio.run(exercise())
+    assert result.complete is False
+    assert result.hits == []
+    assert result.diagnostics['page_1_state'] == 'evidence_missing'
+    assert 'evidence capture failed' in result.error
+
+
 def test_screenshot_ignores_hidden_copy_and_captures_visible_card(tmp_path):
     async def exercise():
         async with async_playwright() as p:

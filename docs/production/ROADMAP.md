@@ -58,12 +58,27 @@
 разными Offer ID, повторный импорт и подтверждение перевыкладки. Живая проверка
 вёрстки или доступа площадок в него не входит.
 
-## Следующий фокус: M3 — evidence collectors
+## M3 завершён в коде: evidence collectors
 
-Следующий этап фиксирует контракты Auto.ru/Avito и fixtures CAPTCHA, blocked,
-layout-change и other technical states. Drom/site не добавляются до отдельной
-приёмки источника. M2 намеренно не превращает legacy candidate в доказанную связь
-без VIN: сначала система должна честно хранить неопределённость.
+Выполнено в `0.12.0`:
+
+1. PNG выдачи, exact-card и direct-card получают рядом privacy-bounded `evidence.v1`
+   manifest с SHA-256, размером, временем, source/purpose и hash URL.
+2. Если screenshot страницы, целевой карточки или прямой карточки не сохранился,
+   collector возвращает `evidence_missing`, а не business fact.
+3. Добавлены проверяемые manifests API и удаление companion manifest вместе с
+   истёкшим PNG.
+4. Введены fixtures Auto.ru CAPTCHA/unknown layout и Avito blocked/empty плюс
+   Playwright regression для отсутствующего exact-card screenshot.
+
+Drom и новый сайт не подключались. Fixtures доказывают код и контракт, но не
+доказывают текущую вёрстку или доступность платформ.
+
+## Следующий фокус: M4 — reconciliation
+
+Следующий этап отделит факт наблюдения от бизнес-вывода: цена, НДС, статус,
+ghost/missing offers и review queue должны быть объяснимы оператору без чтения
+кода. Автоматическая замена спорного Offer по-прежнему запрещена.
 
 ## Рабочий ритм
 

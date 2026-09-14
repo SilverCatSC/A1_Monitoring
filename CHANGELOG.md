@@ -1,5 +1,18 @@
 # Журнал изменений
 
+## M3 — контракт доказательств — 2026-09-14
+
+- Для новых PNG выдачи, точной карточки и direct-card добавлен companion manifest
+  `evidence.v1`: SHA-256, размер, UTC, площадка/назначение и hashes URL без
+  дублирования raw URL, VIN или HTML.
+- Сбой screenshot страницы или целевой карточки завершает обход как
+  `evidence_missing`; direct-card без изображения не подтверждает active/removed.
+- API может вернуть проверенный manifest; при очистке истёкшего PNG удаляется и
+  companion JSON. Подмена файла обнаруживается integrity-проверкой.
+- Добавлены fixtures CAPTCHA/blocked/unknown layout/empty и Playwright regression
+  для обязательного exact-card screenshot. Версия повышена до `0.12.0`.
+- Живой обход площадок и обход CAPTCHA не выполнялись.
+
 ## M2 — стабильная идентичность — 2026-09-14
 
 - Добавлены `Vehicle`, `Offer`, `SourceRecord` и датированная связь

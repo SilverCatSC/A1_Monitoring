@@ -74,6 +74,11 @@ candidate-связи старых URL без переписывания `listing
 переносит contested Offer между Vehicle; это делает только подтверждённое действие
 оператора. Подробная процедура — [Stable identity](production/STABLE_IDENTITY.md).
 
+С 0.12 каждый новый browser screenshot сопровождается проверяемым hash manifest.
+Отсутствующий PNG или exact-card screenshot прерывает вывод, а не понижает его
+доказательность молча. [Evidence contract](production/EVIDENCE_CONTRACT.md)
+фиксирует schema, API и fixtures.
+
 ## Поддержка
 
 Продуктовые правила — BIBLE.md. Определения вычислений — METRICS.md. Схема

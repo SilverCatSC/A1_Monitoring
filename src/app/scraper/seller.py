@@ -8,7 +8,12 @@ from playwright.async_api import async_playwright
 
 from app.config import settings
 from app.models import EngineType
-from app.scraper.base import canonical_listing_key, capture_page_evidence, classify_result_page
+from app.scraper.base import (
+    canonical_listing_key,
+    capture_page_evidence,
+    classify_result_page,
+    evidence_manifest_name,
+)
 from app.scraper.browser_session import browser_page
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import SUPPLEMENT_HEADING
@@ -189,7 +194,25 @@ async def inspect_direct_link(source, url, progress=None):
                 await asyncio.sleep(settings.auto_ru_page_delay_seconds if source.value == 'auto_ru' else settings.avito_page_delay_seconds)
                 html = await page.content()
                 result = direct_page_status(html, source, url, page.url, response.status if response else None)
-                result['evidence'] = await capture_page_evidence(page, source=source, search_url=url, page_number=1, evidence_dir=settings.evidence_dir)
+                evidence = await capture_page_evidence(
+                    page,
+                    source=source,
+                    search_url=url,
+                    page_number=1,
+                    evidence_dir=settings.evidence_dir,
+                    purpose='direct_card',
+                    final_url=page.url,
+                    http_status=response.status if response else None,
+                )
+                if evidence is None:
+                    return {
+                        'state': 'unknown',
+                        'status_code': 'evidence_missing',
+                        'reason': 'Снимок прямой карточки не сохранён; статус нельзя подтвердить',
+                        'unverified_state': result.get('state'),
+                    }
+                result['evidence'] = evidence
+                result['evidence_manifest'] = evidence_manifest_name(evidence)
                 return result
     except Exception as exc:
         return {'state': 'unknown', 'reason': f'{type(exc).__name__}: {exc}'}

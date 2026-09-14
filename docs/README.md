@@ -25,6 +25,7 @@
 - [Production contract](production/PRODUCTION_CONTRACT.md) — роли источников, границы автоматизации и критерии статусов.
 - [Production roadmap](production/ROADMAP.md) — реперные точки, gates и текущий фокус разработки.
 - [Stable identity](production/STABLE_IDENTITY.md) — M2-модель Vehicle/Offer, миграция и ручная перевыкладка.
+- [Evidence contract](production/EVIDENCE_CONTRACT.md) — M3-screenshot manifests, integrity и fail-closed collector rules.
 
 ## Справочные материалы предыдущей реализации
 

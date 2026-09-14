@@ -47,6 +47,7 @@ from app.service.cycle import MonitoringCycleService, cycle_lock
 from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
 from app.service.evidence import (
     EvidenceAccessError,
+    read_evidence_manifest,
     resolve_named_evidence,
     resolve_observation_evidence,
 )
@@ -399,6 +400,22 @@ def observation_evidence(
     )
 
 
+@router.get('/observations/{observation_id}/evidence/{page_number}/manifest')
+def observation_evidence_manifest(
+    observation_id: str,
+    page_number: int,
+    db: Session = Depends(get_db),
+):
+    observation = db.get(ListingObservation, observation_id)
+    if observation is None:
+        raise HTTPException(status_code=404, detail='observation not found')
+    try:
+        image = resolve_observation_evidence(observation, page_number, settings.evidence_dir)
+        return read_evidence_manifest(image.name, settings.evidence_dir)
+    except EvidenceAccessError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get('/reconciliations/{reconciliation_id}/evidence')
 def reconciliation_evidence(
     reconciliation_id: str,
@@ -418,6 +435,21 @@ def reconciliation_evidence(
         filename=path.name,
         content_disposition_type='inline',
     )
+
+
+@router.get('/reconciliations/{reconciliation_id}/evidence/manifest')
+def reconciliation_evidence_manifest(
+    reconciliation_id: str,
+    db: Session = Depends(get_db),
+):
+    record = db.get(ListingReconciliation, reconciliation_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail='reconciliation not found')
+    direct = (record.details or {}).get('direct_inspection') or {}
+    try:
+        return read_evidence_manifest(direct.get('evidence'), settings.evidence_dir)
+    except EvidenceAccessError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
 @router.post('/scan', response_model=TriggerScanResponse)
