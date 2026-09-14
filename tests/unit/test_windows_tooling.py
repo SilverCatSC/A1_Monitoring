@@ -78,3 +78,22 @@ def test_windows_ai_install_is_pinned_and_local():
     assert '-Commit $lock.HERMES_COMMIT' in script
     assert 'ouroboros-ai[mcp]==$($lock.OUROBOROS_VERSION)' in script
     assert 'install_llama_cpp_windows.ps1' in script
+
+
+def test_backup_and_restore_scripts_require_integrity_and_keep_restore_isolated():
+    root = Path(__file__).resolve().parents[2]
+    backup_sh = (root / 'scripts' / 'backup_now.sh').read_text(encoding='utf-8')
+    restore_sh = (root / 'scripts' / 'restore_test.sh').read_text(encoding='utf-8')
+    backup_ps1 = (root / 'scripts' / 'backup_now.ps1').read_text(encoding='utf-8')
+    restore_ps1 = (root / 'scripts' / 'restore_test.ps1').read_text(encoding='utf-8')
+
+    assert 'sha256sum' in backup_sh
+    assert 'BACKUP_OK' in backup_ps1
+    for script in (restore_sh, restore_ps1):
+        assert 'sha256sum -c' in script
+        assert 'pg_restore --list' in script
+        assert 'alembic_version' in script
+        assert 'monitoring_cycles' in script
+        assert 'manager_feedback' in script
+        assert 'dropdb --if-exists --force "$RESTORE_DB"' in script
+        assert 'RESTORE_OK' in script

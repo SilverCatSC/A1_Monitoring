@@ -71,7 +71,9 @@ services:
           target="/backups/a1_search_monitor_$${stamp}.dump"
           pg_dump --format=custom --file="$${temporary}"
           mv "$${temporary}" "$${target}"
-          find /backups -type f -name 'a1_search_monitor_*.dump' -mtime "+$${BACKUP_RETENTION_DAYS}" -delete
+          sha256sum "$${target}" > "$${target}.sha256.tmp"
+          mv "$${target}.sha256.tmp" "$${target}.sha256"
+          find /backups -type f \( -name 'a1_search_monitor_*.dump' -o -name 'a1_search_monitor_*.dump.sha256' \) -mtime "+$${BACKUP_RETENTION_DAYS}" -delete
           sleep "$${BACKUP_INTERVAL_SECONDS}"
         done
     volumes:

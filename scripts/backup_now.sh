@@ -20,5 +20,7 @@ fi
   target="/backups/a1_search_monitor_${stamp}.dump"
   pg_dump --format=custom --file="$temporary"
   mv "$temporary" "$target"
-  printf "%s\n" "$target"
+  sha256sum "$target" > "$target.sha256.tmp"
+  mv "$target.sha256.tmp" "$target.sha256"
+  printf "BACKUP_OK backup=%s checksum=%s\n" "$target" "$(cut -d " " -f 1 "$target.sha256")"
 '

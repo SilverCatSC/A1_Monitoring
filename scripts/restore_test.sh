@@ -25,6 +25,13 @@ fi
     echo "No database backup found." >&2
     exit 1
   fi
+  checksum="$latest.sha256"
+  if [ ! -f "$checksum" ]; then
+    echo "Backup checksum is missing; create a fresh verified backup before restore-test." >&2
+    exit 1
+  fi
+  (cd /backups && sha256sum -c "$(basename "$checksum")")
+  pg_restore --list "$latest" >/dev/null
   cleanup() {
     dropdb --if-exists --force "$RESTORE_DB" >/dev/null 2>&1 || true
   }
@@ -32,13 +39,24 @@ fi
   createdb "$RESTORE_DB"
   pg_restore --exit-on-error --no-owner --no-privileges --dbname="$RESTORE_DB" "$latest"
 
-  source_listings=$(psql --tuples-only --no-align --command="SELECT count(*) FROM listings")
-  restored_listings=$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM listings")
-  source_snapshots=$(psql --tuples-only --no-align --command="SELECT count(*) FROM source_import_snapshots")
-  restored_snapshots=$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM source_import_snapshots")
-  if [ "$source_listings" != "$restored_listings" ] || [ "$source_snapshots" != "$restored_snapshots" ]; then
-    echo "Restore verification failed: row counts differ." >&2
+  for table in listings source_import_snapshots monitoring_cycles manager_feedback; do
+    source_count=$(psql --tuples-only --no-align --command="SELECT count(*) FROM $table")
+    restored_count=$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM $table")
+    if [ "$source_count" != "$restored_count" ]; then
+      echo "Restore verification failed: row count differs for $table." >&2
+      exit 1
+    fi
+  done
+  source_revision=$(psql --tuples-only --no-align --command="SELECT version_num FROM alembic_version")
+  restored_revision=$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT version_num FROM alembic_version")
+  if [ "$source_revision" != "$restored_revision" ]; then
+    echo "Restore verification failed: Alembic revision differs." >&2
     exit 1
   fi
-  printf "RESTORE_OK backup=%s listings=%s snapshots=%s\n" "$latest" "$restored_listings" "$restored_snapshots"
+  printf "RESTORE_OK backup=%s revision=%s listings=%s snapshots=%s cycles=%s feedback=%s\n" \
+    "$latest" "$restored_revision" \
+    "$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM listings")" \
+    "$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM source_import_snapshots")" \
+    "$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM monitoring_cycles")" \
+    "$(psql --dbname="$RESTORE_DB" --tuples-only --no-align --command="SELECT count(*) FROM manager_feedback")"
 '

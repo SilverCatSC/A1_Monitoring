@@ -10,6 +10,15 @@
 - Backup/restore, allowlist публикации и живая приёмка Windows/Mac остаются
   незавершёнными частями M6; версия не повышалась до `0.15.0`.
 
+## M6.2 — проверяемое резервирование — 2026-09-14
+
+- Новые dump получают companion SHA-256 в backup-volume; автоматический backup
+  чистит dump и его checksum вместе.
+- macOS и Windows restore-test проверяют checksum, читаемость custom dump,
+  revision Alembic и количества ключевых таблиц только во временной БД.
+- Windows-скрипты проверены статически. Ни backup, ни restore не запускались на
+  текущем Mac/MSI, поэтому восстановление production пока не подтверждено.
+
 ## M5 — operator release — 2026-09-14
 
 - Добавлены серверные роли `admin`, `operator`, `marketing`, `sales_director`.
