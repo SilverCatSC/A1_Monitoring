@@ -8,7 +8,8 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.contracts import CANONICAL_FIELDS, SourceRecord, split_brand_model
+from app.contracts import CANONICAL_FIELDS, split_brand_model
+from app.contracts import SourceRecord as SourceInputRecord
 from app.models import (
     EngineType,
     ImportFieldDrift,
@@ -24,6 +25,7 @@ from app.scraper.base import (
     is_marketplace_listing_url,
     is_marketplace_search_url,
 )
+from app.service.identity import IdentityService
 from app.service.registry_audit import record_registry_change, registry_values
 
 
@@ -90,14 +92,14 @@ class SourceImporter:
 
     def run(
         self,
-        rows: list[SourceRecord],
+        rows: list[SourceInputRecord],
         source_signature: str | None = None,
         cycle_id: str | None = None,
     ) -> dict[str, int | str]:
         if rows is None:
             rows = []
 
-        parsed_rows: list[tuple[dict[str, Any], list[SearchFilterDefinition], str | None]] = []
+        parsed_rows: list[tuple[int, dict[str, Any], list[SearchFilterDefinition]]] = []
         snapshot = SourceImportSnapshot(
             cycle_id=cycle_id,
             started_at=_utcnow(),
@@ -120,7 +122,7 @@ class SourceImporter:
         required_missing: list[str] = []
         invalid_data: list[str] = []
         seen_vins: set[str] = set()
-        present_signatures: set[str] = set()
+        present_listing_ids: set[str] = set()
         optional_unknown_allowed = {
             'source_status',
             'status',
@@ -153,11 +155,6 @@ class SourceImporter:
                 required_missing.append(f'row:{item.row_number}')
 
             vin = str(row.get('vin') or '').strip().upper()
-            vin_candidates = set(re.findall(r'\b[A-HJ-NPR-Z0-9]{17}\b', vin))
-            present_signatures.update(
-                hashlib.sha256(f'vin|{candidate}'.encode()).hexdigest()
-                for candidate in vin_candidates
-            )
             if _has_multiple_vins(vin):
                 invalid_data.append(f'row:{item.row_number}:multiple_vin')
                 missing += 1
@@ -174,8 +171,10 @@ class SourceImporter:
                 missing += 1
                 continue
 
-            parsed_rows.append((row, _coerce_filters(row), signature))
-            present_signatures.add(signature)
+            # _canonical_signature is a validation anchor only.  It must not be
+            # used to join no-VIN rows: same model/year is not evidence that two
+            # rows describe the same physical vehicle.
+            parsed_rows.append((item.row_number, row, _coerce_filters(row)))
             valid += 1
 
         previous_snapshot = (
@@ -236,15 +235,11 @@ class SourceImporter:
 
         # Safe point: write restructured data only after schema checks pass.
         try:
-            for row, filters, signature in parsed_rows:
-                listing = self.db.query(Listing).filter(Listing.vehicle_signature == signature).one_or_none()
+            identity = IdentityService(self.db)
+            identity.bootstrap_legacy_identities()
+            for row_number, row, filters in parsed_rows:
+                vehicle, listing, resolution = identity.resolve(row=row)
                 previous = registry_values(listing) if listing is not None else None
-                if listing is None:
-                    listing = Listing(
-                        vehicle_signature=signature,
-                    )
-                    self.db.add(listing)
-                    self.db.flush()
 
                 listing.brand = _clean_optional(row.get('brand'))
                 listing.model = _clean_optional(row.get('model'))
@@ -306,7 +301,16 @@ class SourceImporter:
                     listing.price_hint = None
                 listing.notes = _clean_optional(row.get('notes'))
                 listing.is_active = _is_active_status(row.get('source_status'))
+                identity.record_source_row(
+                    snapshot_id=snapshot.id,
+                    row_number=row_number,
+                    row=row,
+                    vehicle=vehicle,
+                    listing=listing,
+                    resolution=resolution,
+                )
                 record_registry_change(self.db, listing, previous, snapshot.id)
+                present_listing_ids.add(listing.id)
 
                 for filt in filters:
                     existing_filter = (
@@ -354,10 +358,10 @@ class SourceImporter:
                 if not is_marketplace_search_url(existing_filter.source, existing_filter.raw_url):
                     existing_filter.active = False
 
-            if present_signatures:
+            if present_listing_ids:
                 for listing in self.db.query(Listing).filter(
                     Listing.is_active.is_(True),
-                    Listing.vehicle_signature.not_in(present_signatures),
+                    Listing.id.not_in(present_listing_ids),
                 ):
                     previous = registry_values(listing)
                     listing.is_active = False

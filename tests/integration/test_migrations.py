@@ -22,10 +22,14 @@ def test_migration_builds_clean_database(tmp_path):
             'listing_observations',
             'manager_feedback',
             'monitoring_cycles',
+            'vehicles',
+            'offers',
+            'source_records',
+            'offer_vehicle_links',
         } <= tables
         with engine.connect() as connection:
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                '20260914_0007'
+                '20260914_0008'
             )
     finally:
         engine.dispose()
@@ -38,8 +42,9 @@ def test_migration_adopts_pre_alembic_schema_without_data_loss(tmp_path):
     with engine.begin() as connection:
         connection.execute(
             text(
-                "INSERT INTO listings (id, vehicle_signature, is_active) "
-                "VALUES ('legacy-listing', 'legacy-signature', 1)"
+                "INSERT INTO listings (id, vehicle_signature, source_auto_ru, is_active) "
+                "VALUES ('legacy-listing', 'legacy-signature', "
+                "'https://auto.ru/cars/used/sale/brand/model/1132311022-old/', 1)"
                 )
             )
         connection.execute(text('DROP TABLE alembic_version'))
@@ -51,8 +56,17 @@ def test_migration_adopts_pre_alembic_schema_without_data_loss(tmp_path):
     try:
         with engine.connect() as connection:
             assert connection.execute(text('SELECT count(*) FROM listings')).scalar_one() == 1
+            assert connection.execute(text('SELECT count(*) FROM vehicles')).scalar_one() == 1
+            assert connection.execute(
+                text('SELECT vehicle_id FROM listings WHERE id = :listing_id'),
+                {'listing_id': 'legacy-listing'},
+            ).scalar_one()
+            assert connection.execute(text('SELECT count(*) FROM offers')).scalar_one() == 1
+            assert connection.execute(
+                text("SELECT state FROM offer_vehicle_links WHERE method = 'legacy_backfill'")
+            ).scalar_one() == 'candidate'
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                '20260914_0007'
+                '20260914_0008'
             )
     finally:
         engine.dispose()

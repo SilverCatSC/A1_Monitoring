@@ -19,6 +19,13 @@ def upgrade() -> None:
     # checkfirst makes the baseline safe for both a clean database and installations
     # created by the pre-Alembic application startup path.
     baseline_tables = [
+        # Current models contain foreign keys to these append-only identity and
+        # cycle parents.  Include them in a clean install so PostgreSQL never has
+        # to create a child table before its referenced table exists.  Later
+        # migrations remain responsible for their data backfills and indexes.
+        'monitoring_cycles',
+        'vehicles',
+        'offers',
         'source_import_snapshots',
         'import_field_drift',
         'search_filters',
@@ -30,6 +37,8 @@ def upgrade() -> None:
         'absence_episodes',
         'manager_feedback',
         'feedback_events',
+        'source_records',
+        'offer_vehicle_links',
     ]
     Base.metadata.create_all(
         bind=bind,

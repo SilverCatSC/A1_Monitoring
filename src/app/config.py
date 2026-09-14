@@ -81,7 +81,7 @@ class Settings(BaseSettings):
         default=100, alias='SELLER_DETAIL_CHECKS_LIMIT', ge=0, le=250
     )
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
-    app_version: str = '0.10.0'
+    app_version: str = '0.11.0'
     min_confirmed_absence_runs: int = 2
     weekend_watch_critical_gap_minutes: int = 24 * 60
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import Session
 from app.models import EngineType, Listing, ListingLinkEvent, ListingLinkOverride
 from app.scraper.base import is_marketplace_listing_url
 from app.service.filters import FilterRegistryService
+from app.service.identity import IdentityService
 from app.service.registry_audit import close_replaced_episodes
 
 
@@ -44,6 +45,14 @@ class ListingRegistryService:
             self.db.add(override)
         override.url, override.actor, override.reason = clean_url, clean_actor, clean_reason
         if old_url == clean_url:
+            IdentityService(self.db).confirm_republication(
+                listing=listing,
+                source=source,
+                old_url=old_url,
+                new_url=clean_url,
+                actor=clean_actor,
+                reason=clean_reason,
+            )
             self.db.flush()
             return listing
         setattr(listing, field, clean_url)
@@ -57,6 +66,14 @@ class ListingRegistryService:
                 actor=clean_actor,
                 reason=clean_reason,
             )
+        )
+        IdentityService(self.db).confirm_republication(
+            listing=listing,
+            source=source,
+            old_url=old_url,
+            new_url=clean_url,
+            actor=clean_actor,
+            reason=clean_reason,
         )
         self.db.flush()
         FilterRegistryService(self.db).refresh_managed_assignments()

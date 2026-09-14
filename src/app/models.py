@@ -146,10 +146,65 @@ class SearchFilter(Base):
     )
 
 
+class Vehicle(Base):
+    """Application-owned vehicle identity; it is deliberately independent of marketplace offers."""
+
+    __tablename__ = 'vehicles'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    # A fingerprint, rather than a database-wide UNIQUE VIN, lets the importer surface
+    # historical duplicate VINs as ambiguity instead of silently selecting one vehicle.
+    vin_fingerprint: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    identity_state: Mapped[str] = mapped_column(String, default='provisional', nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    listings: Mapped[list['Listing']] = relationship(back_populates='vehicle')
+    offer_links: Mapped[list['OfferVehicleLink']] = relationship(
+        back_populates='vehicle', cascade='all, delete-orphan'
+    )
+    source_records: Mapped[list['SourceRecord']] = relationship(back_populates='vehicle')
+
+
+class Offer(Base):
+    """One immutable marketplace external ID, with its latest usable URL as a projection."""
+
+    __tablename__ = 'offers'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    source: Mapped[EngineType] = mapped_column(Enum(EngineType), index=True, nullable=False)
+    external_key: Mapped[str] = mapped_column(String, nullable=False)
+    current_url: Mapped[str] = mapped_column(Text, nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    vehicle_links: Mapped[list['OfferVehicleLink']] = relationship(
+        back_populates='offer', cascade='all, delete-orphan'
+    )
+
+    __table_args__ = (
+        UniqueConstraint('source', 'external_key', name='uq_offer_source_external_key'),
+    )
+
+
 class Listing(Base):
     __tablename__ = 'listings'
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    # Listing remains the compatibility projection for existing observations. New
+    # identity is owned by Vehicle/Offer and migrations never rewrite listing_id.
+    vehicle_id: Mapped[str | None] = mapped_column(
+        ForeignKey('vehicles.id'), unique=True, index=True, nullable=True
+    )
     vehicle_signature: Mapped[str] = mapped_column(String, unique=True, index=True, nullable=False)
     brand: Mapped[str | None] = mapped_column(String, nullable=True)
     model: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -175,11 +230,73 @@ class Listing(Base):
     expectations: Mapped[list['VehicleFilterExpectation']] = relationship(
         back_populates='listing', cascade='all, delete-orphan'
     )
+    vehicle: Mapped[Vehicle | None] = relationship(back_populates='listings')
     observations: Mapped[list['ListingObservation']] = relationship(
         'ListingObservation', back_populates='listing'
     )
     link_events: Mapped[list['ListingLinkEvent']] = relationship(
         'ListingLinkEvent', back_populates='listing', cascade='all, delete-orphan'
+    )
+    source_records: Mapped[list['SourceRecord']] = relationship(back_populates='listing')
+
+
+class SourceRecord(Base):
+    """A persisted, privacy-bounded record of one accepted row in a source snapshot."""
+
+    __tablename__ = 'source_records'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    snapshot_id: Mapped[str] = mapped_column(
+        ForeignKey('source_import_snapshots.id'), index=True, nullable=False
+    )
+    row_number: Mapped[int] = mapped_column(Integer, nullable=False)
+    row_fingerprint: Mapped[str] = mapped_column(String, nullable=False)
+    vin_fingerprint: Mapped[str | None] = mapped_column(String, index=True, nullable=True)
+    offer_keys: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
+    vehicle_id: Mapped[str | None] = mapped_column(ForeignKey('vehicles.id'), index=True, nullable=True)
+    listing_id: Mapped[str | None] = mapped_column(ForeignKey('listings.id'), index=True, nullable=True)
+    resolution: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    vehicle: Mapped[Vehicle | None] = relationship(back_populates='source_records')
+    listing: Mapped[Listing | None] = relationship(back_populates='source_records')
+    offer_links: Mapped[list['OfferVehicleLink']] = relationship(back_populates='source_record')
+
+    __table_args__ = (
+        UniqueConstraint('snapshot_id', 'row_number', name='uq_source_record_snapshot_row'),
+    )
+
+
+class OfferVehicleLink(Base):
+    """Dated vehicle-to-offer assertion. Only an operator can reassign a contested offer."""
+
+    __tablename__ = 'offer_vehicle_links'
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    offer_id: Mapped[str] = mapped_column(ForeignKey('offers.id'), index=True, nullable=False)
+    vehicle_id: Mapped[str] = mapped_column(ForeignKey('vehicles.id'), index=True, nullable=False)
+    source_record_id: Mapped[str | None] = mapped_column(
+        ForeignKey('source_records.id'), index=True, nullable=True
+    )
+    state: Mapped[str] = mapped_column(String, default='candidate', nullable=False, index=True)
+    method: Mapped[str] = mapped_column(String, nullable=False)
+    actor: Mapped[str | None] = mapped_column(String, nullable=True)
+    reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    details: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    offer: Mapped[Offer] = relationship(back_populates='vehicle_links')
+    vehicle: Mapped[Vehicle] = relationship(back_populates='offer_links')
+    source_record: Mapped[SourceRecord | None] = relationship(back_populates='offer_links')
+
+    __table_args__ = (
+        Index('ix_offer_vehicle_link_offer_state', 'offer_id', 'state'),
+        Index('ix_offer_vehicle_link_vehicle_state', 'vehicle_id', 'state'),
     )
 
 

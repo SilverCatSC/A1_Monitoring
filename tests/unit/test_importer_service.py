@@ -257,6 +257,102 @@ def test_importer_updates_existing_listing_links(db_modules):
         session.close()
 
 
+def test_no_vin_rows_with_same_model_but_different_offers_never_merge(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import Listing, Offer, OfferVehicleLink, SourceRecord, Vehicle
+
+    session = app_db.SessionLocal()
+    try:
+        rows = _make_rows(
+            {
+                'brand': 'Mercedes-Benz',
+                'model': 'V-Class',
+                'generation': 'W447',
+                'year': 2024,
+                'listing_url_auto_ru': 'https://auto.ru/cars/used/sale/mercedes/v/1132311022-a/',
+                'listing_url_avito': 'https://www.avito.ru/moskva/avtomobili/v_1132311022',
+                'source_status': 'Актуально',
+            },
+            {
+                'brand': 'Mercedes-Benz',
+                'model': 'V-Class',
+                'generation': 'W447',
+                'year': 2024,
+                'listing_url_auto_ru': 'https://auto.ru/cars/used/sale/mercedes/v/1133334954-b/',
+                'listing_url_avito': 'https://www.avito.ru/moskva/avtomobili/v_1133334954',
+                'source_status': 'Актуально',
+            },
+        )
+
+        SourceImporter(session).run(rows, source_signature='two-no-vin-offers')
+        SourceImporter(session).run(rows, source_signature='two-no-vin-offers-repeat')
+
+        assert session.query(Listing).count() == 2
+        assert session.query(Vehicle).count() == 2
+        assert session.query(Offer).count() == 4
+        assert session.query(SourceRecord).count() == 4
+        assert session.query(OfferVehicleLink).filter_by(state='candidate').count() == 4
+        assert {item.vehicle_id for item in session.query(Listing).all()} == {
+            item.id for item in session.query(Vehicle).all()
+        }
+    finally:
+        session.close()
+
+
+def test_no_vin_republication_requires_manual_identity_confirmation(db_modules):
+    app_db, _ = db_modules
+    from app.importer.service import SourceImporter
+    from app.models import EngineType, Listing, Offer, OfferVehicleLink, Vehicle
+    from app.service.listings import ListingRegistryService
+
+    old = 'https://auto.ru/cars/used/sale/mercedes/v/1132311022-old/'
+    new = 'https://auto.ru/cars/used/sale/mercedes/v/1133334954-new/'
+    session = app_db.SessionLocal()
+    try:
+        base = {
+            'brand': 'Mercedes-Benz',
+            'model': 'V-Class',
+            'generation': 'W447',
+            'year': 2024,
+            'source_status': 'Актуально',
+        }
+        SourceImporter(session).run(_make_rows({**base, 'listing_url_auto_ru': old}))
+        original = session.query(Listing).one()
+        SourceImporter(session).run(_make_rows({**base, 'listing_url_auto_ru': new}))
+
+        assert session.query(Vehicle).count() == 2
+        assert original.is_active is False
+        new_offer = session.query(Offer).filter_by(external_key='auto_ru:1133334954').one()
+        assert {link.vehicle_id for link in new_offer.vehicle_links if link.state == 'candidate'} != {
+            original.vehicle_id
+        }
+
+        ListingRegistryService(session).update_link(
+            original.id,
+            source=EngineType.AUTO_RU,
+            url=new,
+            actor='Оператор',
+            reason='Подтверждена перевыкладка без VIN',
+        )
+
+        links = session.query(OfferVehicleLink).filter_by(offer_id=new_offer.id).all()
+        assert any(
+            link.vehicle_id == original.vehicle_id
+            and link.state == 'confirmed'
+            and link.method == 'operator_confirmed'
+            for link in links
+        )
+        assert any(
+            link.vehicle_id != original.vehicle_id and link.state == 'rejected'
+            for link in links
+        )
+        old_offer = session.query(Offer).filter_by(external_key='auto_ru:1132311022').one()
+        assert any(link.state == 'superseded' for link in old_offer.vehicle_links)
+    finally:
+        session.close()
+
+
 def test_importer_does_not_erase_confirmed_links_with_blank_source_cells(db_modules):
     app_db, _ = db_modules
     from app.importer.service import SourceImporter
