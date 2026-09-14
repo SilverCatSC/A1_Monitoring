@@ -88,6 +88,11 @@ A1_EXPORT_AUTH='user:password' \
 
 ## Открытые части M6
 
+- Live gate 14.09.2026: `BACKUP_OK` создан с SHA-256, но restore-test остановился
+  до restore, потому что активная DB ещё на Alembic `20260909_0006` / app `0.9.0`
+  и не содержит `monitoring_cycles`. Current code требует migration head
+  `20260914_0010`. Контейнер не пересобирался и не мигрировался без отдельного
+  deploy-разрешения; поэтому successful restore пока не подтверждён.
 - backup/restore сценарии для macOS и Windows теперь проверяют checksum, dump,
   revision Alembic и контрольные количества, но их нужно выполнить на целевой
   среде и зафиксировать результат, а не заменить офлайн-тестом;

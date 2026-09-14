@@ -126,6 +126,11 @@ Backup пишет SHA-256 companion, restore-test сравнивает dump/Alem
 только aggregate-only HTML. Реальные backup/restore, owner review HTML и Pages
 publish не выполнялись, поэтому M6 и `0.15.0` остаются открытыми.
 
+Live attempt 14.09.2026 создал verified backup, но isolated restore не начался:
+running container остался на app `0.9.0` / Alembic `20260909_0006`, а current
+release требует `20260914_0010`. Сначала нужен отдельный controlled deploy,
+затем повтор backup/restore.
+
 ## M7 подготовлен документально, но не начат
 
 Единый [M7 acceptance runbook](ACCEPTANCE_M7.md) задаёт live stop-gates для

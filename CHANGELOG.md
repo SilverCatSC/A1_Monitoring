@@ -28,6 +28,14 @@
 - Не было owner approval, export, Pages deploy или публикации в Bitrix. M6 не
   объявляется production-ready до их отдельных проверок.
 
+## M6 live-gate — schema deployment stop — 2026-09-14
+
+- Scoped backup выполнился и записал SHA-256 companion в backup-volume.
+- Restore-test корректно остановился до изменения рабочей БД: запущенный app
+  имеет `0.9.0` / Alembic `20260909_0006` и не содержит `monitoring_cycles`.
+  Current source требует head `20260914_0010`; container не пересобирался и не
+  мигрировался без отдельного deploy-разрешения.
+
 ## M5 — operator release — 2026-09-14
 
 - Добавлены серверные роли `admin`, `operator`, `marketing`, `sales_director`.
