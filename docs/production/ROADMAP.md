@@ -12,8 +12,8 @@
 | M3. Evidence collectors | `0.12.0` | Контракты Auto.ru/Avito, fixtures CAPTCHA/blocked/layout, Drom/site после приёмки | Каждому выводу соответствует сохранённое доказательство |
 | M4. Reconciliation | `0.13.0` | Цена, НДС, статус, ghost/missing offers, очередь review | Выводы объясняются пользователю без чтения кода |
 | M5. Operator release | `0.14.0` | Ролевой дашборд, обратная связь, отчёт по исключениям | Маркетинг и РОП обрабатывают очередь самостоятельно |
-| M6. Operations | `0.15.0` | Retry/resume, schedule, backup/restore, метрики, allowlist публикации | Подтверждено восстановление после сбоя и бэкапа |
-| M7. Acceptance | `1.0.0` | Shadow-run, контрольная выборка, Mac/Windows приемка, rollback | Результаты подтверждены на живом цикле и владельцем данных |
+| M6. Operations | `0.15.0` | Retry/resume, MacBook schedule, backup/restore, метрики, allowlist публикации | Подтверждено восстановление после сбоя и бэкапа |
+| M7. Acceptance | `1.0.0` | MacBook shadow-run, контрольная выборка, rollback | Результаты подтверждены на живом цикле и владельцем данных |
 
 ## M1 завершён в коде: Honest cycle
 
@@ -130,17 +130,21 @@ is at app 0.14.0 / Alembic 20260914_0011; checksum backup and isolated
 restore-test passed. Historical backup старой схемы также прошёл restore-test.
 Evidence: [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md).
 
-M6 не получает version 0.15.0 до owner review aggregate-only export и живой
-Windows проверки backup-age и controlled retry. Export, Pages publish и
-внешняя публикация не выполнялись.
+M6 не получает version 0.15.0 до owner review aggregate-only export, MacBook
+проверки backup-age/controlled retry и отдельного решения о включении
+пользовательского LaunchAgent. Export, Pages publish и внешняя публикация не
+выполнялись. Windows/MSI остаётся резервным handoff: его runtime не является
+обязательным gate для MacBook release.
 
 ## M7 начат на текущем Mac, но не завершён
 
 Единый [M7 acceptance runbook](ACCEPTANCE_M7.md) задаёт live stop-gates для
-VPSUS, backup/restore, Mac shadow-run, MSI/Windows и owner rollback decision.
-На текущем Mac подтверждены VPN routing, backup/restore и одностраничные
-read-only probes Auto.ru/Avito; evidence записано в VPN_GATE_2026-09-14.md
-и LIVE_PROBE_2026-09-14.md.
+VPSUS, backup/restore, MacBook shadow-run, gated LaunchAgent и owner rollback
+decision. Решение владельца о MacBook как primary host зафиксировано в
+[MACBOOK_PRIMARY_HOST_2026-09-14.md](MACBOOK_PRIMARY_HOST_2026-09-14.md).
+На текущем Mac зафиксированы read-only состояние VPN/маршрутов, backup/restore и
+одностраничные probes Auto.ru/Avito; это ещё не закрывает direct split-tunnel.
+Evidence записано в VPN_GATE_2026-09-14.md и LIVE_PROBE_2026-09-14.md.
 
 Уточнение owner от 14.09.2026 усилило Avito scope: все шесть фильтров теперь
 требуют `/moskva/`, `radius=0`, `searchRadius=0` и включённый
@@ -150,8 +154,10 @@ Avito contract but correctly ended `partial` pending link review; details:
 [AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
 
 M7 нельзя закрыть в CI или автоматическим агентом: нужны утверждённая owner
-контрольная выборка, полноценный shadow-run с ручной сверкой, реальные
-role accounts и отдельная MSI/Windows приёмка.
+контрольная выборка, полноценный MacBook shadow-run с ручной сверкой, реальные
+role accounts и owner decision по включению либо отказу от LaunchAgent.
+Windows-приёмка требуется только если владелец снова выберет Windows как
+рабочий host.
 
 ## Рабочий ритм
 

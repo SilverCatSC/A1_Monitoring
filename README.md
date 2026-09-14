@@ -6,14 +6,16 @@
 
 Версия приложения: **0.14.0**. Аудит и перенос: **14 сентября 2026**.
 Основная папка исходников: `/Users/filaret/Desktop/Monitoring`.
-Целевая эксплуатация: MSI, Windows 11, Intel Core Ultra 5 125U, 16 ГБ RAM.
+Основной эксплуатационный host: текущий MacBook с macOS и видимым Chrome в
+интерактивной пользовательской сессии. Windows/MSI сохранён только как
+резервный, пока не принятый handoff.
 
 ## С чего начать
 
 | Задача | Документ |
 | --- | --- |
 | Ежедневная работа менеджера и оператора | [Рабочая инструкция](docs/operations/OPERATOR.md) |
-| Установка Windows / сохранённый Mac | [Окружение и запуск](docs/operations/ENVIRONMENT.md) |
+| Основной MacBook / резервный Windows | [Окружение и запуск](docs/operations/ENVIRONMENT.md) |
 | Устройство и этапы проверки, карта алгоритма | [Алгоритм](docs/architecture/ALGORITHM.md) |
 | Файлы, данные, точки входа | [Структура проекта](docs/architecture/PROJECT_STRUCTURE.md) |
 | Реальные ограничения и обнаруженные дефекты | [Аудит 14.09.2026](docs/analysis/AUDIT_2026-09-14.md) |
@@ -27,6 +29,7 @@
 | Роли, обратная связь и отчёт по исключениям | [M5 Operator release](docs/production/OPERATOR_RELEASE.md) |
 | Controlled retry, backup и public allowlist | [M6 Operations](docs/production/OPERATIONS.md) |
 | Живая приёмка, VPN и rollback | [M7 Acceptance](docs/production/ACCEPTANCE_M7.md) |
+| Решение о primary host и будущий LaunchAgent | [MacBook primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
 
 ## Текущее состояние
@@ -36,11 +39,14 @@
 AI анализирует сохранённые данные и изображения последовательно. Подключение
 платных LLM API пока только рассчитано — интеграция не выполнена.
 
-Windows-перенос подготовлен кодом, но живой цикл на MSI не принят. Поисковый,
-сверочный и карточечный контуры теперь связаны `cycle_id` и неизменяемым roster
-manifest. Идентичность `Vehicle`/`Offer` отделена от старой проекции `Listing`;
-машины без VIN не склеиваются по похожим полям, а перевыкладка требует явного
-подтверждения оператора. Это ещё не заменяет живую приёмку.
+MacBook назначен основным host, но назначение не заменяет живую приёмку: VPSUS
+split-tunnel, контрольная выборка, роли и ручной Mac shadow-run по-прежнему
+являются M7-gates. Windows-перенос подготовлен кодом, но остаётся резервным и
+непринятым. Поисковый, сверочный и карточечный контуры теперь связаны `cycle_id`
+и неизменяемым roster manifest. Идентичность `Vehicle`/`Offer` отделена от старой
+проекции `Listing`; машины без VIN не склеиваются по похожим полям, а
+перевыкладка требует явного подтверждения оператора. Это ещё не заменяет живую
+приёмку.
 Поэтому зелёные unit-тесты не означают подтверждённую точность мониторинга.
 
 ## Быстрый запуск
@@ -53,14 +59,24 @@ cd /Users/filaret/Desktop/Monitoring
 ./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
 ```
 
-Видимый Chrome использует отдельный постоянный профиль. Перед живым прогоном
+Видимый Chrome использует отдельный постоянный профиль. Перед разрешённым живым прогоном
 VPSUS остаётся включённым: ChatGPT/Codex продолжает работать по согласованному
 VPN/direct-маршруту, а Auto.ru и Avito открываются в обычном Chrome по
-подтверждённым direct-правилам. Не выключайте VPN и не закрывайте ChatGPT как
-workaround. CAPTCHA требует действия оператора. Граница проверки —
+согласованным direct-правилам. Не выключайте VPN и не закрывайте ChatGPT как
+workaround. Текущая конфигурация ещё не является полным доказательством
+split-tunnel; CAPTCHA требует действия оператора. Граница проверки —
 [VPSUS split-tunnel gate](docs/production/VPN_GATE_2026-09-14.md).
 
-Windows после переноса файлов и установки окружения:
+Автоматического production-расписания пока нет. `./scripts/local_scan.sh --watch`
+— только foreground-loop открытого Terminal. Скрипты
+`run_monitoring_host_macos.sh` и `register_monitoring_launchagent_macos.sh`
+поставлены как static-only contract и имеют отдельный MacBook gate: LaunchAgent
+должен быть per-user, plan-only до явного `--apply`, не может заменять видимый
+Chrome/VPSUS и не запускается при lock screen. Детали —
+[primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
+
+Windows после отдельного решения владельца — резервный ручной сценарий, не
+основной путь:
 
 ```powershell
 Set-Location C:\work\A1_Monitoring
@@ -69,14 +85,15 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
 ```
 
-Полный сценарий с локальными Hermes/Ouroboros:
-`scripts/run_full_monitoring_windows.ps1`; на Mac — `scripts/run_full_monitoring_macos.sh`.
-Они требуют дополнительной AI-установки и имеют ограничения из аудита.
+Полный сценарий с локальными Hermes/Ouroboros на основном Mac —
+`scripts/run_full_monitoring_macos.sh`. Windows-вариант
+`scripts/run_full_monitoring_windows.ps1` не является принятой альтернативой и
+требует отдельной живой приёмки, если этот host когда-либо будет использован.
 
 Windows-команды выше — только ручной controlled cycle. `--watch` остаётся
 foreground-циклом открытого PowerShell; container scheduler не управляет host
-Chrome. Отдельные host-runner/Task Scheduler допустимы лишь после живой MSI
-приёмки по [Windows handoff](docs/WINDOWS_11_INSTALL.md#host-runner-и-windows-task-scheduler--только-после-gate-4).
+Chrome. Отдельные host-runner/Task Scheduler допустимы лишь после отдельной
+Windows-приёмки по [Windows handoff](docs/WINDOWS_11_INSTALL.md).
 
 Дашборд: [127.0.0.1:18000](http://127.0.0.1:18000/api/v1/dashboard).
 Карточки отдела продаж: [Автомобили](http://127.0.0.1:18000/api/v1/dashboard/listings).

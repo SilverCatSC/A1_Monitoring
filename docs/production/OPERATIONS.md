@@ -55,39 +55,44 @@ than guessing that it is stale.
 
 `SCHEDULER_ENABLED=true` внутри web-контейнера **не является решением для
 видимого host Chrome**. Он может коалесцировать интервалы и предотвращать второй
-container job, но не получает интерактивный Windows desktop, состояние VPSUS или
+container job, но не получает интерактивную macOS GUI-сессию, состояние VPSUS или
 право управлять Chrome-профилем пользователя. Поэтому для реальных marketplace
 циклов `SCHEDULER_ENABLED` остаётся `false`; не включайте его как обход отсутствия
 host-runner.
 
-`local_scan_windows.ps1 -Watch` также не является production scheduler: это
-ручной foreground-loop в открытом PowerShell. Он заканчивается при logoff/сне и
-не должен работать параллельно с другой ручной командой либо Task Scheduler.
+`local_scan.sh --watch` также не является production scheduler: это ручной
+foreground-loop в открытом Terminal. Он заканчивается при logout/сне и не должен
+работать параллельно с другой ручной командой либо LaunchAgent.
 
-Production-контракт Windows использует отдельный
-`run_monitoring_host_windows.ps1`: ровно один cautious scan в интерактивном
-desktop (не Session 0), межсессионный mutex, preflight HTTP, безопасное recovery
-только abandoned cycles и privacy-safe
-`artifacts/monitoring_host_runner_status.json`. При занятом mutex это штатный
-`HOST_RUNNER_SKIPPED_ACTIVE`, а не повод запускать второй worker или retry.
+Production-контракт основного MacBook использует отдельный, ещё не принятый
+`run_monitoring_host_macos.sh`: ровно один cautious scan в активной GUI-сессии,
+mutex, preflight HTTP, безопасное recovery только abandoned cycles и privacy-safe
+status в `artifacts`. При занятом mutex это штатный skip, а не повод запускать
+второй worker или retry.
 
-`register_monitoring_task_windows.ps1` без `-Apply` только показывает план;
-с `-Apply` отдельно создаёт ежедневную `\A1Monitoring\InteractiveCycle` для
-текущего пользователя с
-`LogonType=Interactive`, `RunLevel=Limited`, `MultipleInstances=IgnoreNew` и
-`RestartCount=0`. Регистрация не запускает scan; trigger запускает один
-host-runner, не `--watch` и не автоматический retry.
+`register_monitoring_launchagent_macos.sh --at HH:MM` без `--apply` только
+показывает план. Явный `--apply` должен отдельно создать per-user GUI LaunchAgent
+`com.silvercatsc.a1monitoring.interactive-cycle` с ежедневным
+`StartCalendarInterval`, `RunAtLoad=false` и `KeepAlive=false`. Регистрация не
+запускает scan; trigger запускает один host-runner, не `--watch` и не
+автоматический retry. Это LaunchAgent, не LaunchDaemon: запуск возможен только
+после входа пользователя и не является способом обойти блокировку экрана или CAPTCHA.
 
 Включение этой задачи допустимо только после:
 
 1. подтверждённого split-tunnel для ChatGPT, Auto.ru и Avito в обычном Chrome;
-2. успешного ручного Windows controlled cycle с видимым Chrome;
+2. успешного ручного MacBook controlled cycle с видимым Chrome;
 3. проверки, что `--watch`, container scheduler и иные workers остановлены;
-4. owner review плана задачи и статуса после первого trigger.
+4. явной проверки TCC/Desktop-доступа для GUI-пользователя, Chrome и launchd
+   без автоматической выдачи permissions;
+5. owner review плана задачи и статуса после первого trigger.
 
-До этих фактов host-runner/Task Scheduler остаются M7 gate, а не принятым
-production-расписанием. Детальная Windows-процедура:
-[WINDOWS_11_INSTALL.md](../WINDOWS_11_INSTALL.md#host-runner-и-windows-task-scheduler--только-после-gate-4).
+До этих фактов host-runner/LaunchAgent остаются static-only M7 gate, а не
+принятым production-расписанием. При lock screen или отсутствии console GUI user
+runner должен отказаться, а не начинать невидимый scan. Детали и границы —
+[MACBOOK_PRIMARY_HOST_2026-09-14.md](MACBOOK_PRIMARY_HOST_2026-09-14.md).
+Windows Task Scheduler остаётся отдельным, непринятым fallback-путём и не
+требуется для MacBook release.
 
 ## Publication allowlist
 
@@ -135,14 +140,14 @@ A1_EXPORT_AUTH='user:password' \
 
 - Historical pre-deploy stop is superseded: the current Mac/stage backup and
   isolated restore-test completed at Alembic `20260914_0011`. Evidence:
-  [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md). Windows/MSI execution
-  remains unverified.
-- backup/restore сценарии для macOS и Windows проверяют checksum, dump, revision
-  Alembic и контрольные количества; macOS result is recorded above, while the
-  same procedure must still be executed and recorded on Windows/MSI;
+  [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md). This does not by itself
+  accept a live MacBook cycle or scheduled runner.
+- backup/restore сценарий macOS проверяет checksum, dump, revision Alembic и
+  контрольные количества; его result is recorded above. Windows/MSI имеет
+  отдельный unaccepted fallback procedure, а не блокирующий MacBook gate;
 - нужно провести owner review фактического aggregate-only HTML перед любым
   публичным export/publish;
-- мониторинг backup-age и controlled retry на Windows/MSI требуют отдельной
-  живой приёмки.
+- мониторинг backup-age, controlled retry и, при необходимости, первый
+  LaunchAgent trigger на MacBook требуют отдельной живой приёмки.
 
 Пока эти пункты не закрыты, M6 не повышает релиз до `0.15.0` и не заменяет M7.

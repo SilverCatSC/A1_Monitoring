@@ -1,8 +1,10 @@
 # A1 Monitoring: основной запуск на Mac
 
-Текущий Mac — staged-контур; Windows/MSI остаётся целевым production-контуром,
-но ещё не принят живым запуском. Проверено на MacBook Pro, Apple M2 Pro, 12 ядер,
-16 ГБ общей памяти, macOS 26.6.2. Текущая staged-версия приложения — 0.14.0.
+По текущему решению владельца этот MacBook — основной production host. Проверено
+на MacBook Pro, Apple M2 Pro, 12 ядер, 16 ГБ общей памяти, macOS 26.6.2.
+Текущая staged-версия приложения — 0.14.0. Это решение о host не закрывает M7:
+живой controlled cycle, VPSUS split-tunnel, роли и будущий LaunchAgent требуют
+отдельных evidence. Windows/MSI остаётся резервным, непринятым handoff.
 
 ## Что уже проверено
 
@@ -45,9 +47,15 @@ cd /Users/filaret/Desktop/Monitoring
 ```
 
 Адрес: [локальный дашборд](http://127.0.0.1:18000/api/v1/dashboard).
-Файл «Открыть дашборд.command» в корне проекта выполняет запуск через Finder.
+Файл «Открыть дашборд.command» в корне проекта предназначен для запуска через
+Finder после проверки его executable-bit.
 Существующая `.env` сохраняется. Не меняйте пароль уже созданной базы и
 не удаляйте Docker volumes. Программа доступна только на этом Mac через loopback.
+
+Перед первым запуском двойным кликом убедитесь, что оба Finder-launcher файла
+исполняемы: `test -x './Открыть дашборд.command' && test -x './Запустить мониторинг.command'`.
+Если проверка не проходит, используйте команду из Terminal выше и не считайте
+Finder-путь принятым до восстановления executable-bit в контролируемом checkout.
 
 ## Повтор локальных тестов без обращения к площадкам
 
@@ -69,6 +77,9 @@ cd /Users/filaret/Desktop/Monitoring
 доступен по утверждённому VPN/direct-маршруту, Auto.ru и Avito — по direct browser
 rules Monitoring. Не меняйте VPN, reconnect или bypass-правила без отдельного
 подтверждения владельца. Оставьте Docker и пользовательскую сессию запущенными.
+
+Следующая команда является ручным controlled cycle, а не доказательством нового
+live run этой документацией. Выполняйте её только после соответствующего M7 gate.
 
 В Терминале:
 
@@ -103,6 +114,25 @@ Chrome видимый, с отдельным локальным
 а не отсутствие всех машин. CAPTCHA/403/429/таймаут нельзя засчитывать как непоказ.
 Паузы не гарантируют отсутствие CAPTCHA. Остановите цикл через `Ctrl+C`, если
 требуется ручной разбор; не запускайте второй цикл поверх первого.
+
+## График через LaunchAgent — static-only, пока не принят
+
+Основной MacBook использует только per-user GUI LaunchAgent, а не container
+scheduler или LaunchDaemon. Поставленные static-only скрипты
+`scripts/run_monitoring_host_macos.sh` и
+`scripts/register_monitoring_launchagent_macos.sh` предназначены для ровно одного
+cautious цикла с видимым Chrome в активной пользовательской сессии.
+
+Регистратор по умолчанию показывает план; только явный `--apply` может создать
+`com.silvercatsc.a1monitoring.interactive-cycle`. Он не запускает scan при
+регистрации. `RunAtLoad=false` и `KeepAlive=false`; `--watch` остаётся ручным
+foreground-loop. Не включайте `SCHEDULER_ENABLED=true` как замену этому контуру.
+Ни runner, ни LaunchAgent не заявлены живо проверенными: пока есть только
+static-only contract. Отдельный M7 record должен зафиксировать GUI-trigger, один
+`cycle_id`, отсутствие параллельного worker, корректную обработку `partial` и
+TCC/Desktop access для проекта, Terminal, Chrome и launchd. Не выдавайте
+permissions автоматически и не используйте locked screen как способ запуска. См.
+[MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
 Для приёмки вручную сверьте несколько автомобилей: Москва/0 км на обеих площадках,
 общий список новых Auto.ru, правильный ID объявления, цена, номер страницы 1–3,
@@ -170,7 +200,7 @@ Ouroboros использует отдельные `artifacts/ouroboros_home`,
 
 ## Другие инструкции
 
-[Windows 11 — целевой, но ещё не принятый контур](WINDOWS_11_INSTALL.md), [стек](STACK.md),
+[Windows 11 — резервный, но ещё не принятый handoff](WINDOWS_11_INSTALL.md), [стек](STACK.md),
 [правила продукта](archive/2026-09-10/BIBLE.md), [README](archive/2026-09-10/README.md).
 GitHub/Bitrix пока не опубликованы; перед публичным экспортом требуется отдельная
 проверка исключения внутренних данных, VIN и замечаний менеджеров.

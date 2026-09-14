@@ -2,10 +2,10 @@
 
 Текущая staged-версия — 0.14.0. Реализованный и технически проверенный контур —
 Python 3.12 / macOS / ARM64, контейнеры Linux ARM64. MacBook Pro M2 Pro с 16 ГБ
-остаётся Mac/stage средой; [запуск на Mac](MACOS_INSTALL.md). Windows 11 на MSI —
-целевой production-контур, но ещё не прошёл живую приёмку. Его видимый Chrome
-запускается только через `scripts/*_windows.ps1` в интерактивной сессии, не через
-container scheduler.
+назначен основным production host, хотя его живые M7-gates ещё не закрыты;
+[запуск на Mac](MACOS_INSTALL.md). Windows 11 на MSI — резервный, непринятый
+handoff. Его видимый Chrome допустим только через `scripts/*_windows.ps1` в
+интерактивной сессии, не через container scheduler.
 
 | Назначение | Технология / проверенная версия |
 | --- | --- |
@@ -19,7 +19,8 @@ container scheduler.
 | Миграции | Alembic 1.19.1; stage head 20260914_0011 |
 | Тестирование | pytest 9.1.1, Ruff 0.16.6 |
 | Поставка | Docker Compose, Git, requirements.lock |
-| Целевой Windows-запуск | PowerShell 7, Docker Desktop/WSL2, Git for Windows, Chrome, interactive host-runner |
+| Основной host | macOS MacBook, интерактивный Chrome + будущий per-user LaunchAgent, не container scheduler |
+| Резервный Windows-handoff | PowerShell 7, Docker Desktop/WSL2, Git for Windows, Chrome, interactive host-runner |
 | Публичный отчёт | Статический HTML/CSS/JS, GitHub Pages workflow |
 | Bitrix24 | Входящий webhook, `scripts/bitrix_publish.ps1`, dry-run по умолчанию |
 | Локальная инференс-модель | Qwen3.5-9B Q4_K_M + mmproj-F16 (текст, reasoning, изображения), llama.cpp/Metal, loopback `127.0.0.1:18080` |

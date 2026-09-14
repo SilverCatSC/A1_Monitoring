@@ -9,7 +9,7 @@ records имеют приоритет над старым аудитом и об
 
 - [PROJECT_DOSSIER](PROJECT_DOSSIER.md) — единый справочник проекта с приложением исходного скрипта.
 - [OPERATOR](operations/OPERATOR.md) — запуск, чтение отчёта, замечания, приёмка.
-- [ENVIRONMENT](operations/ENVIRONMENT.md) — Mac/Windows, окружение, команды.
+- [ENVIRONMENT](operations/ENVIRONMENT.md) — основной MacBook, резервный Windows, окружение и команды.
 - [MAINTENANCE](operations/MAINTENANCE.md) — изменения, диагностика и резервирование.
 - [MIGRATION](operations/MIGRATION_2026-09-14.md) — что перенесено и что хранится отдельно.
 
@@ -31,11 +31,14 @@ records имеют приоритет над старым аудитом и об
 - [Offer reconciliation](production/OFFER_RECONCILIATION.md) — M4-очередь цены, НДС, статуса и ghost/missing Offer.
 - [Operator release](production/OPERATOR_RELEASE.md) — M5-роли, feedback по finding и отчёт по исключениям.
 - [Operations](production/OPERATIONS.md) — M6 controlled retry, status и границы scheduler.
-- [M7 acceptance](production/ACCEPTANCE_M7.md) — живые stop-gates, shadow-run, MSI и rollback.
+- [M7 acceptance](production/ACCEPTANCE_M7.md) — живые MacBook stop-gates, shadow-run и rollback.
+- [MacBook primary host](production/MACBOOK_PRIMARY_HOST_2026-09-14.md) — решение владельца,
+  границы будущего LaunchAgent и статус Windows fallback.
 
 ## Справочные материалы предыдущей реализации
 
-- [Установка Windows](WINDOWS_11_INSTALL.md), [установка Mac](MACOS_INSTALL.md).
+- [Установка Mac — основной host](MACOS_INSTALL.md),
+  [Windows handoff — резервный](WINDOWS_11_INSTALL.md).
 - [AI-агенты](AI_AGENTS.md), [стек](STACK.md), [данные](DATA_CONTRACT.md).
 - [Сверка продавца](SELLER_RECONCILIATION.md), [метрики](METRICS.md), [UX](UX_UI.md).
 - [Архитектура v0.9](ARCHITECTURE.md), [прежний статус релиза](RELEASE_STATUS.md).

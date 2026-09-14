@@ -1,5 +1,14 @@
+import stat
+import subprocess
 import sys
 from pathlib import Path
+
+import pytest
+
+try:
+    import fcntl
+except ModuleNotFoundError:  # Windows has no POSIX kernel-lock module.
+    fcntl = None
 
 sys.path.insert(0, str(Path(__file__).parents[2]))
 
@@ -159,3 +168,114 @@ def test_windows_task_registration_is_plan_only_and_never_autostarts_scan():
     assert '-MultipleInstances IgnoreNew -RestartCount 0' in registrar
     assert 'Start-ScheduledTask' not in registrar
     assert '--watch' not in registrar
+
+
+def test_macos_host_runner_requires_visible_console_and_uses_kernel_lock():
+    root = Path(__file__).resolve().parents[2]
+    runner = (root / 'scripts' / 'run_monitoring_host_macos.sh').read_text(encoding='utf-8')
+
+    assert '[[ "$EUID" -eq 0 ]]' in runner
+    assert 'root_not_allowed' in runner
+    assert "stat -f '%Su' /dev/console" in runner
+    assert 'gui/$CONSOLE_UID' in runner
+    assert 'IOConsoleLocked' in runner
+    assert "CONSOLE_LOCKED" in runner
+    assert 'screen_locked_or_state_unavailable' in runner
+    assert runner.count('require_console_gui_user') >= 3
+    assert 'with_monitoring_host_lock_macos.py' in runner
+    assert 'HOST_RUNNER_SKIPPED_ACTIVE' in (
+        root / 'scripts' / 'with_monitoring_host_lock_macos.py'
+    ).read_text(encoding='utf-8')
+    assert 'app.cli recover-open-cycles' in runner
+    assert runner.index('app.cli recover-open-cycles') < runner.index(
+        '$ROOT_DIR/scripts/local_scan.sh'
+    )
+    assert runner.index("RUNNER_PHASE='browser_preflight'") < runner.index(
+        '$ROOT_DIR/scripts/local_scan.sh'
+    )
+    assert "PACE='cautious'" in runner
+    assert 'HOST_RUNNER_PARTIAL no_automatic_retry=true' in runner
+    assert '--watch' not in runner
+    assert '/usr/bin/mktemp' in runner
+    assert '/bin/mv -f' in runner
+
+
+def test_macos_lock_helper_skips_an_active_runner_and_releases_after_exec(tmp_path):
+    if fcntl is None:
+        pytest.skip('fcntl lock semantics are verified on POSIX hosts only')
+
+    root = Path(__file__).resolve().parents[2]
+    helper = root / 'scripts' / 'with_monitoring_host_lock_macos.py'
+    lock_path = tmp_path / 'runner.lock'
+
+    with lock_path.open('w', encoding='utf-8') as held_lock:
+        fcntl.flock(held_lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        skipped = subprocess.run(
+            [
+                sys.executable,
+                str(helper),
+                '--lock-path',
+                str(lock_path),
+                '--',
+                sys.executable,
+                '-c',
+                'raise SystemExit(47)',
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert skipped.returncode == 0
+        assert skipped.stdout == 'HOST_RUNNER_SKIPPED_ACTIVE\n'
+
+    executed = subprocess.run(
+        [
+            sys.executable,
+            str(helper),
+            '--lock-path',
+            str(lock_path),
+            '--',
+            sys.executable,
+            '-c',
+            'raise SystemExit(47)',
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert executed.returncode == 47
+
+
+def test_macos_launchagent_registration_is_plan_only_and_never_autostarts():
+    root = Path(__file__).resolve().parents[2]
+    registrar = (
+        root / 'scripts' / 'register_monitoring_launchagent_macos.sh'
+    ).read_text(encoding='utf-8')
+
+    assert 'root_not_allowed' in registrar
+    assert "stat -f '%Su' /dev/console" in registrar
+    assert 'IOConsoleLocked' in registrar
+    assert 'screen_locked_or_state_unavailable' in registrar
+    assert 'if [[ "$APPLY" -eq 0 ]]' in registrar
+    assert 'LAUNCHAGENT_REGISTRATION_PLAN_ONLY' in registrar
+    assert registrar.index('if [[ "$APPLY" -eq 0 ]]') < registrar.index(
+        '/bin/mkdir -p "$AGENTS_DIR" "$LOG_DIR"'
+    )
+    assert '<key>WorkingDirectory</key>' in registrar
+    assert '<key>EnvironmentVariables</key>' in registrar
+    assert '/opt/homebrew/bin:/usr/local/bin' in registrar
+    assert '<key>RunAtLoad</key>' in registrar
+    assert '<key>KeepAlive</key>' in registrar
+    assert '/bin/launchctl bootstrap "gui/$CONSOLE_UID" "$PLIST_PATH"' in registrar
+    assert 'launchctl kickstart' not in registrar
+    assert 'launchctl bootout' not in registrar
+    assert '--watch' not in registrar
+
+
+def test_macos_finder_launchers_are_executable():
+    if sys.platform == 'win32':
+        pytest.skip('Git executable bits are not represented by Windows file modes')
+
+    root = Path(__file__).resolve().parents[2]
+    for name in ('Открыть дашборд.command', 'Запустить мониторинг.command'):
+        assert (root / name).stat().st_mode & stat.S_IXUSR

@@ -22,6 +22,7 @@ VPN-маршрутов не выполнялись.
 
 ## Remaining acceptance gates
 
-M7 не закрыт. Нужны отдельно подтверждённые VPN route tests, Mac shadow-run
-через видимый Chrome, Windows/MSI acceptance и owner decision по ролям,
-ограничениям и rollback.
+M7 не закрыт. Нужны отдельно подтверждённые VPN route tests, MacBook shadow-run
+через видимый Chrome, owner decision по ролям, ограничениям и rollback, а при
+включении графика — отдельный per-user LaunchAgent gate. Windows/MSI acceptance
+сохранён как резервный handoff и больше не является обязательным MacBook gate.

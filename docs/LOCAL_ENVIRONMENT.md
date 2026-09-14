@@ -1,17 +1,51 @@
 # Локальное окружение
 
-Целевой production-контур — MSI / Windows 11 / 16 ГБ, но его живой runtime ещё не
-принят. Mac/stage является текущей проверенной технической средой в ограниченных
-границах. [Основная инструкция Windows](WINDOWS_11_INSTALL.md).
+Основной production host по текущему решению владельца — MacBook / macOS /
+интерактивный Chrome. Его живой M7 runtime ещё не принят за пределами
+[stage gate](production/STAGE_GATE_2026-09-14.md); Windows/MSI остаётся
+резервным, непринятым handoff, а не обязательным release gate.
 
-## MSI / Windows 11
+## Основной MacBook
 
-Полная актуальная инструкция: [Установка и запуск Windows 11](WINDOWS_11_INSTALL.md).
+Канонический каталог и ручной browser-only запуск:
+
+```bash
+cd /Users/filaret/Desktop/Monitoring
+./scripts/start_local.sh
+./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+```
+
+Это один controlled cycle в видимом Chrome и активной пользовательской сессии
+macOS. Перед ним VPSUS остаётся включённым; ChatGPT/Codex и Auto.ru/Avito
+проверяются по согласованному split-tunnel, без отключения VPN или изменения
+правил. `SCHEDULER_ENABLED=false`: контейнер не заменяет host Chrome.
+
+`local_scan.sh --watch` — лишь foreground-loop Terminal. Будущая автоматизация
+должна быть per-user GUI LaunchAgent через
+`register_monitoring_launchagent_macos.sh`, плановой по умолчанию и с явным
+`--apply`; она поставлена static-only и не заявлена живо принятой. Отдельно
+проверяются TCC/Desktop-доступ, активный console GUI user и поведение на lock
+screen; permissions не выдаются автоматически. Подробнее:
+[MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
+
+Перед Finder-launcher проверять executable-bit:
+
+```bash
+test -x './Открыть дашборд.command' && test -x './Запустить мониторинг.command'
+```
+
+При ошибке запускать через Terminal и не принимать двойной клик до исправления
+mode в контролируемом checkout. Полная Mac-инструкция:
+[MACOS_INSTALL.md](MACOS_INSTALL.md).
+
+## Резервный MSI / Windows 11
+
+Полная fallback-инструкция: [Установка и запуск Windows 11](WINDOWS_11_INSTALL.md).
 Используйте PowerShell 7 и согласованный commit из
 [A1_Monitoring](https://github.com/SilverCatSC/A1_Monitoring). Новая установка не
 переносит историю с Mac автоматически.
 
-Основной рабочий компьютер — MSI с Windows 11, Intel Core Ultra 5 125U и 16 ГБ RAM.
+Планируемый fallback-компьютер — MSI с Windows 11, Intel Core Ultra 5 125U и 16 ГБ RAM.
 Откройте PowerShell в корне репозитория:
 
 ```powershell
@@ -33,7 +67,7 @@ Python 3.12 и Google Chrome. Скрипт создаёт `.venv312`, устан
 .\scripts\start_windows.ps1 -OpenDashboard
 ```
 
-Живой мониторинг выполняется после подтверждения VPSUS split-tunnel: VPN и
+Если Windows снова войдёт в scope, живой мониторинг выполняется после подтверждения VPSUS split-tunnel: VPN и
 ChatGPT/Codex остаются включёнными, а Auto.ru/Avito открываются в отдельном Chrome
 профиле по approved direct browser rules:
 
@@ -59,7 +93,7 @@ Chrome, `NETWORK_PROFILE=local_browser`, loopback CDP и отдельный
 `artifacts/local_chrome_profile`. CAPTCHA остаётся ручным событием; 401/403/429,
 таймаут и неизвестная выдача сохраняются как technical error.
 
-После ручной MSI-приёмки и owner review production-расписание использует ровно один
+После отдельной ручной MSI-приёмки и owner review fallback-расписание использует ровно один
 `run_monitoring_host_windows.ps1` на trigger. План
 `register_monitoring_task_windows.ps1 -At HH:mm` без `-Apply` только описывает
 `\A1Monitoring\InteractiveCycle`; `-Apply` отдельно регистрирует интерактивную
@@ -103,7 +137,7 @@ Workflow `.github/workflows/pages.yml` разместит содержимое `
 `https://silvercatsc.github.io/A1_Monitoring/`.
 
 Входящий webhook Bitrix24 создаётся администратором один раз. Его полный адрес и
-идентификатор диалога хранятся только в `.env` MSI:
+идентификатор диалога хранятся только в `.env` выбранного host:
 
 ```text
 PUBLIC_REPORT_URL=https://silvercatsc.github.io/A1_Monitoring/
@@ -146,11 +180,14 @@ SCHEDULER_ENABLED=false предотвращает фоновые обращен
 
 ## Каждый день
 
-«Открыть дашборд.command» поднимает приложение и открывает отчёт.
+«Открыть дашборд.command» поднимает приложение и открывает отчёт только если
+его executable-bit прошёл preflight выше.
 «Запустить мониторинг.command» выполняет осторожный общий запуск с импортом
 источника, сверкой каталогов продавца и журналом; caffeinate удерживает компьютер
 от idle sleep на время процесса.
 Эти файлы лежат в корне проекта на рабочем столе. Требуется активная сессия macOS.
+`--watch` и будущий LaunchAgent не запускаются одновременно; регистрация
+LaunchAgent не выполняет marketplace scan.
 
 Источник: SOURCE_GOOGLE_SHEET_EXPORT_URL, текущий gid=755848469. «Monitoring» в
 интерфейсе обозначает локальный реестр; программа не запускает Apps Script для

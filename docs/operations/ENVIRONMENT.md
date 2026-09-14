@@ -1,9 +1,11 @@
 # Окружение и установка
 
-Проверено по файлам проекта 14.09.2026. Целевой production-контур — Windows 11
-на MSI / 16 ГБ; его живой runtime ещё **не принят**. Mac/stage подтверждён только
-в границах [stage gate](../production/STAGE_GATE_2026-09-14.md). Каноническая
-рабочая папка на Mac: `/Users/filaret/Desktop/Monitoring`.
+Проверено по файлам проекта 14.09.2026. По текущему решению владельца основной
+production host — MacBook. Его живой runtime ещё **не принят** за пределами
+[stage gate](../production/STAGE_GATE_2026-09-14.md): назначение host не заменяет
+M7 shadow-run, VPSUS proof или role acceptance. Каноническая рабочая папка:
+`/Users/filaret/Desktop/Monitoring`. Windows 11 / MSI — резервный handoff,
+который не является gate для MacBook release.
 
 ## Компоненты
 
@@ -23,7 +25,37 @@
 скрипты установки рассчитаны на 3.12: для воспроизводимости использовать 3.12.
 Не устанавливать все зависимости повторно при каждом запуске.
 
-## Установка Windows с чистого компьютера
+## Основной MacBook: запуск и подготовка
+
+На уже подготовленном MacBook:
+
+```bash
+cd /Users/filaret/Desktop/Monitoring
+.venv312/bin/python --version
+.venv312/bin/python -c 'import app; print(app.__file__)'
+./scripts/start_local.sh
+```
+
+Видимый Chrome, Docker Desktop и активная пользовательская macOS-сессия нужны
+для controlled cycle. Установка или `smoke_stage.sh` не посещают площадки и не
+доказывают доступ к ним. Перед ручным cycle VPSUS остаётся включённым; правила
+и evidence — в [VPSUS split-tunnel gate](../production/VPN_GATE_2026-09-14.md).
+
+Finder-launcher допускается только после проверки executable-bit:
+
+```bash
+test -x './Открыть дашборд.command' && test -x './Запустить мониторинг.command'
+```
+
+Если эта команда неуспешна, использовать Terminal и не считать Finder-путь
+проверенным до исправления mode в контролируемом checkout. Полная инструкция:
+[установка macOS](../MACOS_INSTALL.md) и
+[установочные скрипты](../INSTALL_SCRIPTS_MACOS.md).
+
+## Резервная подготовка Windows с чистого компьютера
+
+Этот раздел сохраняет переносимый Windows-handoff. Он не является инструкцией
+для текущего production запуска и не подтверждён живым MSI runtime.
 
 1. Установить Git for Windows, Python 3.12 с launcher `py`, Google Chrome,
    Docker Desktop с WSL2 и PowerShell 7 (`pwsh.exe` нужен AI-установщику).
@@ -53,7 +85,8 @@ Set-ExecutionPolicy -Scope Process Bypass
 Не добавлять `-SkipDocker`, если требуется работающее приложение: этот режим
 проверяет только Python-часть.
 
-6. Сначала принять обход без AI по [рабочей инструкции](OPERATOR.md).
+6. Если Windows снова войдёт в scope, сначала принять обход без AI по
+   [рабочей инструкции](OPERATOR.md).
 7. Только если нужен локальный AI:
 
 ```powershell
@@ -77,10 +110,10 @@ Chrome: ChatGPT доступен по согласованному VPN/direct-м
 VPN, reconnect или bypass-правила без отдельного подтверждения владельца.
 
 Результат текущей Mac-проверки и незакрытые границы описаны в
-[VPSUS split-tunnel gate](../production/VPN_GATE_2026-09-14.md); на MSI этот
-контроль повторяется и остаётся частью M7 acceptance.
+[VPSUS split-tunnel gate](../production/VPN_GATE_2026-09-14.md). На Windows этот
+контроль повторяется только если Windows снова станет выбранным host.
 
-## Существующий Mac
+## Дополнительный Mac или восстановление окружения
 
 Окружение перенесено вместе с проектом. Повторная загрузка модели не нужна.
 Старый путь оставлен символической ссылкой для совместимости.
@@ -113,27 +146,35 @@ cd /Users/filaret/Desktop/Monitoring
 окружении аутентификация приложения отключена; публикация такого сервиса наружу
 требует отдельной настройки доступа.
 
-## Повторный запуск на Windows
+## Плановый запуск на основном MacBook — только после gate
 
-`local_scan_windows.ps1 -Watch` — только ручной foreground-loop открытого
-PowerShell: он не переживает logoff/сон и не должен работать одновременно с другим
-worker. Для production-расписания не включать `SCHEDULER_ENABLED=true`: web-container
-не управляет видимым Chrome пользовательской сессии.
+`local_scan.sh --watch` — только ручной foreground-loop открытого Terminal: он
+завершается при logout/сне и не должен работать одновременно с другим worker.
+Для production-расписания не включать `SCHEDULER_ENABLED=true`: web-container
+не управляет видимым Chrome пользовательской GUI-сессии.
 
-После ручного MSI controlled cycle и owner review применяется отдельный
-`run_monitoring_host_windows.ps1`: один cautious scan, интерактивный desktop,
-межсессионный mutex и privacy-safe status. Планировщик должен регистрироваться
-скриптом `register_monitoring_task_windows.ps1` сначала без `-Apply`, затем отдельно
-с `-Apply`; задача запускается только как Interactive user и не вложенно с
-`--watch`. Это future gate, а не принятое расписание. Полный порядок — в
-[Windows handoff](../WINDOWS_11_INSTALL.md#host-runner-и-windows-task-scheduler--только-после-gate-4).
+После ручного MacBook controlled cycle и owner review планируется один
+`run_monitoring_host_macos.sh` на trigger. Регистратор
+`register_monitoring_launchagent_macos.sh --at HH:MM` без `--apply` только
+показывает план; `--apply` отдельно создаёт per-user GUI LaunchAgent
+`com.silvercatsc.a1monitoring.interactive-cycle` с mutex, `RunAtLoad=false` и
+`KeepAlive=false`. Он запускает один cycle, не вложенный `--watch`, и не
+выполняет scan при регистрации. Это future gate, а не принятое расписание.
+Полный порядок — в
+[MacBook primary-host decision](../production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
+
+Windows `local_scan_windows.ps1 -Watch`, host-runner и Task Scheduler остаются
+непринятым fallback-путём. Если он понадобится, отдельная процедура приведена в
+[Windows handoff](../WINDOWS_11_INSTALL.md).
 
 ## Память
 
 Малые задания снижают размер контекста, но не размер загруженных весов модели.
-На Windows предусмотрены фазы browser → AI; проверка свободных 7500 МБ — лишь
-порог запуска, не гарантия достаточной памяти во время vision. Остановка
-контейнеров не гарантирует немедленного возврата памяти WSL2.
+На основном MacBook 16 ГБ — общая память Chrome, Docker и модели: сначала
+принимать browser-only cycle, затем отдельно AI и измерять пик памяти. Windows
+browser → AI и порог 7500 МБ — ограничение резервного handoff, не результат
+измерения на MacBook. Остановка контейнеров не гарантирует немедленного возврата
+памяти WSL2.
 
 После перехода на LLM API локальные веса и vision-проектор не нужны для анализа;
 Chrome, Python и БД всё равно занимают память. Размер экономии RAM необходимо

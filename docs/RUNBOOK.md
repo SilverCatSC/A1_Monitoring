@@ -47,16 +47,19 @@ curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/progress
 ```
 
 `--watch` в этом блоке — ручной foreground-loop, не service scheduler. Не
-запускать его одновременно с другим worker или Task Scheduler. `NETWORK_PROFILE`
+запускать его одновременно с другим worker или LaunchAgent. `NETWORK_PROFILE`
 маркирует происхождение запуска, но не доказывает VPN-маршрут: до live cycle
 подтвердить VPSUS split-tunnel в обычном Chrome, не выключая VPN или ChatGPT.
 Сам API повторяет применимые gate и возвращает HTTP 422 до создания `ScanRun`,
 если клиент попытается вызвать `/scan` или `/cycle` напрямую.
 
 Startup сначала выполняет `alembic upgrade head`, затем запускает web. Scheduler
-в web-контейнере остаётся `false`: он не является решением для host Chrome.
-Windows production schedule после отдельного MSI gate должен запускать один
-interactive host-runner, а не container scheduler или вложенный `--watch`.
+в web-контейнере остаётся `false`: он не является решением для видимого host
+Chrome на основном MacBook. Будущее расписание допускается только через один
+per-user GUI LaunchAgent и `run_monitoring_host_macos.sh`, а не container scheduler
+или вложенный `--watch`. До VPSUS proof, ручного MacBook cycle и отдельного owner
+review этот LaunchAgent остаётся plan-only; детали —
+[MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
 ## 3. Ручные операции
 

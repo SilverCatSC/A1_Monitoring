@@ -1,5 +1,20 @@
 # Журнал изменений
 
+## M6.6 — MacBook primary-host decision — 2026-09-14
+
+- По решению владельца основной production host изменён с планируемого MSI/Windows
+  на текущий MacBook. Это изменение scope, не M7 acceptance и не новый live scan.
+- Runbooks теперь требуют видимый Chrome в активной macOS GUI-сессии и VPSUS
+  split-tunnel без выключения VPN или ChatGPT/Codex. `SCHEDULER_ENABLED` остаётся
+  false: container scheduler не получает доступ к host Chrome.
+- Планируемый macOS host-runner/LaunchAgent остаётся plan-only до явного
+  `--apply`, отдельного owner review и evidence первого trigger; автоматический
+  retry `partial` запрещён. Windows PowerShell/Task Scheduler сохранён как
+  непринятый fallback, а не обязательный release gate.
+- Finder `.command` launchers теперь имеют документированный preflight
+  executable-bit; пока он не подтверждён, оператор использует Terminal и не
+  считает запуск двойным кликом принятым.
+
 ## M6.5 — Windows interactive host-runner contract — 2026-09-14
 
 - Added a Windows host-runner contract for exactly one cautious cycle in a

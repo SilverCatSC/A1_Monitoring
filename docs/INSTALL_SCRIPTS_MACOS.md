@@ -1,7 +1,8 @@
 # Установочные скрипты A1 Monitoring для macOS
 
-Актуально для Mac/stage на 14.09.2026. Windows/MSI — целевой production-контур,
-который пока не прошёл живую приёмку.
+Актуально для основного MacBook host на 14.09.2026. Назначение MacBook основным
+контуром не равно живой M7-приёмке: VPSUS, shadow-run и будущий LaunchAgent имеют
+отдельные gates. Windows/MSI сохранён как резервный, непринятый handoff.
 
 ## Одна команда для полной установки
 
@@ -66,7 +67,7 @@ cd /Users/filaret/Desktop/Monitoring
 
 Ожидаемый итог: `FULL_MONITORING_SYSTEM_READY`. Проверка не посещает площадки.
 
-## Реальный запуск
+## Ручной controlled cycle — только после соответствующего gate
 
 Сохраните VPSUS включённым и подтвердите split-tunnel: ChatGPT/Codex продолжает
 работать по согласованному маршруту, Auto.ru/Avito — по direct browser rules.
@@ -76,7 +77,7 @@ cd /Users/filaret/Desktop/Monitoring
 ./Запустить\ мониторинг.command
 ```
 
-Система сначала проводит реальный обход в видимом Chrome, а после него запускает
+Команда, если оператор разрешил cycle, сначала проводит обход в видимом Chrome, а после него запускает
 последовательные data/vision/synthesis-этапы Hermes. Малые этапы идут по одному,
 с паузами и ограничением процессора. Затем Ouroboros проверяет компактный результат
 как read-only аудитор. Артефакты сохраняются в `artifacts/agent_work_units/`,
@@ -92,3 +93,25 @@ Ouroboros использует отдельный HOME и отдельные git
 задачей; результат проверяется тестами и человеком до переноса в рабочую ветку.
 
 Подробности: [основная инструкция macOS](MACOS_INSTALL.md).
+
+## Плановый запуск в активной macOS-сессии — отдельный gate
+
+Container scheduler не управляет видимым Chrome, поэтому
+`SCHEDULER_ENABLED` остаётся `false`. В целевой static-only схеме
+`run_monitoring_host_macos.sh` выполняет один cautious cycle, а
+`register_monitoring_launchagent_macos.sh` создаёт per-user GUI LaunchAgent
+`com.silvercatsc.a1monitoring.interactive-cycle`.
+
+План регистратора должен быть безопасным по умолчанию:
+
+```bash
+./scripts/register_monitoring_launchagent_macos.sh --at 09:00
+```
+
+Только после ручного review и отдельного разрешения используется `--apply`.
+Регистрация сама не запускает marketplace cycle. LaunchAgent не должен быть
+`LaunchDaemon`, не работает как обход lock screen/CAPTCHA, использует
+`RunAtLoad=false` и `KeepAlive=false`, а `partial` не повторяет автоматически.
+Это описание планируемого контракта, не заявление о выполненной регистрации или
+живом тесте. Полный gate —
+[MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).

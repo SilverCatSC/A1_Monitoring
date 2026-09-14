@@ -1,8 +1,10 @@
 # MSI, локальные агенты и публикация отчёта
 
-> Исторический план от 09.09.2026. Основной контур позднее перенесён на MSI/Windows.
-> Актуальное состояние и команды: [RELEASE_STATUS.md](RELEASE_STATUS.md) и
-> [WINDOWS_11_INSTALL.md](WINDOWS_11_INSTALL.md).
+> Исторический план от 09.09.2026. Позднее основной контур временно переносился
+> на MSI/Windows, но решением владельца 14.09.2026 снова выбран MacBook.
+> Windows остаётся только резервным handoff. Актуальное состояние и команды:
+> [MACBOOK_PRIMARY_HOST_2026-09-14.md](production/MACBOOK_PRIMARY_HOST_2026-09-14.md),
+> [RELEASE_STATUS.md](RELEASE_STATUS.md) и [WINDOWS_11_INSTALL.md](WINDOWS_11_INSTALL.md).
 > Формулировка «без VPN» в этом историческом плане superseded: текущий route
 > contract сохраняет VPSUS и ChatGPT/Codex, подтверждая split-tunnel для
 > Auto.ru/Avito в обычном Chrome.

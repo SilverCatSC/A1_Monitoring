@@ -16,7 +16,8 @@ Mac/stage deployment evidence: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.
 1. рабочий split-tunnel для ChatGPT, Auto.ru и Avito на этом компьютере;
 2. успешный checksum backup и isolated restore-test на целевой среде;
 3. shadow-run с контрольной выборкой и evidence по площадкам;
-4. повтор той же процедуры на MSI/Windows 11;
+4. если owner включит расписание — один MacBook host-runner / LaunchAgent trigger
+   в активной пользовательской сессии без параллельного цикла;
 5. owner sign-off состава ролей, ограничений и rollback-плана.
 
 Провал любого пункта даёт `blocked` или `failed`; он не заменяется повтором
@@ -72,8 +73,8 @@ A fresh shadow-run must use this v6 filter catalogue.
 
 Mac/stage status: **completed** on 2026-09-14 at Alembic `20260914_0011`.
 The fresh backup and isolated restore matched the required control tables;
-evidence is in [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md). The Windows
-execution in Gate 4 remains required.
+evidence is in [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md). A Windows
+execution is not part of the current MacBook acceptance scope.
 
 На той же целевой машине, без параллельного импорта:
 
@@ -82,10 +83,11 @@ execution in Gate 4 remains required.
 ./scripts/restore_test.sh
 ```
 
-На Windows — `backup_now.ps1` и `restore_test.ps1`. Сохранить только
-`BACKUP_OK`/`RESTORE_OK`, время, checksum и revision Alembic — не dump, не `.env`.
-Restore создаёт и удаляет временную БД; если его результат не `RESTORE_OK`,
-production rollout останавливается.
+Windows backup/restore остаётся отдельной процедурой резервного handoff; его
+результат понадобится только при возвращении Windows в эксплуатационный scope.
+Для любого host сохранять только `BACKUP_OK`/`RESTORE_OK`, время, checksum и
+revision Alembic — не dump, не `.env`. Restore создаёт и удаляет временную БД;
+если его результат не `RESTORE_OK`, production rollout останавливается.
 
 ## Gate 3 — Mac shadow-run
 
@@ -104,19 +106,38 @@ production rollout останавливается.
 закрывает M7. The 2026-09-14 v6 run is precisely such a correct negative result:
 the Avito contract is verified, while link reconciliation remains open.
 
-## Gate 4 — MSI / Windows 11
+## Gate 4 — MacBook host-runner / LaunchAgent (только если нужен график)
 
-Повторить Gates 0–3 на MSI. Отдельно доказать, что:
+Основной MacBook уже является целевым host, но автоматическое выполнение на нём
+ещё не принято. Не включать `SCHEDULER_ENABLED=true`: web-контейнер не может
+надёжно управлять видимым Chrome в GUI-сессии macOS.
 
-- `alembic upgrade head` применён, dashboard открывается на loopback;
-- Windows backup/restore реально выполнены;
-- видимый Chrome и controlled cycle не исчерпывают RAM и не зависают;
-- `SCHEDULER_ENABLED` в контейнере остаётся false; host-runner и
-  `\A1Monitoring\InteractiveCycle` не создают параллельные циклы, выполняются
-  только в интерактивной пользовательской сессии, не запускают вложенный `--watch`
-  и имеют `RestartCount=0`;
+Сначала выполнить plan-only проверку
+`scripts/register_monitoring_launchagent_macos.sh --at HH:MM`. Только после
+отдельного owner review допустим явный `--apply`. Ожидаемый per-user GUI
+LaunchAgent `com.silvercatsc.a1monitoring.interactive-cycle` должен запускать
+ровно один `scripts/run_monitoring_host_macos.sh` с видимым Chrome, без вложенного
+`--watch`, `RunAtLoad` или `KeepAlive`-повтора. Регистрация не должна выполнять
+marketplace scan.
+
+После первого trigger отдельно доказать, что:
+
+- пользователь вошёл в GUI-сессию macOS; это не LaunchDaemon и не lock-screen
+  обход;
+- TCC / Privacy & Security разрешает GUI-пользователю, Chrome и launchd-процессу
+  доступ к проекту на Desktop; никакое permission не выдаётся автоматически;
+- `alembic upgrade head` применён, dashboard открывается на loopback, а
+  `SCHEDULER_ENABLED=false`;
+- видимый Chrome и один cautious controlled cycle не исчерпывают память и не
+  зависают;
+- mutex/статус runner не допускают второй цикл, а `partial` не вызывает
+  автоматический retry;
 - retry создаёт новый `cycle_id` с `retry_of_cycle_id`, а не меняет прежний
   manifest.
+
+Скрипты и LaunchAgent в этом gate — static-only поставка кода; их живой
+GUI-trigger, TCC/Desktop доступ и поведение при lock screen не заявлены
+проверенными до записи отдельного MacBook evidence.
 
 ## Gate 5 — owner decision и rollback
 
@@ -129,6 +150,15 @@ Rollback выполняется только из последнего verified 
 проверяются Alembic revision и ключевые количества до переключения. Не применять
 destructive Alembic downgrade, `docker compose down -v` или переписывание
 manifest как «быстрый rollback».
+
+## Windows/MSI — резервный, не обязательный gate
+
+Windows/PowerShell скрипты сохранены для переносимости, но Windows/MSI больше не
+является целевой production-средой. Его статическая проверка не переносится на
+MacBook и не требуется для M7. Если владелец снова выберет Windows, необходимо
+отдельно повторить Gates 0–4 на той машине: Docker/backup/restore, VPSUS,
+видимый Chrome, ручной cycle и интерактивный Task Scheduler без container
+scheduler.
 
 ## Артефакт приёмки
 

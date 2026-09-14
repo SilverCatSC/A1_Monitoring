@@ -3,6 +3,7 @@
 **Редакция:** 14 сентября 2026 года<br>
 **Версия приложения:** 0.14.0<br>
 **Основная папка:** `/Users/filaret/Desktop/Monitoring`<br>
+**Основной host:** текущий MacBook (macOS, interactive Chrome); Windows/MSI — резервный handoff<br>
 **Назначение:** локальный мониторинг размещения автомобилей компании A1 Auto на Auto.ru, Avito и сайте компании без API площадок.
 
 > Документ объединяет описание продукта, текущего состояния, эксплуатационные сведения, архитектуру, ограничения и исходный код точки запуска. Это фактический срез проекта на указанную дату, а не обещание, что все площадки доступны в любой момент.
@@ -44,7 +45,9 @@ VIN не является обязательным признаком. Maestra V
 ### Не принято как готовое
 
 - Живой полный прогон обеих площадок после переноса.
-- Приёмка Windows 11 на MSI.
+- MacBook M7 acceptance: split-tunnel, контрольная выборка, roles и owner rollback decision.
+- Живой GUI-trigger будущего MacBook LaunchAgent, если owner выберет расписание.
+- Windows 11 на MSI как резервный handoff, если этот host когда-либо вернётся в scope.
 - Безошибочная работа при CAPTCHA, 401/403/429 и изменении вёрстки площадок.
 - Безопасная публикация полного отчёта на GitHub Pages.
 - Полная целостность AI-пакета одного запуска.
@@ -179,10 +182,11 @@ Hermes получает малое задание на одну машину/к�
 - Неполная выдача может потерять уже найденный положительный факт первой страницы.
 - Положительный критерий «карточка активна» недостаточно строг при новой вёрстке.
 - Аудиты сайта и головной таблицы имеют ограничения по страницам и объёму выборки.
-- Host-runner появился как one-cycle Windows contract, но его mutex/recovery и
-  Task Scheduler ещё не приняты живым MSI запуском; единый возобновляемый
-  coordinator пока не доказан.
-- Проверка Windows/MSI и полный живой прогон с подтверждённым VPSUS split-tunnel не приняты.
+- Плановый MacBook host-runner/LaunchAgent ещё не принят живым GUI-trigger: его
+  mutex/recovery, один cycle и отсутствие автоматического retry должны быть
+  подтверждены отдельно. Windows Task Scheduler остаётся непринятым fallback.
+- Полный живой MacBook прогон с подтверждённым VPSUS split-tunnel не принят;
+  Windows/MSI проверяется отдельно только при возврате в эксплуатационный scope.
 
 ## 8. Сильные стороны
 
@@ -250,7 +254,7 @@ JSON последнего поиска: http://127.0.0.1:18000/api/v1/status/sca
 ./scripts/run_full_monitoring_macos.sh
 ```
 
-### Windows 11
+### Windows 11 — резервный handoff
 
 ```powershell
 Set-Location C:\work\A1_Monitoring
@@ -260,7 +264,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
 ```
 
-Полная инструкция находится в [ENVIRONMENT.md](operations/ENVIRONMENT.md). На Windows сначала принять обычный браузерный мониторинг, затем устанавливать Hermes/Ouroboros и модель.
+Полная инструкция находится в [ENVIRONMENT.md](operations/ENVIRONMENT.md). Это
+не текущий production-путь: на Windows сначала нужен отдельный browser-only
+acceptance, затем Hermes/Ouroboros и модель.
 
 ## 11. Тестирование и приёмка
 
@@ -295,7 +301,7 @@ git diff --check
 
 ## 13. Резервирование и безопасность
 
-Не коммитить `.env`, cookies, Chrome profile, дампы, снимки, VIN-отчёты и AI HOME. Не выполнять `docker compose down -v` без подтверждённого backup. Для переноса на Windows нужен отдельный `pg_dump/pg_restore` и копия `artifacts`, а не простое копирование исходников.
+Не коммитить `.env`, cookies, Chrome profile, дампы, снимки, VIN-отчёты и AI HOME. Не выполнять `docker compose down -v` без подтверждённого backup. При возможном возврате на Windows нужен отдельный `pg_dump/pg_restore` и копия `artifacts`, а не простое копирование исходников.
 
 Публичный GitHub может содержать код и безопасную документацию. Рабочий отчёт для
 отдела продаж остаётся защищённым; `export_public_report.py` создаёт только
