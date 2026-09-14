@@ -196,3 +196,16 @@ def test_avito_extracts_plain_item_div_and_pagination_replaces_old_page():
     assert auto_page_url('https://auto.ru/moskva/cars/all/?page=2&rid=213', 3) == (
         'https://auto.ru/moskva/cars/all/?rid=213&page=3'
     )
+
+
+def test_avito_uses_visible_card_when_catalogue_marker_is_empty():
+    html = """
+    <div data-marker="catalog-serp"></div>
+    <div data-marker="item" data-item-id="8176083999">
+      <a data-marker="item-title"
+         href="/moskva/avtomobili/zeekr_9x_2026_8176083999">Zeekr 9X</a>
+    </div>
+    """
+    hits = AvitoAdapter()._extract(html, page_number=2)
+    assert len(hits) == 1
+    assert hits[0].external_id.endswith('8176083999')

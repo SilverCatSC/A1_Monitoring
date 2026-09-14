@@ -19,6 +19,12 @@ def primary_cards(html, selector, root_selector=None):
     # summary appears first. The approved root with the most candidate cards is
     # the only useful result scope; ties preserve document order.
     root = max(roots, key=lambda node: len(node.select(selector)), default=soup)
+    # Avito's hydrated page can retain an empty catalogue marker while
+    # rendering the visible cards next to it.  An empty approved root is not
+    # a result scope: fall back to the already-cleaned document and preserve
+    # the normal supplemental-content boundary below.
+    if roots and not root.select(selector):
+        root = soup
     ordered = {id(node): index for index, node in enumerate(root.find_all(True))}
     boundary = min((ordered[id(node)] for node in root.select('h2,h3,[role="heading"]')
                     if SUPPLEMENT_HEADING.search(node.get_text(' ', strip=True))), default=float('inf'))
