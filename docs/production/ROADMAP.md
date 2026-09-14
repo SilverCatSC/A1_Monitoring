@@ -119,6 +119,13 @@ retryable и недавние failed циклы; scheduler coalesces пропу�
 M6 остаётся открытым до проверенных backup/restore, publication allowlist и
 целевой runtime-приёмки. Офлайн-test не считается восстановлением production.
 
+## M6.2–M6.3 реализованы в коде: backup integrity и publication allowlist
+
+Backup пишет SHA-256 companion, restore-test сравнивает dump/Alembic/ключевые
+таблицы во временной БД. Public export требует свежий owner allowlist и создаёт
+только aggregate-only HTML. Реальные backup/restore, owner review HTML и Pages
+publish не выполнялись, поэтому M6 и `0.15.0` остаются открытыми.
+
 ## Рабочий ритм
 
 1. Уточнение scope и критериев реперной точки.

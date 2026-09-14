@@ -30,6 +30,7 @@ backup:
 restore-test:
 	./scripts/restore_test.sh
 public-report:
-	$(PYTHON) scripts/export_public_report.py
+	@test -n "$(ALLOWLIST)" || (echo "Use: make public-report ALLOWLIST=/secure/path/publication_allowlist.json" >&2; exit 2)
+	$(PYTHON) scripts/export_public_report.py --allowlist "$(ALLOWLIST)"
 bitrix-dry-run:
 	$(PYTHON) scripts/bitrix_publish.py --report-url https://silvercatsc.github.io/A1_Monitoring/

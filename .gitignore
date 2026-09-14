@@ -25,6 +25,8 @@ playwright/
 # Local reports and snapshots
 artifacts/
 evidence/
+public/
+*publication_allowlist*.json
 
 # Temporary test sources
 tmp_test_source.csv

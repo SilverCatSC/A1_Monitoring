@@ -44,12 +44,55 @@ Auto.ru/Avito, поэтому это явное действие операто�
 2. Проверки, что приложение поднято в единственном экземпляре.
 3. Контролируемого shadow-run и review статусов `/status/operations`.
 
+## Publication allowlist
+
+`scripts/export_public_report.py` не экспортирует dashboard, listing, историю,
+feedback, activity, evidence или raw API. Он берёт только
+`/api/v1/public/report`: отдельную страницу с агрегатами, статусами двух площадок
+и счётчиками. Её projection не содержит VIN, URL, названия/цены автомобилей,
+ID, текст/автора feedback или screenshot.
+
+Каждый export требует локальный, ignored allowlist вне Git. Пример структуры:
+
+```json
+{
+  "scope": "a1-aggregate-public-report-v1",
+  "approved_by": "owner",
+  "approved_at": "2026-09-14T10:00:00+03:00",
+  "expires_at": "2026-09-21T10:00:00+03:00"
+}
+```
+
+Он действует максимум 31 день, должен быть подписан по внутренней процедуре
+владельцем и не может содержать разрешение на полный отчёт. Команда только
+генерирует ignored `public/`; она не делает commit, push или Pages deploy:
+
+```bash
+make public-report ALLOWLIST=/secure/path/publication_allowlist.json
+```
+
+Если app защищено Basic-auth, передать **имя** переменной окружения с локальным
+`username:password`, а не секрет в командной строке:
+
+```bash
+A1_EXPORT_AUTH='user:password' \
+.venv312/bin/python scripts/export_public_report.py \
+  --allowlist /secure/path/publication_allowlist.json --auth-env A1_EXPORT_AUTH
+```
+
+Скрипт останавливается, если output содержит неизвестные старые файлы, или HTML
+содержит внутренние API/evidence references. После export нужны независимая
+ручная проверка итогового `public/index.html`, owner approval и только затем
+отдельный явный `publish_pages.ps1 -Push`/commit. Ни export, ни publish не были
+выполнены в этой разработке.
+
 ## Открытые части M6
 
 - backup/restore сценарии для macOS и Windows теперь проверяют checksum, dump,
   revision Alembic и контрольные количества, но их нужно выполнить на целевой
   среде и зафиксировать результат, а не заменить офлайн-тестом;
-- publication allowlist должен быть включён до любого публичного export;
+- нужно провести owner review фактического aggregate-only HTML перед любым
+  публичным export/publish;
 - мониторинг backup-age и controlled retry на Windows/MSI требуют отдельной
   живой приёмки.
 

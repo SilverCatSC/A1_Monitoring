@@ -25,6 +25,7 @@
 | Evidence, blocked/CAPTCHA и безопасная смена вёрстки | [M3 Evidence contract](docs/production/EVIDENCE_CONTRACT.md) |
 | Цена, НДС, статус, missing/ghost Offer и действия | [M4 Offer reconciliation](docs/production/OFFER_RECONCILIATION.md) |
 | Роли, обратная связь и отчёт по исключениям | [M5 Operator release](docs/production/OPERATOR_RELEASE.md) |
+| Controlled retry, backup и public allowlist | [M6 Operations](docs/production/OPERATIONS.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
 
 ## Текущее состояние

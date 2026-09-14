@@ -19,6 +19,15 @@
 - Windows-скрипты проверены статически. Ни backup, ни restore не запускались на
   текущем Mac/MSI, поэтому восстановление production пока не подтверждено.
 
+## M6.3 — allowlist публичной сводки — 2026-09-14
+
+- Старый export внутренних dashboard-страниц заменён одной aggregate-only
+  страницей без VIN, URL, карточек, evidence и текста/авторов feedback.
+- Для каждого export требуется короткоживущий owner allowlist вне Git; output
+  отказывается смешиваться с неизвестными прежними файлами и получает checksum.
+- Не было owner approval, export, Pages deploy или публикации в Bitrix. M6 не
+  объявляется production-ready до их отдельных проверок.
+
 ## M5 — operator release — 2026-09-14
 
 - Добавлены серверные роли `admin`, `operator`, `marketing`, `sales_director`.

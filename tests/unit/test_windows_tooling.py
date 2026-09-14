@@ -5,7 +5,7 @@ sys.path.insert(0, str(Path(__file__).parents[2]))
 
 from scripts.bitrix_publish import _message, _valid_url
 from scripts.doctor import chrome_available
-from scripts.export_public_report import DIRECT_EVIDENCE_RE, _route_for
+from scripts.export_public_report import PUBLIC_REPORT_PATH
 from scripts.local_scan import _chrome_executable
 
 
@@ -29,17 +29,8 @@ def test_windows_chrome_user_install(monkeypatch):
     assert _chrome_executable() == expected
 
 
-def test_public_routes_are_static_and_relative_free():
-    assert _route_for('/api/v1/dashboard') == 'index.html'
-    assert _route_for('/api/v1/dashboard/placements?days=7') == 'placements/index.html'
-    assert _route_for('/api/v1/dashboard/listings/listing-1') == 'listings/listing-1/index.html'
-
-
-def test_public_export_recognizes_direct_card_evidence():
-    match = DIRECT_EVIDENCE_RE.search('/api/v1/reconciliations/check-1/evidence')
-
-    assert match is not None
-    assert match.group(1) == 'check-1'
+def test_public_export_has_one_aggregate_only_route():
+    assert PUBLIC_REPORT_PATH == '/api/v1/public/report'
 
 
 def test_bitrix_message_keeps_report_url_and_validates_https():

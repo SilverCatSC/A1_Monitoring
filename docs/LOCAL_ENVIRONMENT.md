@@ -64,25 +64,29 @@ docker compose stop
 
 ## Публикация HTML и ссылка Bitrix
 
-**Публикация не прошла приёмку.** Команды ниже описывают подготовленные заготовки,
-а не разрешение публиковать рабочие данные. Текущий экспорт копирует внутренние
-страницы и может включить VIN и замечания менеджеров. Не используйте `-Push` до
-реализации безопасного публичного набора полей и проверки результата.
+**Публикация не прошла приёмку.** Команды ниже не являются разрешением
+публиковать рабочие данные. Export создаёт только новую aggregate-only страницу
+без VIN, URL, карточек, evidence и текстов замечаний, но её фактический HTML ещё
+не прошёл owner review. Не используйте `-Push` без свежего owner allowlist и
+ручной проверки результата.
 
-После завершённого локального прогона приложение экспортирует read-only копию
-страниц в `public/`:
+После завершённого локального прогона создать owner allowlist **вне Git** и
+экспортировать единственную публичную сводку в ignored `public/`:
 
 ```powershell
-.\scripts\publish_pages.ps1
+.\scripts\publish_pages.ps1 -Allowlist 'C:\secure\publication_allowlist.json'
 ```
 
 По умолчанию это только экспорт. Явная отправка коммита в GitHub:
 
 ```powershell
-.\scripts\publish_pages.ps1 -Push -CommitMessage 'Publish monitoring report'
+.\scripts\publish_pages.ps1 -Allowlist 'C:\secure\publication_allowlist.json' -Push -CommitMessage 'Publish aggregate monitoring report'
 ```
 
 Workflow `.github/workflows/pages.yml` разместит содержимое `public/` на GitHub Pages.
+Перед `-Push` убедиться, что в папке есть только `index.html`, `static/` и
+`PUBLICATION_MANIFEST.json`; export намеренно откажется от каталога с неизвестными
+старыми файлами.
 Репозиторий проекта: `SilverCatSC/A1_Monitoring`; ожидаемый адрес отчёта:
 `https://silvercatsc.github.io/A1_Monitoring/`.
 

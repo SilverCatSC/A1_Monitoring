@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Публичный агрегированный отчёт · A1 Monitoring</title>
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body class="workbench">
+<main class="app-content" id="main-content">
+  <header class="page-heading"><div><span class="eyebrow">A1 · ПУБЛИЧНАЯ СВОДКА</span><h1>Агрегированный статус мониторинга</h1><p class="muted">Данные за последние 7 дней · сформировано {{ data.generated_at.strftime('%d.%m.%Y %H:%M') }} МСК</p></div></header>
+  <div class="notice">Отчёт содержит только агрегаты. Он не публикует VIN, ссылки площадок, карточки автомобилей, evidence или тексты внутренних обращений.</div>
+  <section class="kpi-grid">
+    <div class="kpi"><div class="kpi-label">Активные записи</div><div class="kpi-value">{{ data.summary.active_listings }}</div></div>
+    <div class="kpi primary-kpi"><div class="kpi-label">Обнаружения</div><div class="kpi-value">{{ data.summary.found_observations }}</div><div class="kpi-note">за 7 дней</div></div>
+    <div class="kpi"><div class="kpi-label">Технические результаты</div><div class="kpi-value">{{ data.summary.technical_observations }}</div><div class="kpi-note">не являются отсутствием публикаций</div></div>
+    <div class="kpi"><div class="kpi-label">Открытые обращения</div><div class="kpi-value">{{ data.summary.open_feedback }}</div><div class="kpi-note">без содержимого и авторов</div></div>
+  </section>
+  <section class="panel"><div class="section-head"><h2>Последние проверяемые прогоны</h2><span class="muted">Площадки и агрегированные статусы</span></div>
+    <div class="scroll"><table><thead><tr><th>Площадка</th><th>Последняя проверка</th><th>Статус</th><th>Фильтры</th><th>Технические ошибки</th></tr></thead><tbody>{% for source in data.sources %}<tr><td>{{ 'Auto.ru' if source.source == 'auto_ru' else 'Avito' }}</td><td>{{ source.last_checked_at.strftime('%d.%m.%Y %H:%M') if source.last_checked_at else 'Нет проверки' }}</td><td>{{ source.last_status }}</td><td>{{ source.filters_ok }} / {{ source.filters_total }}</td><td>{{ source.technical_errors }}</td></tr>{% endfor %}</tbody></table></div>
+  </section>
+  <footer class="app-footer">Публичная копия · только агрегаты · не является подтверждением доступности конкретного автомобиля</footer>
+</main>
+</body>
+</html>

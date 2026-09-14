@@ -71,6 +71,7 @@ from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import ScanAlreadyRunning, ScanConfigurationError
 from app.service.offer_reconciliation import offer_review_queue
+from app.service.public_report import public_report_context
 from app.service.reconciliation import reconciliation_context
 from app.service.report import (
     cycle_operational_metrics,
@@ -229,6 +230,15 @@ def dashboard_html(request: Request, days: int = 7, source: str = '', brand: str
             'context': context,
             'auth_enabled': settings.auth_enabled,
         },
+    )
+
+
+@router.get('/public/report', response_class=HTMLResponse)
+def public_report_html(request: Request, db: Session = Depends(get_db)):
+    return templates.TemplateResponse(
+        request=request,
+        name='public_report.html',
+        context={'data': public_report_context(db)},
     )
 
 
