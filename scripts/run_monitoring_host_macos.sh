@@ -157,12 +157,19 @@ require_console_gui_user() {
     CONSOLE_LOCKED="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
         | /usr/bin/plutil -extract IOConsoleLocked raw - 2>/dev/null || true)"
     # IOConsoleLocked can remain "false" while the current GUI session itself
-    # is locked. Treat both IOKit signals as mandatory and fail closed if
-    # either is true or unavailable: a run must never open Chrome behind the
-    # lock screen.
+    # is locked. On this macOS version the per-session lock key is *absent*
+    # when unlocked and becomes "true" when the screen is locked. Require an
+    # explicit active, completed console session, then allow only absent/false
+    # or fail closed: a run must never open Chrome behind the lock screen.
+    CONSOLE_SESSION_ACTIVE="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
+        | /usr/bin/plutil -extract IOConsoleUsers.0.kCGSSessionOnConsoleKey raw - 2>/dev/null || true)"
+    CONSOLE_SESSION_LOGGED_IN="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
+        | /usr/bin/plutil -extract IOConsoleUsers.0.kCGSessionLoginDoneKey raw - 2>/dev/null || true)"
     SESSION_SCREEN_LOCKED="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
         | /usr/bin/plutil -extract IOConsoleUsers.0.CGSSessionScreenIsLocked raw - 2>/dev/null || true)"
-    if [[ "$CONSOLE_LOCKED" != 'false' || "$SESSION_SCREEN_LOCKED" != 'false' ]]; then
+    if [[ "$CONSOLE_LOCKED" != 'false' || "$CONSOLE_SESSION_ACTIVE" != 'true' || \
+          "$CONSOLE_SESSION_LOGGED_IN" != 'true' || \
+          ( "$SESSION_SCREEN_LOCKED" != '' && "$SESSION_SCREEN_LOCKED" != 'false' ) ]]; then
         safe_message 'HOST_RUNNER_REFUSED reason=screen_locked_or_state_unavailable'
         exit 1
     fi

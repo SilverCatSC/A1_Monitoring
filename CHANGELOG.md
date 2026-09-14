@@ -1,5 +1,15 @@
 # Журнал изменений
 
+## M6.12 — macOS unlocked-session semantics — 2026-09-14
+
+- На разблокированном текущем Mac `CGSSessionScreenIsLocked` отсутствует, а
+  `kCGSSessionOnConsoleKey=true` и `kCGSessionLoginDoneKey=true`. Gate теперь
+  различает именно эту валидную unlocked-сессию от нечитабельного состояния,
+  сохраняя отказ при явном `CGSSessionScreenIsLocked=true`.
+- Проверено реальным `run_monitoring_host_macos.sh --preflight`: host, services
+  и loopback readiness успешно прошли без Chrome, VPN mutation, cycle/recovery
+  или marketplace traffic.
+
 ## M6.11 — VPSUS dual-stack reachability evidence — 2026-09-14
 
 - Read-only VPSUS UI now visibly confirms `avito.ru` and `auto.ru` in mode
@@ -17,8 +27,9 @@
 - Обнаружена и устранена расходимость IOKit-сигналов: при
   `IOConsoleLocked=false` активная GUI-сессия могла одновременно иметь
   `CGSSessionScreenIsLocked=true`. MacBook host-runner и LaunchAgent registrar
-  теперь требуют явного `false` для обоих признаков; отсутствие любого из них
-  также запрещает запуск.
+  теперь требуют `IOConsoleLocked=false` и подтверждённую активную GUI-сессию;
+  отсутствие per-session lock-key принимается только при такой сессии, потому
+  что именно так текущая macOS представляет разблокированное состояние.
 - На фактически заблокированной сессии `run_monitoring_host_macos.sh --preflight`
   завершается до поднятия сервисов с
   `HOST_RUNNER_REFUSED reason=screen_locked_or_state_unavailable`. Это локальное

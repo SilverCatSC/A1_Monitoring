@@ -75,9 +75,11 @@ LaunchAgent остаются отдельными owner gates.
 `IOConsoleUsers.0.CGSSessionScreenIsLocked=true`. Это означает, что прежняя
 проверка одного только `IOConsoleLocked` была недостаточна: она могла ошибочно
 пропустить запуск на заблокированном экране. `run_monitoring_host_macos.sh` и
-`register_monitoring_launchagent_macos.sh` скорректированы так, что оба
-сигнала обязаны быть буквально `false`; true, отсутствие или ошибка чтения
-дают отказ.
+`register_monitoring_launchagent_macos.sh` скорректированы так, что нужен
+`IOConsoleLocked=false` и активная завершившая login GUI-сессия. На текущей
+версии macOS ключ `CGSSessionScreenIsLocked` присутствует только при lock и
+имеет `true`; его отсутствие допускается лишь вместе с обоими проверяемыми
+session-признаками. Любое иное/нечитаемое состояние даёт отказ.
 
 После исправления `./scripts/run_monitoring_host_macos.sh --preflight` на этой
 же заблокированной сессии вернул
@@ -85,6 +87,14 @@ LaunchAgent остаются отдельными owner gates.
 Chrome, VPN admission, cycle/recovery или сетевого обращения к площадкам. Это
 проверяет только fail-closed lock boundary; успешный preflight и M7 acceptance
 из этого не следуют и должны повторяться после ручной разблокировки владельцем.
+
+После ручной разблокировки владелец повторил preflight на том же Mac. В IOKit
+теперь присутствовали `kCGSSessionOnConsoleKey=true` и
+`kCGSessionLoginDoneKey=true`, а `CGSSessionScreenIsLocked` отсутствовал — это
+нормальная unlocked-семантика данной macOS. После корректировки gate команда
+завершилась `HOST_RUNNER_PREFLIGHT_OK no_cycle_created=true`. Проверены только
+host/services/loopback readiness: Chrome, VPN mutation, VPN attestation,
+recovery и marketplace traffic по-прежнему не запускались.
 
 ## Boundary
 
