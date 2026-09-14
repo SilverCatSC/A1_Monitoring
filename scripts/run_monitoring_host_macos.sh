@@ -393,7 +393,10 @@ main() {
 
     RUNNER_PHASE='recover_open_cycles'
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
-    if ! run_quietly "$PYTHON" -m app.cli recover-open-cycles; then
+    # The Docker database is exposed to the host on the private loopback port
+    # from .env.  Do not inherit the container-oriented localhost:5432 DSN.
+    if ! A1_MONITORING_HOST_RUNNER_CONTEXT=1 \
+        run_quietly "$PYTHON" "$ROOT_DIR/scripts/recover_open_cycles.py"; then
         safe_message 'HOST_RUNNER_FAILED phase=recover_open_cycles'
         return 1
     fi

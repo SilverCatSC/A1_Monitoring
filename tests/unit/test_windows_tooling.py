@@ -229,8 +229,8 @@ def test_macos_host_runner_requires_visible_console_and_uses_kernel_lock():
     assert 'HOST_RUNNER_SKIPPED_ACTIVE' in (
         root / 'scripts' / 'with_monitoring_host_lock_macos.py'
     ).read_text(encoding='utf-8')
-    assert 'app.cli recover-open-cycles' in runner
-    assert runner.index('app.cli recover-open-cycles') < runner.index(
+    assert 'recover_open_cycles.py' in runner
+    assert runner.index('recover_open_cycles.py') < runner.index(
         '$ROOT_DIR/scripts/local_scan.sh'
     )
     assert runner.index("RUNNER_PHASE='browser_preflight'") < runner.index(
