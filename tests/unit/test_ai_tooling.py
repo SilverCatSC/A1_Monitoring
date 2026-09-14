@@ -80,6 +80,7 @@ def test_hermes_review_requires_vehicle_keys_from_the_evidence_packet() -> None:
     script = (ROOT / 'scripts' / 'run_ai_review_macos.sh').read_text(encoding='utf-8')
 
     assert '--allowed-vehicles-from "$INPUT_FILE"' in script
+    assert '--cycle-id' in script
     assert 'build_ai_work_units.py' in script
     assert 'run_ai_work_units.py' in script
     assert 'validate_staged_review.py' in script

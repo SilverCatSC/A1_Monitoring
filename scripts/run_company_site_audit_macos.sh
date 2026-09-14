@@ -9,4 +9,4 @@ if [[ ! -x .venv312/bin/python ]]; then
   exit 1
 fi
 
-exec .venv312/bin/python scripts/audit_company_site.py
+exec .venv312/bin/python scripts/audit_company_site.py "$@"

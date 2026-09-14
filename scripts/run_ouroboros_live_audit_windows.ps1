@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param()
+param([Parameter(Mandatory = $true)][string]$CycleId)
 
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -8,7 +8,7 @@ $packet = Join-Path $Root 'artifacts\agent_reviews\staged_review_latest.json'
 if (-not (Test-Path $packet)) { throw 'Staged Hermes review is missing.' }
 $python = Join-Path $Root '.venv312\Scripts\python.exe'
 $env:PYTHONPATH = $Root
-& $python scripts/validate_staged_review.py $packet
+& $python scripts/validate_staged_review.py $packet --cycle-id $CycleId
 if ($LASTEXITCODE -ne 0) { throw 'Staged review validation failed.' }
 & (Join-Path $PSScriptRoot 'sync_ai_profiles_windows.ps1')
 $ouroboros = Join-Path $Root 'artifacts\ai_tools\bin\ouroboros.exe'

@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 from datetime import datetime
@@ -31,6 +32,9 @@ def _local_database_environment(root: Path) -> None:
 
 
 def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--cycle-id', default='')
+    args = parser.parse_args()
     root = Path(__file__).resolve().parents[1]
     _local_database_environment(root)
     from app.db import get_db_context
@@ -40,6 +44,8 @@ def main() -> int:
     target.mkdir(parents=True, exist_ok=True)
     with get_db_context() as db:
         report = audit_head_table(db)
+    if args.cycle_id:
+        report['cycle_id'] = args.cycle_id
     stamp = datetime.now().astimezone().strftime('%Y%m%d_%H%M%S')
     path = target / f'audit_{stamp}.json'
     payload = json.dumps(report, ensure_ascii=False, indent=2) + '\n'

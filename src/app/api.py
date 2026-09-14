@@ -22,6 +22,7 @@ from app.models import (
     ListingObservation,
     ListingReconciliation,
     ManagerFeedback,
+    MonitoringCycle,
     ObservationState,
     SearchFilter,
     SourceImportSnapshot,
@@ -140,8 +141,30 @@ def system_status(db: Session = Depends(get_db)):
 
 
 @router.get('/status/scans/latest')
-def latest_scan_status(db: Session = Depends(get_db)):
-    return latest_scan_runs_status(db)
+def latest_scan_status(cycle_id: str | None = None, db: Session = Depends(get_db)):
+    if cycle_id is not None and db.get(MonitoringCycle, cycle_id) is None:
+        raise HTTPException(status_code=404, detail='monitoring cycle not found')
+    return latest_scan_runs_status(db, cycle_id=cycle_id)
+
+
+@router.get('/status/cycles/{cycle_id}')
+def monitoring_cycle_status(cycle_id: str, db: Session = Depends(get_db)):
+    cycle = db.get(MonitoringCycle, cycle_id)
+    if cycle is None:
+        raise HTTPException(status_code=404, detail='monitoring cycle not found')
+    return {
+        'id': cycle.id,
+        'status': cycle.status,
+        'started_at': cycle.started_at,
+        'finished_at': cycle.finished_at,
+        'network_profile': cycle.network_profile,
+        'app_version': cycle.app_version,
+        'roster_count': cycle.roster_count,
+        'roster_sha256': cycle.roster_sha256,
+        'manifest_path': cycle.manifest_path,
+        'summary': cycle.summary,
+        'error': cycle.error,
+    }
 
 
 @router.get('/status/scans/progress')

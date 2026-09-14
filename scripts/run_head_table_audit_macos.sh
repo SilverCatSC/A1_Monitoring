@@ -11,4 +11,4 @@ fi
 
 # The audit is read-only but needs the same local database connection as the
 # visible-Chrome worker.  Reuse the worker's environment preparation.
-exec .venv312/bin/python scripts/audit_head_table.py
+exec .venv312/bin/python scripts/audit_head_table.py "$@"

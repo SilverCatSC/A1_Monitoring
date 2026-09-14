@@ -267,6 +267,8 @@ def main() -> int:
                 return 1
         summary = result['scan']
         completion = result['completion']
+        cycle = result['cycle']
+        print(f'LOCAL_CYCLE_ID {cycle["id"]}')
         print('LOCAL_SELLER_PREFLIGHT ' + json.dumps(result['seller_preflight'], ensure_ascii=False))
         print('LOCAL_DIRECT_CARDS ' + json.dumps(result['direct_cards'], ensure_ascii=False))
         print(json.dumps(summary, ensure_ascii=False, indent=2))

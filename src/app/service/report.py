@@ -427,7 +427,7 @@ def operational_status(
     }
 
 
-def latest_scan_runs_status(session) -> dict:
+def latest_scan_runs_status(session, cycle_id: str | None = None) -> dict:
     rows = []
     for source_name in settings.scan_engines:
         try:
@@ -441,12 +441,10 @@ def latest_scan_runs_status(session) -> dict:
                 }
             )
             continue
-        run = (
-            session.query(ScanRun)
-            .filter(ScanRun.source == source)
-            .order_by(ScanRun.started_at.desc(), ScanRun.id.desc())
-            .first()
-        )
+        query = session.query(ScanRun).filter(ScanRun.source == source)
+        if cycle_id is not None:
+            query = query.filter(ScanRun.cycle_id == cycle_id)
+        run = query.order_by(ScanRun.started_at.desc(), ScanRun.id.desc()).first()
         if run is None:
             rows.append({'source': source.value, 'status': 'never_run'})
             continue
@@ -472,6 +470,7 @@ def latest_scan_runs_status(session) -> dict:
         rows.append(
             {
                 'id': run.id,
+                'cycle_id': run.cycle_id,
                 'source': source.value,
                 'status': run.status.value,
                 'network_profile': run.network_profile,
@@ -488,10 +487,12 @@ def latest_scan_runs_status(session) -> dict:
                 'notes': run.notes,
             }
         )
-    latest_worker_run = (
-        session.query(ScanRun).order_by(ScanRun.started_at.desc(), ScanRun.id.desc()).first()
-    )
+    worker_query = session.query(ScanRun)
+    if cycle_id is not None:
+        worker_query = worker_query.filter(ScanRun.cycle_id == cycle_id)
+    latest_worker_run = worker_query.order_by(ScanRun.started_at.desc(), ScanRun.id.desc()).first()
     return {
+        'cycle_id': cycle_id,
         'requested_pages': settings.scan_pages_limit,
         'network_profile': settings.network_profile,
         'latest_worker_profile': latest_worker_run.network_profile if latest_worker_run else None,

@@ -98,6 +98,7 @@ def build_units(packet: dict[str, Any], evidence_root: Path) -> tuple[dict[str, 
             entry['company_site_issues'].append(_trim_mapping(row))
 
     global_context = {
+        'cycle': packet.get('cycle', {}),
         'contract': packet.get('contract', {}),
         'scan': _scan_summary(packet.get('scan', {})),
         'head_table_summary': head.get('summary', {}),
@@ -163,6 +164,7 @@ def main() -> int:
     manifest = {
         'schema_version': 1,
         'created_at': datetime.now(UTC).isoformat(),
+        'cycle_id': (packet.get('cycle') or {}).get('id'),
         'source_packet': str(args.packet.resolve()),
         'run_dir': str(run_dir.resolve()),
         'resource_policy': {

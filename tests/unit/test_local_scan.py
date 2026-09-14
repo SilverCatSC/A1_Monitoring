@@ -67,3 +67,44 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['SCAN_FILTER_PAUSE_MIN_SECONDS'] == '12'
     assert local_scan.os.environ['SCAN_PAGE_PAUSE_MAX_SECONDS'] == '12'
     assert local_scan.os.environ['AUTO_RU_PAGE_DELAY_SECONDS'] == '5'
+
+
+def test_local_scan_reports_cycle_id_before_its_final_status(monkeypatch, capsys, tmp_path):
+    cycle_result = {
+        'scan': {'filters_scanned': 1, 'found': 0, 'missed_confirmed': 0, 'missed_uncertain': 0},
+        'completion': {
+            'status': 'completed', 'technical_errors': 0, 'links_need_review': 0,
+            'direct_cards_incomplete': 0,
+        },
+        'cycle': {'id': 'cycle-1'},
+        'seller_preflight': {},
+        'direct_cards': {},
+    }
+
+    class Context:
+        def __enter__(self):
+            return 'db'
+
+        def __exit__(self, *_):
+            return None
+
+    class Service:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self):
+            return cycle_result
+
+    monkeypatch.setattr(local_scan, '_env_file_values', lambda _: {'DB_PASSWORD': 'safe-pass'})
+    monkeypatch.setattr(local_scan, '_configure_runtime', lambda *_: 'http://127.0.0.1:19222')
+    monkeypatch.setattr(local_scan, '_ensure_local_chrome', lambda *_: False)
+    monkeypatch.setattr('app.db.get_db_context', lambda: Context())
+    monkeypatch.setattr('app.service.cycle.MonitoringCycleService', Service)
+    monkeypatch.setattr(
+        'sys.argv',
+        ['local_scan.py', '--evidence-dir', str(tmp_path / 'evidence')],
+    )
+
+    assert local_scan.main() == 0
+    output = capsys.readouterr().out
+    assert output.index('LOCAL_CYCLE_ID cycle-1') < output.index('LOCAL_SCAN_OK')

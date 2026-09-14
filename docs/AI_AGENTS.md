@@ -110,6 +110,11 @@ cd /Users/filaret/Desktop/a1_search_monitor_noapi_product
 `AI_STAGE vision` и `AI_STAGE synthesis`. Если локальная модель или Hermes не
 ответили, скрипт сохраняет частичную диагностику и не корректирует данные мониторинга.
 
+Полный сценарий передаёт `cycle_id` сам. При ручном запуске `build_live_agent_packet.py`,
+`run_ai_review_*` и `run_ouroboros_live_audit_*` обязаны получить один и тот же
+завершённый `cycle_id`; сборка откажется от частичного цикла или смешанных
+`latest`-артефактов.
+
 ## Реальный цикл
 
 ```text

@@ -16,12 +16,26 @@ if [[ $scan_status -ne 0 && $scan_status -ne 2 ]]; then
   echo "MONITORING_SYSTEM_FAILED scan_status=$scan_status log=$log_file" >&2
   exit "$scan_status"
 fi
+if [[ $scan_status -eq 2 ]]; then
+  echo "MONITORING_SYSTEM_PARTIAL scan_status=$scan_status reason=core_cycle_not_completed log=$log_file"
+  exit 2
+fi
+cycle_id="$(awk '$1 == "LOCAL_CYCLE_ID" { value=$2 } END { print value }' "$log_file")"
+if [[ -z "$cycle_id" ]]; then
+  echo "MONITORING_SYSTEM_FAILED reason=cycle_id_missing log=$log_file" >&2
+  exit 1
+fi
 
 company_site_status=0
-./scripts/run_company_site_audit_macos.sh 2>&1 | tee -a "$log_file" || company_site_status=$?
+./scripts/run_company_site_audit_macos.sh --cycle-id "$cycle_id" 2>&1 | tee -a "$log_file" || company_site_status=$?
 
 head_table_status=0
-./scripts/run_head_table_audit_macos.sh 2>&1 | tee -a "$log_file" || head_table_status=$?
+./scripts/run_head_table_audit_macos.sh --cycle-id "$cycle_id" 2>&1 | tee -a "$log_file" || head_table_status=$?
+
+if [[ $company_site_status -ne 0 || $head_table_status -ne 0 ]]; then
+  echo "MONITORING_SYSTEM_PARTIAL scan_status=$scan_status company_site_status=$company_site_status head_table_status=$head_table_status log=$log_file"
+  exit 2
+fi
 
 # Keep one bounded local-model process for both sequential agent stages. This
 # avoids loading the 6.2 GB model twice while preserving one-request concurrency.
@@ -37,8 +51,8 @@ ai_start_status=0
 ai_status=0
 ouroboros_status=0
 if [[ $ai_start_status -eq 0 ]]; then
-  ./scripts/run_ai_review_macos.sh 2>&1 | tee -a "$log_file" || ai_status=$?
-  ./scripts/run_ouroboros_live_audit_macos.sh 2>&1 | tee -a "$log_file" || ouroboros_status=$?
+  ./scripts/run_ai_review_macos.sh --cycle-id "$cycle_id" 2>&1 | tee -a "$log_file" || ai_status=$?
+  ./scripts/run_ouroboros_live_audit_macos.sh --cycle-id "$cycle_id" 2>&1 | tee -a "$log_file" || ouroboros_status=$?
 else
   ai_status=$ai_start_status
   ouroboros_status=$ai_start_status

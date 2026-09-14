@@ -17,14 +17,22 @@ Start-Transcript -Path $log
 try {
     Write-A1MemorySnapshot 'start' | Out-Null
     Invoke-A1Native 'docker' @('compose', 'up', '-d', 'app', 'db', 'backup')
-    & $python scripts/local_scan.py --engines $Engines --pages $Pages --pace cautious
+    $scanOutput = & $python scripts/local_scan.py --engines $Engines --pages $Pages --pace cautious 2>&1
     $scanStatus = $LASTEXITCODE
+    $scanOutput | ForEach-Object { Write-Host $_ }
     if ($scanStatus -ne 0 -and $scanStatus -ne 2) { throw "Live scan failed (exit $scanStatus)." }
-    if ($scanStatus -eq 2) { $overall = 2 }
+    if ($scanStatus -eq 2) {
+        $overall = 2
+        throw 'Core monitoring cycle is partial; supplemental audits and AI packet were not started.'
+    }
+    $cycleLine = $scanOutput | Where-Object { "$_" -like 'LOCAL_CYCLE_ID *' } | Select-Object -Last 1
+    if (-not $cycleLine) { throw 'Completed local scan did not return LOCAL_CYCLE_ID.' }
+    $cycleId = ("$cycleLine" -split '\s+', 2)[1]
+    if (-not $cycleId) { throw 'Completed local scan returned an empty cycle ID.' }
 
-    Invoke-A1Native $python @('scripts/audit_company_site.py')
-    Invoke-A1Native $python @('scripts/audit_head_table.py')
-    Invoke-A1Native $python @('scripts/build_live_agent_packet.py')
+    Invoke-A1Native $python @('scripts/audit_company_site.py', '--cycle-id', $cycleId)
+    Invoke-A1Native $python @('scripts/audit_head_table.py', '--cycle-id', $cycleId)
+    Invoke-A1Native $python @('scripts/build_live_agent_packet.py', '--cycle-id', $cycleId)
     Invoke-A1Native $python @('scripts/build_ai_work_units.py')
 
     & (Join-Path $PSScriptRoot 'stop_monitoring_chrome_windows.ps1')
@@ -33,9 +41,9 @@ try {
     Write-A1MemorySnapshot 'browser_and_docker_stopped' | Out-Null
 
     & (Join-Path $PSScriptRoot 'start_local_ai_windows.ps1') -MinFreeMemoryMb $MinFreeMemoryMb
-    & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ai_review_windows.ps1') -PreparedPacket
+    & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ai_review_windows.ps1') -PreparedPacket -CycleId $cycleId
     if ($LASTEXITCODE -ne 0) { $overall = 2 }
-    & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ouroboros_live_audit_windows.ps1')
+    & pwsh.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'run_ouroboros_live_audit_windows.ps1') -CycleId $cycleId
     if ($LASTEXITCODE -ne 0) { $overall = 2 }
 } catch {
     Write-Warning $_

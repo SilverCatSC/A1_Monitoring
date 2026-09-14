@@ -1,5 +1,15 @@
 # Журнал изменений
 
+## M1.3 — fail-closed AI packet — 2026-09-14
+
+- API и локальный runner выдают точный `cycle_id`; status endpoint возвращает
+  ledger конкретного цикла, а scan endpoint умеет выбрать только его runs.
+- Head-table и site audits получают ID как явный аргумент. AI work units, staged
+  Hermes review и Ouroboros сверяют этот ID; разнородные `latest`-файлы отвергаются.
+- Полные macOS/Windows сценарии не запускают дополнительные аудиты и AI после
+  partial core-цикла. Пустая или неизвестная конфигурация marketplace source также
+  блокируется до создания `ScanRun`.
+
 ## M1.2 — ledger и immutable roster — 2026-09-14
 
 - Добавлена миграция `20260914_0007`: таблица `monitoring_cycles` и `cycle_id`

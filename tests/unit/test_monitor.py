@@ -96,6 +96,19 @@ def _seed(session):
     return listing, search_filter
 
 
+@pytest.mark.parametrize('configured', ['', 'auto_ru,unknown_source'])
+def test_monitor_rejects_empty_or_unknown_source_configuration(tmp_path, monkeypatch, configured):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', configured)
+    session, engine = _session(tmp_path)
+    try:
+        with pytest.raises(ScanConfigurationError):
+            MonitorService(session, auto_adapter=FakeAdapter([])).run_full_cycle()
+        assert session.query(ScanRun).count() == 0
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_canonical_listing_key_ignores_slug_and_tracking_query():
     left = canonical_listing_key(
         EngineType.AUTO_RU,

@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+if [[ $# -ne 2 || "$1" != '--cycle-id' || -z "$2" ]]; then
+  echo 'Usage: run_ouroboros_live_audit_macos.sh --cycle-id <completed-cycle-id>' >&2
+  exit 2
+fi
+CYCLE_ID="$2"
 # Optional override is intended for an isolated saved-artifact smoke test only.
 PACKET="${OUROBOROS_PACKET:-$ROOT_DIR/artifacts/agent_reviews/staged_review_latest.json}"
 OUTPUT_DIR="${OUROBOROS_OUTPUT_DIR:-$ROOT_DIR/artifacts/ouroboros_reviews}"
@@ -15,7 +20,7 @@ if [[ ! -s "$PACKET" ]]; then
 fi
 mkdir -p "$OUTPUT_DIR"
 PYTHONPATH="$ROOT_DIR" "$ROOT_DIR/.venv312/bin/python" \
-  "$ROOT_DIR/scripts/validate_staged_review.py" "$PACKET"
+  "$ROOT_DIR/scripts/validate_staged_review.py" "$PACKET" --cycle-id "$CYCLE_ID"
 "$ROOT_DIR/scripts/sync_ai_profiles_macos.sh"
 
 ai_was_running=false

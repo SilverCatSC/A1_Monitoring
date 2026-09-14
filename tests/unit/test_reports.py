@@ -103,8 +103,10 @@ def test_latest_scan_status_exposes_outcomes_and_unique_evidence(tmp_path, monke
         payload = latest_scan_runs_status(session)
 
         assert payload['requested_pages'] == 3
+        assert payload['cycle_id'] is None
         assert payload['runs'][0] == {
             'id': 'run-1',
+            'cycle_id': None,
             'source': 'auto_ru',
             'status': 'success',
             'network_profile': 'cloud_no_vpn',
@@ -126,6 +128,30 @@ def test_latest_scan_status_exposes_outcomes_and_unique_evidence(tmp_path, monke
             'evidence_pages': [1, 2],
             'notes': None,
         }
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_cycle_scoped_scan_status_does_not_mix_runs(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.report.settings.scan_enabled_engines', 'auto_ru')
+    engine = create_engine(f'sqlite:///{tmp_path / "cycle-scan.db"}')
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    try:
+        session.add_all([
+            ScanRun(id='old', cycle_id='old-cycle', source=EngineType.AUTO_RU,
+                    network_profile='local_browser', started_at=datetime(2026, 9, 1, tzinfo=UTC)),
+            ScanRun(id='new', cycle_id='new-cycle', source=EngineType.AUTO_RU,
+                    network_profile='local_browser', started_at=datetime(2026, 9, 2, tzinfo=UTC)),
+        ])
+        session.commit()
+
+        payload = latest_scan_runs_status(session, cycle_id='old-cycle')
+
+        assert payload['cycle_id'] == 'old-cycle'
+        assert payload['runs'][0]['id'] == 'old'
+        assert payload['runs'][0]['cycle_id'] == 'old-cycle'
     finally:
         session.close()
         engine.dispose()

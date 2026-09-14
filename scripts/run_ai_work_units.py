@@ -204,10 +204,13 @@ def main() -> int:
     parser.add_argument('--cooldown-seconds', type=float, default=8.0)
     parser.add_argument('--limit-units', type=int, default=0)
     parser.add_argument('--vehicle-key', default='')
+    parser.add_argument('--cycle-id', default='')
     parser.add_argument('--smoke', action='store_true')
     args = parser.parse_args()
 
     manifest = _read(args.manifest)
+    if args.cycle_id and manifest.get('cycle_id') != args.cycle_id:
+        raise ValueError('work-unit manifest does not belong to the requested cycle_id')
     units = manifest.get('units') if isinstance(manifest.get('units'), list) else []
     if args.vehicle_key:
         units = [item for item in units if isinstance(item, dict) and item.get('vehicle_key') == args.vehicle_key]
@@ -318,6 +321,7 @@ def main() -> int:
     artifact = {
         'schema_version': 2,
         'generated_at': datetime.now(UTC).isoformat(),
+        'cycle_id': manifest.get('cycle_id'),
         'mode': 'sequential_multimodal',
         'resource_policy': manifest.get('resource_policy', {}),
         'coverage': coverage,

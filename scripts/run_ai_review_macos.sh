@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
+if [[ $# -ne 2 || "$1" != '--cycle-id' || -z "$2" ]]; then
+  echo 'Usage: run_ai_review_macos.sh --cycle-id <completed-cycle-id>' >&2
+  exit 2
+fi
+CYCLE_ID="$2"
 # shellcheck disable=SC1091
 source "$ROOT_DIR/config/ai-tools.lock"
 INPUT_FILE="$ROOT_DIR/artifacts/agent_reviews/live_packet_latest.json"
@@ -20,12 +25,13 @@ cleanup_ai() {
 }
 trap cleanup_ai EXIT
 
-curl -fsS --max-time 10 http://127.0.0.1:18000/api/v1/status/scans/latest >/dev/null
-"$ROOT_DIR/.venv312/bin/python" "$ROOT_DIR/scripts/build_live_agent_packet.py"
+curl -fsS --max-time 10 "http://127.0.0.1:18000/api/v1/status/cycles/$CYCLE_ID" >/dev/null
+"$ROOT_DIR/.venv312/bin/python" "$ROOT_DIR/scripts/build_live_agent_packet.py" --cycle-id "$CYCLE_ID"
 "$ROOT_DIR/.venv312/bin/python" "$ROOT_DIR/scripts/build_ai_work_units.py"
 
 set +e
 "$ROOT_DIR/.venv312/bin/python" "$ROOT_DIR/scripts/run_ai_work_units.py" \
+  --cycle-id "$CYCLE_ID" \
   --cooldown-seconds "$AI_STAGE_COOLDOWN_SECONDS"
 review_status=$?
 set -e
@@ -39,6 +45,7 @@ fi
   "$ROOT_DIR/artifacts/agent_reviews/latest.json"
 PYTHONPATH="$ROOT_DIR" "$ROOT_DIR/.venv312/bin/python" \
   "$ROOT_DIR/scripts/validate_staged_review.py" \
+  --cycle-id "$CYCLE_ID" \
   "$ROOT_DIR/artifacts/agent_reviews/staged_review_latest.json"
 
 if [[ $review_status -ne 0 ]]; then
