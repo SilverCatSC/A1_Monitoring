@@ -1,5 +1,15 @@
 # Журнал изменений
 
+## M7 status map and republication decision — 2026-09-14
+
+- Добавлен единый owner-facing status map с целью системы, evidence по
+  контурам, измеримыми остаточными gates и объяснением `missing_link` /
+  `removed` / `review_required`.
+- Зафиксирован следующий product milestone: deterministic mapping
+  `VIN/внутренний ID → текущий URL` для безопасного автоматического обновления
+  ссылок после перевыкладки; совпадение только по модели/цене/году намеренно
+  не считается достаточным.
+
 ## M7 — MacBook controlled-cycle evidence — 2026-09-14
 
 - После owner authorization и strict private VPN admission MacBook выполнил
