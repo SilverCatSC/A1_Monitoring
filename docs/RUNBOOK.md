@@ -36,22 +36,26 @@ git diff --check
 ./scripts/smoke_stage.sh
 ```
 
-Smoke не вызывает `/scan`. Реальная локальная приёмка выполняется через
-постоянный Chrome-профиль:
+Smoke не вызывает `/scan`. До M7 запускайте только host-only preflight:
 
 ```bash
-./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
-./scripts/local_scan.sh --watch --interval-minutes 360 --pace cautious
+./scripts/run_monitoring_host_macos.sh --preflight
+```
+
+После Gate 0/1 M7 и owner approval ровно один live controlled cycle выполняется
+только через host runner:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/progress
 ```
 
-`--watch` в этом блоке — ручной foreground-loop, не service scheduler. Не
-запускать его одновременно с другим worker или LaunchAgent. `NETWORK_PROFILE`
-маркирует происхождение запуска, но не доказывает VPN-маршрут: до live cycle
-подтвердить VPSUS split-tunnel в обычном Chrome, не выключая VPN или ChatGPT.
-Сам API повторяет применимые gate и возвращает HTTP 422 до создания `ScanRun`,
-если клиент попытается вызвать `/scan` или `/cycle` напрямую.
+`local_scan.sh --watch` остаётся инженерным foreground-loop, не service
+scheduler и не MacBook production entrypoint. Не запускать его одновременно с
+host runner или LaunchAgent. `NETWORK_PROFILE` маркирует происхождение запуска,
+но не доказывает VPN-маршрут: до live cycle подтвердить VPSUS split-tunnel в
+обычном Chrome, не выключая VPN или ChatGPT.
 
 Startup сначала выполняет `alembic upgrade head`, затем запускает web. Scheduler
 в web-контейнере остаётся `false`: он не является решением для видимого host
@@ -77,7 +81,7 @@ scan, `--apply` LaunchAgent или M7 acceptance.
 
 ```bash
 docker-compose exec -T app python -m app.cli import-source
-./scripts/local_scan.sh --engines auto_ru,avito --pages 3
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
 ./scripts/backup_now.sh
 ./scripts/restore_test.sh
 ```

@@ -104,8 +104,9 @@ revision Alembic — не dump, не `.env`. Restore создаёт и удал�
 
 ## Gate 3 — Mac shadow-run
 
-1. Запустить видимый Chrome и одну осторожную полную проверку, без AI:
-   `./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious`.
+1. После закрытия Gate 0/1 запустить видимый Chrome и одну осторожную полную
+   проверку без AI только через защищённый Mac-host путь:
+   `./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3`.
 2. Сохранить `cycle_id`, final status и M3 evidence manifests.
 3. Сверить вручную контрольную выборку: source, timestamp, ID, страницу,
    direct-card, цену, год, VIN/внутренний ID и Avito НДС, когда он применим.

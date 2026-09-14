@@ -51,8 +51,8 @@ cd /Users/filaret/Desktop/Monitoring
 | `start_local_ai.sh` | Поднимает llama-server только на `127.0.0.1:18080` |
 | `stop_local_ai.sh` | Останавливает только процесс, чей PID и команда подтверждены |
 | `run_ai_review_macos.sh` | Делит последний прогон по машинам и снимкам, запускает последовательный Hermes QA |
-| `run_full_monitoring_macos.sh` | Обход двух площадок, затем Hermes QA и read-only аудит Ouroboros |
-| `run_monitoring_host_macos.sh` | Static-only host runner; `--preflight` проверяет GUI host/Docker/readiness без цикла или Chrome |
+| `run_full_monitoring_macos.sh` | Расширенный инженерный сценарий: после core-cycle запускает Hermes QA и read-only аудит Ouroboros; не M7/Finder entrypoint |
+| `run_monitoring_host_macos.sh` | Единственный MacBook M7 entrypoint: `--preflight` проверяет GUI host/Docker/readiness без цикла или Chrome; full mode — один gate-approved cycle |
 | `register_monitoring_launchagent_macos.sh` | Plan-only per-user LaunchAgent registrar; требуется явный `--apply` |
 | `hermes_maintenance_macos.sh` | Изолированный исполнитель Hermes для инженерного контура |
 | `run_ouroboros_maintenance_macos.sh` | Запускает Ouroboros с проектным HOME и отключённой телеметрией |
@@ -69,23 +69,29 @@ cd /Users/filaret/Desktop/Monitoring
 
 Ожидаемый итог: `FULL_MONITORING_SYSTEM_READY`. Проверка не посещает площадки.
 
-## Ручной controlled cycle — только после соответствующего gate
+## Finder preflight и ручной controlled cycle — только после соответствующего gate
 
 Сохраните VPSUS включённым и подтвердите split-tunnel: ChatGPT/Codex продолжает
 работать по согласованному маршруту, Auto.ru/Avito — по direct browser rules.
-Не выключайте VPN и не закрывайте ChatGPT как workaround, затем:
+Не выключайте VPN и не закрывайте ChatGPT как workaround. До M7-gate Finder
+только проверяет готовность host:
 
 ```bash
 ./Запустить\ мониторинг.command
 ```
 
-Команда, если оператор разрешил cycle, сначала проводит обход в видимом Chrome, а после него запускает
-последовательные data/vision/synthesis-этапы Hermes. Малые этапы идут по одному,
-с паузами и ограничением процессора. Затем Ouroboros проверяет компактный результат
-как read-only аудитор. Артефакты сохраняются в `artifacts/agent_work_units/`,
-`artifacts/agent_reviews/` и `artifacts/ouroboros_reviews/`. Для инженерных задач
-Ouroboros использует отдельный HOME и отдельные git-worktree. Первый диагностический
-вызов без изменения кода:
+Finder не открывает площадки и не запускает AI. После Gate 0/1 M7 и явного owner
+approval один controlled cycle запускается из Terminal через host runner:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
+```
+
+Отдельный `run_full_monitoring_macos.sh` запускает после core-cycle
+последовательные data/vision/synthesis-этапы Hermes и read-only аудит Ouroboros;
+это инженерный сценарий, не часть M7 acceptance. Для инженерных задач Ouroboros
+использует отдельный HOME и отдельные git-worktree. Первый диагностический вызов
+без изменения кода:
 
 ```bash
 ./scripts/run_ouroboros_maintenance_macos.sh doctor install

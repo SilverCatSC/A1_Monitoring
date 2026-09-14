@@ -240,15 +240,21 @@ privacy-bounded hash manifest. Если screenshot не сохранён или 
 
 ```bash
 cd /Users/filaret/Desktop/Monitoring
-./scripts/start_local.sh
-./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+./scripts/run_monitoring_host_macos.sh --preflight
+```
+
+После Gate 0/1 M7 и явного owner approval один browser-only cycle:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
 ```
 
 Дашборд: http://127.0.0.1:18000/api/v1/dashboard<br>
 JSON последнего поиска: http://127.0.0.1:18000/api/v1/status/scans/latest<br>
 Прогресс: http://127.0.0.1:18000/api/v1/status/scans/progress
 
-Полный запуск с аудитами и локальным AI:
+Расширенный инженерный запуск с аудитами и локальным AI — не M7 entrypoint и
+только после успешного core-cycle:
 
 ```bash
 ./scripts/run_full_monitoring_macos.sh

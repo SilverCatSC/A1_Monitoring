@@ -38,16 +38,26 @@
 
 ```bash
 cd /Users/filaret/Desktop/Monitoring
-./scripts/start_local.sh
-./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+./scripts/run_monitoring_host_macos.sh --preflight
 ```
 
-Первый сценарий собирает/поднимает приложение, БД и резервирование. Второй
-обновляет реестр Monitoring, сверяет кабинеты, проверяет поиск и прямые карточки.
-Он **не запускает Hermes/Ouroboros** и не выполняет отдельные аудиты головной
-таблицы и сайта. Это предпочтительный первый тест самого мониторинга.
+Это только безопасная проверка GUI-host, Docker и readiness: она не открывает
+Chrome, не обращается к площадкам и не создаёт cycle. Finder-ярлык «Запустить
+мониторинг.command» делает тот же preflight.
 
-Полный сценарий, только после установки AI и оценки памяти:
+После закрытия Gate 0/1 M7 и явного owner approval выполните один controlled
+cycle через защищённый host runner:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
+```
+
+Он обновляет реестр Monitoring, сверяет кабинеты, проверяет поиск и прямые
+карточки, но **не запускает Hermes/Ouroboros** и не выполняет отдельные аудиты
+головной таблицы и сайта.
+
+Расширенный инженерный сценарий — только после успешного core-cycle, установки
+AI и оценки памяти; он не является M7 entrypoint и не запускается Finder-ярлыком:
 
 ```bash
 cd /Users/filaret/Desktop/Monitoring

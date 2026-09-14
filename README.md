@@ -51,24 +51,35 @@ split-tunnel, контрольная выборка, роли и ручной Ma
 
 ## Быстрый запуск
 
-На этом Mac, только проверка площадок без загрузки локальной LLM:
+На этом Mac безопасный старт — readiness-only preflight без обращения к
+площадкам и без загрузки локальной LLM:
 
 ```bash
 cd /Users/filaret/Desktop/Monitoring
-./scripts/start_local.sh
-./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+./scripts/run_monitoring_host_macos.sh --preflight
 ```
 
-Видимый Chrome использует отдельный постоянный профиль. Перед разрешённым живым прогоном
-VPSUS остаётся включённым: ChatGPT/Codex продолжает работать по согласованному
-VPN/direct-маршруту, а Auto.ru и Avito открываются в обычном Chrome по
-согласованным direct-правилам. Не выключайте VPN и не закрывайте ChatGPT как
-workaround. Текущая конфигурация ещё не является полным доказательством
-split-tunnel; CAPTCHA требует действия оператора. Граница проверки —
+Finder-ярлык «Запустить мониторинг.command» делает тот же preflight и затем
+открывает локальный dashboard; двойной клик никогда не создаёт monitoring cycle.
+
+Только после закрытия Gate 0/1 M7 и явного решения владельца о VPSUS policy
+допустим один controlled cycle через защищённый Mac-host путь:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
+```
+
+Видимый Chrome использует отдельный постоянный профиль. Перед разрешённым живым
+прогоном VPSUS остаётся включённым: ChatGPT/Codex продолжает работать по
+согласованному VPN/direct-маршруту, а Auto.ru и Avito — по утверждённой owner
+policy. Не выключайте VPN и не закрывайте ChatGPT как workaround. Текущая
+конфигурация ещё не является полным доказательством split-tunnel; CAPTCHA
+требует действия оператора. Граница проверки —
 [VPSUS split-tunnel gate](docs/production/VPN_GATE_2026-09-14.md).
 
-Автоматического production-расписания пока нет. `./scripts/local_scan.sh --watch`
-— только foreground-loop открытого Terminal. Скрипты
+Автоматического production-расписания пока нет. Низкоуровневый
+`local_scan.sh --watch` — инженерный foreground-loop открытого Terminal, а не
+MacBook production entrypoint. Скрипты
 `run_monitoring_host_macos.sh` и `register_monitoring_launchagent_macos.sh`
 поставлены как static-only contract и имеют отдельный MacBook gate: LaunchAgent
 должен быть per-user, plan-only до явного `--apply`, не может заменять видимый
@@ -85,8 +96,9 @@ Set-ExecutionPolicy -Scope Process Bypass
 .\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
 ```
 
-Полный сценарий с локальными Hermes/Ouroboros на основном Mac —
-`scripts/run_full_monitoring_macos.sh`. Windows-вариант
+Расширенный инженерный сценарий с локальными Hermes/Ouroboros на основном Mac —
+`scripts/run_full_monitoring_macos.sh`; он не является M7 controlled cycle и
+не запускается Finder-ярлыком. Windows-вариант
 `scripts/run_full_monitoring_windows.ps1` не является принятой альтернативой и
 требует отдельной живой приёмки, если этот host когда-либо будет использован.
 

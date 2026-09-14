@@ -7,21 +7,30 @@
 
 ## Основной MacBook
 
-Канонический каталог и ручной browser-only запуск:
+Канонический каталог и безопасный readiness-only preflight:
 
 ```bash
 cd /Users/filaret/Desktop/Monitoring
-./scripts/start_local.sh
-./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+./scripts/run_monitoring_host_macos.sh --preflight
 ```
 
-Это один controlled cycle в видимом Chrome и активной пользовательской сессии
-macOS. Перед ним VPSUS остаётся включённым; ChatGPT/Codex и Auto.ru/Avito
-проверяются по согласованному split-tunnel, без отключения VPN или изменения
-правил. `SCHEDULER_ENABLED=false`: контейнер не заменяет host Chrome.
+Preflight поднимает локальные app/db/backup и проверяет GUI/readiness, но не
+создаёт cycle, не открывает Chrome и не обращается к площадкам. Finder-ярлык
+«Запустить мониторинг.command» выполняет только этот режим.
 
-`local_scan.sh --watch` — лишь foreground-loop Terminal. Будущая автоматизация
-должна быть per-user GUI LaunchAgent через
+Один controlled cycle в видимом Chrome и активной пользовательской сессии macOS
+допустим лишь после Gate 0/1 M7 и явного owner approval:
+
+```bash
+./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
+```
+
+Перед ним VPSUS остаётся включённым; ChatGPT/Codex и Auto.ru/Avito проверяются
+по согласованному split-tunnel без отключения VPN или изменения правил.
+`SCHEDULER_ENABLED=false`: контейнер не заменяет host Chrome.
+
+`local_scan.sh --watch` — низкоуровневый инженерный foreground-loop Terminal, не
+MacBook production entrypoint. Будущая автоматизация должна быть per-user GUI LaunchAgent через
 `register_monitoring_launchagent_macos.sh`, плановой по умолчанию и с явным
 `--apply`; она поставлена static-only и не заявлена живо принятой. Отдельно
 проверяются TCC/Desktop-доступ, активный console GUI user и поведение на lock
