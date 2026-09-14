@@ -42,6 +42,10 @@ Current Mac routing evidence is recorded in
 [VPN_GATE_2026-09-14.md](VPN_GATE_2026-09-14.md). It is a configuration and
 basic reachability result, not a replacement for the remaining M7 gates.
 
+Current Mac marketplace probes are recorded in
+[LIVE_PROBE_2026-09-14.md](LIVE_PROBE_2026-09-14.md). They verify adapters on
+one page each without creating a monitoring cycle.
+
 После подтверждения оператор фиксирует screenshot/текст настроек и выполняет один
 контролируемый доступ в обычном Chrome:
 
