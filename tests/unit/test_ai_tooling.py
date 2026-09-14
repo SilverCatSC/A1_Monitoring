@@ -53,15 +53,13 @@ def test_maintenance_wrapper_separates_completion_from_runtime_profile() -> None
     assert "env -i" in script
 
 
-def test_full_monitoring_runs_both_agents_and_head_table_audit() -> None:
+def test_extended_full_monitoring_entrypoint_is_retired_from_production() -> None:
     script = (ROOT / 'scripts' / 'run_full_monitoring_macos.sh').read_text(encoding='utf-8')
 
-    assert 'run_head_table_audit_macos.sh' in script
-    assert 'run_company_site_audit_macos.sh' in script
-    assert 'run_ai_review_macos.sh' in script
-    assert 'run_ouroboros_live_audit_macos.sh' in script
-    assert 'start_local_ai.sh' in script
-    assert 'ai_was_running=false' in script
+    assert 'MONITORING_SYSTEM_REFUSED reason=extended_pipeline_not_accepted' in script
+    assert 'run_monitoring_host_macos.sh' in script
+    assert 'run_head_table_audit_macos.sh' not in script
+    assert 'run_ai_review_macos.sh' not in script
 
 
 def test_live_ouroboros_audit_is_read_only_and_local() -> None:

@@ -15,6 +15,12 @@ $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $Root
 . (Join-Path $PSScriptRoot 'windows_common.ps1')
 
+# The owner selected the MacBook as the production host. The Windows contract
+# remains source-only fallback material until a separately verified Windows
+# VPN/TCC/browser acceptance is completed; do not start Docker or Chrome here.
+[Console]::Error.WriteLine('HOST_RUNNER_REFUSED reason=windows_fallback_not_accepted')
+exit 64
+
 $env:PYTHONUTF8 = '1'
 $env:PYTHONUNBUFFERED = '1'
 $script:RunnerStartedAt = [DateTime]::UtcNow.ToString('o')

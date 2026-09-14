@@ -6,14 +6,15 @@ backup/restore и живого production-расписания.
 
 ## Controlled retry
 
-`partial` или `failed` цикл можно повторить через:
+`partial` или `failed` цикл можно повторить только через MacBook host runner:
 
 ```bash
-.venv312/bin/python -m app.cli retry-cycle <cycle_id>
+make retry-cycle CYCLE_ID=<UUID>
 ```
 
-или защищённый маршрут `POST /api/v1/cycles/<cycle_id>/retry` роли `admin` либо
-`operator`. Это **не** resume старого цикла:
+Target делегирует retry тому же host runner, что и новый cycle; прямой
+`python -m app.cli retry-cycle` и ручной API-вызов не являются operator entrypoint.
+Это **не** resume старого цикла:
 
 1. Система проверяет, что исходный цикл уже завершён как `partial`/`failed`.
 2. Запускается новый `MonitoringCycle` с новым ID и `retry_of_cycle_id`.
@@ -53,16 +54,12 @@ than guessing that it is stale.
 
 ## Расписание и host Chrome
 
-`SCHEDULER_ENABLED=true` внутри web-контейнера **не является решением для
-видимого host Chrome**. Он может коалесцировать интервалы и предотвращать второй
-container job, но не получает интерактивную macOS GUI-сессию, состояние VPSUS или
-право управлять Chrome-профилем пользователя. Поэтому для реальных marketplace
-циклов `SCHEDULER_ENABLED` остаётся `false`; не включайте его как обход отсутствия
-host-runner.
+`SCHEDULER_ENABLED=true` отвергается во всех окружениях. Контейнер не получает
+интерактивную macOS GUI-сессию, состояние VPSUS или право управлять
+Chrome-профилем пользователя, поэтому допустимо только `SCHEDULER_ENABLED=false`.
 
-`local_scan.sh --watch` также не является production scheduler: это ручной
-foreground-loop в открытом Terminal. Он заканчивается при logout/сне и не должен
-работать параллельно с другой ручной командой либо LaunchAgent.
+`local_scan.sh`, `local_scan.py --watch` и `make watch` намеренно отказываются.
+Они не являются scheduler, foreground fallback или способом обойти host runner.
 
 Production-контракт основного MacBook использует отдельный, ещё не принятый
 `run_monitoring_host_macos.sh`: ровно один cautious scan в активной GUI-сессии,
@@ -70,9 +67,14 @@ mutex, preflight HTTP, безопасное recovery только abandoned cycl
 status в `artifacts`. При занятом mutex это штатный skip, а не повод запускать
 второй worker или retry.
 
-`register_monitoring_launchagent_macos.sh --at HH:MM` без `--apply` только
-показывает план. Явный `--apply` должен отдельно создать per-user GUI LaunchAgent
-`com.silvercatsc.a1monitoring.interactive-cycle` с ежедневным
+Central cycle принимает только проверяемый inherited Mac host-lock FD, который
+удерживает этот runner; `LOCAL_BROWSER_HOST_ADMISSION=true`, путь к lock-файлу или
+VPN attestation по отдельности не открывают цикл. Это operational anti-accidental
+boundary, не hostile-security proof против того же локального пользователя.
+
+`register_monitoring_launchagent_macos.sh --at HH:MM` показывает только plan-only
+контракт. Если owner когда-либо одобрит применение, per-user GUI LaunchAgent
+`com.silvercatsc.a1monitoring.interactive-cycle` обязан использовать ежедневный
 `StartCalendarInterval`, `RunAtLoad=false` и `KeepAlive=false`. Регистрация не
 запускает scan; trigger запускает один host-runner, не `--watch` и не
 автоматический retry. Это LaunchAgent, не LaunchDaemon: запуск возможен только
@@ -82,7 +84,7 @@ status в `artifacts`. При занятом mutex это штатный skip, �
 
 1. подтверждённого split-tunnel для ChatGPT, Auto.ru и Avito в обычном Chrome;
 2. успешного ручного MacBook controlled cycle с видимым Chrome;
-3. проверки, что `--watch`, container scheduler и иные workers остановлены;
+3. проверки, что нет другого worker; `--watch` и container scheduler fail-closed;
 4. явной проверки TCC/Desktop-доступа для GUI-пользователя, Chrome и launchd
    без автоматической выдачи permissions;
 5. owner review плана задачи и статуса после первого trigger.
@@ -91,8 +93,8 @@ status в `artifacts`. При занятом mutex это штатный skip, �
 принятым production-расписанием. При lock screen или отсутствии console GUI user
 runner должен отказаться, а не начинать невидимый scan. Детали и границы —
 [MACBOOK_PRIMARY_HOST_2026-09-14.md](MACBOOK_PRIMARY_HOST_2026-09-14.md).
-Windows Task Scheduler остаётся отдельным, непринятым fallback-путём и не
-требуется для MacBook release.
+Windows Task Scheduler, scanner/full/watch и host runner deliberately fail-closed
+и не требуются для MacBook release.
 
 ## Publication allowlist
 

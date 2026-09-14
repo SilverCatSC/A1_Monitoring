@@ -56,59 +56,42 @@ cycle через защищённый host runner:
 карточки, но **не запускает Hermes/Ouroboros** и не выполняет отдельные аудиты
 головной таблицы и сайта.
 
-Расширенный инженерный сценарий — только после успешного core-cycle, установки
-AI и оценки памяти; он не является M7 entrypoint и не запускается Finder-ярлыком:
+`scripts/run_full_monitoring_macos.sh` больше не является инженерной точкой
+запуска: он намеренно отказывается. Hermes/Ouroboros остаются отдельными
+офлайн-задачами над уже сохранёнными evidence и не расширяют M7 cycle.
+
+Для terminal `partial`/`failed` повтор разрешён только после тех же M7/VPN gates:
 
 ```bash
-cd /Users/filaret/Desktop/Monitoring
-./scripts/run_full_monitoring_macos.sh
+make retry-cycle CYCLE_ID=<UUID>
 ```
 
-Он дополнительно выполняет сверку сайта, головной таблицы, Hermes и Ouroboros;
-сам сохраняет общий журнал в `artifacts/manual_scan_YYYYmmdd_HHMMSS.log`.
+Этот target передаёт retry защищённому MacBook host runner. Не запускайте
+`python -m app.cli retry-cycle` напрямую и не используйте API как operator bypass.
 
 ## Плановый запуск на MacBook — пока только контракт
 
-Не используйте `local_scan.sh --watch` как сервис: это foreground-loop открытого
-Terminal, который заканчивается при logout/сне. Container scheduler также не
-может управлять видимым Chrome, поэтому `SCHEDULER_ENABLED` остаётся `false`.
+`local_scan.sh`, `local_scan.py --watch` и `make watch` намеренно отказываются:
+они не являются foreground-сервисом и не могут заменить host runner. Контейнерный
+`SCHEDULER_ENABLED=true` также отвергается во всех окружениях.
 
 После ручного controlled cycle, VPSUS proof и owner review допускается отдельный
 per-user GUI LaunchAgent. Его static-only runner
 `scripts/run_monitoring_host_macos.sh` делает один cautious cycle; регистратор
 `scripts/register_monitoring_launchagent_macos.sh --at HH:MM` по умолчанию только
-показывает план и требует явного `--apply`. Регистрация не выполняет scan, а
-`partial` не повторяется автоматически. До отдельного evidence первого trigger
-эта схема не считается работающим расписанием. См.
+показывает план. Регистрация не выполняет scan, а `partial` не повторяется
+автоматически. До отдельного evidence первого trigger эта схема не считается
+работающим расписанием. См.
 [MacBook primary-host decision](../production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
-## Резервный запуск на Windows 11 — только при отдельном решении
+## Windows 11 — fail-closed fallback
 
-В PowerShell, каталог без пробелов:
-
-```powershell
-Set-Location C:\work\A1_Monitoring
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\start_windows.ps1 -OpenDashboard
-.\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
-```
-
-Для полного установленного AI-контура:
-
-```powershell
-.\scripts\run_full_monitoring_windows.ps1
-```
-
-Windows-сценарий останавливает служебный Chrome и контейнеры проекта перед AI,
-затем возвращает приложение. В этот промежуток дашборд может не открываться.
-Он не является текущим production-путём. Живая приёмка на MSI обязательна, если
-владелец вернёт Windows в scope; статические тесты PowerShell её не заменяют.
-Установка: [окружение](ENVIRONMENT.md).
-
-Эта команда — ручной controlled cycle. Не сочетать `local_scan_windows.ps1 -Watch`
-с Task Scheduler: `--watch` требует открытого терминала и пользовательской сессии.
-Host-runner и интерактивная задача Windows — резервный будущий gate, а не уже
-принятая автоматизация; см. [Windows handoff](../WINDOWS_11_INSTALL.md).
+Windows/MSI не является разрешённым live host. `local_scan_windows.ps1`,
+`run_full_monitoring_windows.ps1`, `-Watch`, `run_monitoring_host_windows.ps1`
+и `register_monitoring_task_windows.ps1 -Apply` намеренно отказываются и не
+создают marketplace cycle. До отдельного нового решения владельца на Windows
+допустимы только установка, локальная диагностика и dashboard; см.
+[окружение](ENVIRONMENT.md) и [Windows handoff](../WINDOWS_11_INSTALL.md).
 
 ## Где наблюдать и смотреть результаты
 

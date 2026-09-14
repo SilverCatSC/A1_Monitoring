@@ -51,15 +51,26 @@ curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/latest
 curl -fsS http://127.0.0.1:${APP_BIND_PORT:-8000}/api/v1/status/scans/progress
 ```
 
-`local_scan.sh --watch` остаётся инженерным foreground-loop, не service
-scheduler и не MacBook production entrypoint. Не запускать его одновременно с
-host runner или LaunchAgent. `NETWORK_PROFILE` маркирует происхождение запуска,
+`local_scan.sh`, `local_scan.py --watch` и `make watch` намеренно отказываются:
+они не являются service scheduler или MacBook production entrypoint.
+`NETWORK_PROFILE` маркирует происхождение запуска,
 но не доказывает VPN-маршрут: до live cycle подтвердить VPSUS split-tunnel в
 обычном Chrome, не выключая VPN или ChatGPT.
 
-Startup сначала выполняет `alembic upgrade head`, затем запускает web. Scheduler
-в web-контейнере остаётся `false`: он не является решением для видимого host
-Chrome на основном MacBook. Будущее расписание допускается только через один
+После фактической owner/browser проверки и до full host cycle нужен свежий
+private record из [VPN admission contract](production/VPN_ADMISSION_CONTRACT_2026-09-14.md).
+Он не создаётся скриптом, не содержит URL/cookies/настройки VPSUS, требует 0700/0600
+и истекает максимум через 24 часа. Missing/expired/invalid record — stop-rule;
+не подменять его фиктивным JSON и не менять VPN ради прохождения runner.
+Кроме attestation central cycle требует проверяемый inherited Mac host-lock FD от
+этого runner: boolean `LOCAL_BROWSER_HOST_ADMISSION` или файл сами по себе не
+достаточны. Это защита от случайного прямого/container запуска, не hostile-security
+утверждение против того же GUI-пользователя.
+
+Startup сначала выполняет `alembic upgrade head`, затем запускает web.
+`SCHEDULER_ENABLED=true` отвергается во всех окружениях; допускается только
+`false`, поскольку контейнер не является решением для видимого host Chrome на
+основном MacBook. Будущее расписание допускается только через один
 per-user GUI LaunchAgent и `run_monitoring_host_macos.sh`, а не container scheduler
 или вложенный `--watch`. До VPSUS proof, ручного MacBook cycle и отдельного owner
 review этот LaunchAgent остаётся plan-only; детали —
@@ -164,7 +175,8 @@ docker-compose exec -T db psql -U monitor -d a1_search_monitor -c \
 2. Проверить последние `ScanRun` и `SourceImportSnapshot`.
 3. Убедиться, что локальный Chrome-профиль открыт и предыдущий worker не завис.
 4. Проверить свободное место и DNS/HTTPS к Google Sheets.
-5. После устранения выполнить один `run-cycle` и сверить status.
+5. После устранения и повторного прохождения gates выполнить один Mac host cycle
+   либо `make retry-cycle CYCLE_ID=<UUID>` для terminal partial/failed; сверить status.
 
 ## 8. Восстановление
 
@@ -185,7 +197,9 @@ destructive Alembic downgrade как штатный способ отката.
 Остановить production deploy, если:
 
 - `AUTH_ENABLED=false`;
-- рабочий запуск не имеет `NETWORK_PROFILE=local_browser`;
+- рабочий запуск не имеет `NETWORK_PROFILE=local_browser` или свежей валидной
+  VPN admission attestation; profiles `cloud_no_vpn`, `local_no_vpn` и
+  `local_vpn` не могут создавать marketplace cycle;
 - домен не имеет валидного HTTPS;
 - PostgreSQL опубликован не на loopback;
 - в git/логах обнаружен секрет;

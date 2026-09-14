@@ -82,6 +82,13 @@ connection`) для каждого сервиса, его нужных subdomain
 401/403/429 или CAPTCHA остаётся `technical_error`; не отключать защиту площадки
 ради зелёного результата.
 
+Перед полным `local_browser` cycle host-runner получает только короткоживущую
+private attestation по [VPN admission contract](VPN_ADMISSION_CONTRACT_2026-09-14.md).
+Она требует подтверждения IPv4 и IPv6 каждого сервиса, действует не более 24
+часов и fail-closed блокирует runner при отсутствии, expiry или небезопасных
+правах. Она не заменяет owner decision/evidence маршрута и не разрешает VPN
+change/reconnect.
+
 ## Gate 2 — восстановление
 
 Mac/stage status: **completed** on 2026-09-14 at Alembic `20260914_0011`.
@@ -129,8 +136,8 @@ the Avito contract is verified, while link reconciliation remains open.
 ## Gate 4 — MacBook host-runner / LaunchAgent (только если нужен график)
 
 Основной MacBook уже является целевым host, но автоматическое выполнение на нём
-ещё не принято. Не включать `SCHEDULER_ENABLED=true`: web-контейнер не может
-надёжно управлять видимым Chrome в GUI-сессии macOS.
+ещё не принято. `SCHEDULER_ENABLED=true` отвергается во всех окружениях: web-
+контейнер не может надёжно управлять видимым Chrome в GUI-сессии macOS.
 
 Сначала допустим только host-only preflight:
 
@@ -144,11 +151,10 @@ VPN и не проверяет TCC browser-control. Его результат н
 evidence host, но сам по себе не закрывает даже этот Gate и не разрешает scan.
 
 После этого выполнить plan-only проверку
-`scripts/register_monitoring_launchagent_macos.sh --at HH:MM`. Только после
-отдельного owner review допустим явный `--apply`. Ожидаемый per-user GUI
+`scripts/register_monitoring_launchagent_macos.sh --at HH:MM`. Ожидаемый per-user GUI
 LaunchAgent `com.silvercatsc.a1monitoring.interactive-cycle` должен запускать
 ровно один `scripts/run_monitoring_host_macos.sh` с видимым Chrome, без вложенного
-`--watch`, `RunAtLoad` или `KeepAlive`-повтора. Регистрация не должна выполнять
+`--watch` (он fail-closed), `RunAtLoad` или `KeepAlive`-повтора. Регистрация не должна выполнять
 marketplace scan.
 
 После первого trigger отдельно доказать, что:
@@ -158,11 +164,13 @@ marketplace scan.
 - TCC / Privacy & Security разрешает GUI-пользователю, Chrome и launchd-процессу
   доступ к проекту на Desktop; никакое permission не выдаётся автоматически;
 - `alembic upgrade head` применён, dashboard открывается на loopback, а
-  `SCHEDULER_ENABLED=false`;
+  `SCHEDULER_ENABLED=true` отвергается и остаётся `false`;
 - видимый Chrome и один cautious controlled cycle не исчерпывают память и не
   зависают;
 - mutex/статус runner не допускают второй цикл, а `partial` не вызывает
   автоматический retry;
+- central cycle принял inherited Mac host-lock FD именно от host runner; один
+  `LOCAL_BROWSER_HOST_ADMISSION` или локальный файл не могут обойти этот gate;
 - retry создаёт новый `cycle_id` с `retry_of_cycle_id`, а не меняет прежний
   manifest.
 
@@ -185,11 +193,10 @@ manifest как «быстрый rollback».
 ## Windows/MSI — резервный, не обязательный gate
 
 Windows/PowerShell скрипты сохранены для переносимости, но Windows/MSI больше не
-является целевой production-средой. Его статическая проверка не переносится на
-MacBook и не требуется для M7. Если владелец снова выберет Windows, необходимо
-отдельно повторить Gates 0–4 на той машине: Docker/backup/restore, VPSUS,
-видимый Chrome, ручной cycle и интерактивный Task Scheduler без container
-scheduler.
+является целевой production-средой. Его scanner/full/watch/host runner, raw
+probe и Task Scheduler `-Apply` deliberately fail-closed. Если владелец снова
+выберет Windows, необходимо сначала принять новую архитектуру и только затем
+повторить Gates 0–4 с нуля; существующие scripts не являются обходом.
 
 ## Артефакт приёмки
 

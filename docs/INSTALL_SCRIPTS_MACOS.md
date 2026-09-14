@@ -51,9 +51,9 @@ cd /Users/filaret/Desktop/Monitoring
 | `start_local_ai.sh` | Поднимает llama-server только на `127.0.0.1:18080` |
 | `stop_local_ai.sh` | Останавливает только процесс, чей PID и команда подтверждены |
 | `run_ai_review_macos.sh` | Делит последний прогон по машинам и снимкам, запускает последовательный Hermes QA |
-| `run_full_monitoring_macos.sh` | Расширенный инженерный сценарий: после core-cycle запускает Hermes QA и read-only аудит Ouroboros; не M7/Finder entrypoint |
+| `run_full_monitoring_macos.sh` | Legacy entrypoint, который намеренно fail-closed; не использовать для AI или M7 cycle |
 | `run_monitoring_host_macos.sh` | Единственный MacBook M7 entrypoint: `--preflight` проверяет GUI host/Docker/readiness без цикла или Chrome; full mode — один gate-approved cycle |
-| `register_monitoring_launchagent_macos.sh` | Plan-only per-user LaunchAgent registrar; требуется явный `--apply` |
+| `register_monitoring_launchagent_macos.sh` | Plan-only per-user LaunchAgent registrar; future gate, не подтверждённое расписание |
 | `hermes_maintenance_macos.sh` | Изолированный исполнитель Hermes для инженерного контура |
 | `run_ouroboros_maintenance_macos.sh` | Запускает Ouroboros с проектным HOME и отключённой телеметрией |
 | `check_full_system_macos.sh` | Проверяет приложение, инструменты, модель, checksum и локальный endpoint |
@@ -87,9 +87,9 @@ approval один controlled cycle запускается из Terminal чере
 ./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
 ```
 
-Отдельный `run_full_monitoring_macos.sh` запускает после core-cycle
-последовательные data/vision/synthesis-этапы Hermes и read-only аудит Ouroboros;
-это инженерный сценарий, не часть M7 acceptance. Для инженерных задач Ouroboros
+`run_full_monitoring_macos.sh` намеренно отказывается. Для инженерных задач
+Hermes/Ouroboros используются отдельные offline-инструменты над сохранёнными
+evidence; они не являются частью M7 acceptance. Для инженерных задач Ouroboros
 использует отдельный HOME и отдельные git-worktree. Первый диагностический вызов
 без изменения кода:
 
@@ -104,8 +104,9 @@ approval один controlled cycle запускается из Terminal чере
 
 ## Плановый запуск в активной macOS-сессии — отдельный gate
 
-Container scheduler не управляет видимым Chrome, поэтому
-`SCHEDULER_ENABLED` остаётся `false`. В целевой static-only схеме
+Container scheduler не управляет видимым Chrome, поэтому допускается только
+`SCHEDULER_ENABLED=false`: значение `true` отвергается во всех окружениях. В
+целевой static-only схеме
 `run_monitoring_host_macos.sh` выполняет один cautious cycle, а
 `register_monitoring_launchagent_macos.sh` создаёт per-user GUI LaunchAgent
 `com.silvercatsc.a1monitoring.interactive-cycle`.
@@ -116,10 +117,10 @@ Container scheduler не управляет видимым Chrome, поэтом�
 ./scripts/register_monitoring_launchagent_macos.sh --at 09:00
 ```
 
-Только после ручного review и отдельного разрешения используется `--apply`.
 Регистрация сама не запускает marketplace cycle. LaunchAgent не должен быть
 `LaunchDaemon`, не работает как обход lock screen/CAPTCHA, использует
 `RunAtLoad=false` и `KeepAlive=false`, а `partial` не повторяет автоматически.
+`local_scan.py --watch` и `make watch` намеренно отказываются.
 Это описание планируемого контракта, не заявление о выполненной регистрации или
 живом тесте. Полный gate —
 [MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).

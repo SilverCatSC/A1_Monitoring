@@ -19,6 +19,8 @@ from urllib.request import Request, urlopen
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = PROJECT_ROOT / 'artifacts' / 'local_chrome_profile'
 DEFAULT_EVIDENCE = PROJECT_ROOT / 'artifacts' / 'evidence'
+DEFAULT_VPN_ADMISSION = PROJECT_ROOT / 'artifacts' / 'vpn_admission' / 'attestation.json'
+HOST_RUNNER_CONTEXT_ENV = 'A1_MONITORING_HOST_RUNNER_CONTEXT'
 PACING_PROFILES = {
     'normal': {
         'SCAN_FILTER_PAUSE_MIN_SECONDS': '2',
@@ -149,6 +151,9 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     os.environ['SCAN_ENABLED_ENGINES'] = args.engines
     os.environ['SCAN_PAGES_LIMIT'] = str(args.pages)
     os.environ['EVIDENCE_DIR'] = str(evidence_dir)
+    # The host runner owns this file outside the writable evidence directory.
+    # A web-container API cannot opt into host-browser admission by itself.
+    os.environ['VPN_ADMISSION_PATH'] = str(DEFAULT_VPN_ADMISSION)
     for key, value in PACING_PROFILES[args.pace].items():
         os.environ[key] = value
 
@@ -162,6 +167,53 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
             f'{quote_plus(password)}@127.0.0.1:{port}/a1_search_monitor'
         )
     return cdp_url
+
+
+def _require_vpn_admission() -> None:
+    """Fail before Chrome or a DB context unless the local admission is fresh."""
+    from app.service.vpn_admission import require_vpn_admission
+
+    admission = require_vpn_admission(DEFAULT_VPN_ADMISSION)
+    print(f'VPN_ADMISSION_OK expires_at_utc={admission.expires_at_utc.isoformat().replace("+00:00", "Z")}')
+
+
+def _prepare_vpn_admission_directory() -> None:
+    from app.service.vpn_admission import prepare_attestation_directory
+
+    prepare_attestation_directory(DEFAULT_VPN_ADMISSION.parent)
+
+
+def _require_interactive_host_runner_context() -> None:
+    """Reject direct host scans that bypass an accepted interactive runner."""
+    if sys.platform == 'win32':
+        raise RuntimeError(
+            'Windows full monitoring is not accepted; use the MacBook production host'
+        )
+    if sys.platform != 'darwin':
+        return
+    if os.environ.get(HOST_RUNNER_CONTEXT_ENV) != '1':
+        raise RuntimeError('full monitoring requires run_monitoring_host_macos.sh')
+    _require_verified_host_lock_context()
+    os.environ['LOCAL_BROWSER_HOST_ADMISSION'] = 'true'
+
+
+def _require_verified_host_lock_context() -> None:
+    """Bind the host-child process to the runner's inherited kernel lock.
+
+    The marker blocks accidental direct entry points; the inherited descriptor
+    additionally proves that this child owns the same lock as the Mac runner.
+    It is not a hostile-same-user security boundary, but it prevents a normal
+    shell invocation from silently becoming a second full browser cycle.
+    """
+    from app.service.host_runner_context import (
+        HostRunnerContextError,
+        require_verified_macos_host_runner_context,
+    )
+
+    try:
+        require_verified_macos_host_runner_context()
+    except HostRunnerContextError as exc:
+        raise RuntimeError('full monitoring requires the verified MacBook host lock') from exc
 
 
 async def _probe(url: str, pages: int) -> dict:
@@ -190,6 +242,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument('--engines', default='auto_ru,avito')
     parser.add_argument('--pages', type=int, default=3, choices=range(1, 11), metavar='1..10')
     parser.add_argument('--probe-url', help='Check one search URL without writing observations to the DB')
+    parser.add_argument(
+        '--retry-cycle',
+        help='Start one explicit retry for a completed partial/failed cycle; never combine with --watch.',
+    )
     parser.add_argument('--cdp-port', type=int, default=19222)
     parser.add_argument('--browser-profile', default=str(DEFAULT_PROFILE))
     parser.add_argument('--evidence-dir', default=str(DEFAULT_EVIDENCE))
@@ -211,6 +267,22 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
+    # Windows/MSI is deliberately source-only fallback material after the
+    # MacBook primary-host decision. Reject even the read-only probe path here
+    # because this raw Python entry point could otherwise bypass its PowerShell
+    # wrappers and make live marketplace traffic from an unaccepted host.
+    if sys.platform == 'win32':
+        raise RuntimeError('Windows monitoring is not accepted; use the MacBook production host')
+    if args.retry_cycle and args.probe_url:
+        raise RuntimeError('retry-cycle cannot be combined with probe-url')
+    if args.retry_cycle and args.watch:
+        raise RuntimeError('retry-cycle cannot be combined with watch')
+    if args.watch:
+        raise RuntimeError(
+            'recurring monitoring is not accepted; use a reviewed MacBook LaunchAgent after M7 acceptance'
+        )
+    if not args.probe_url:
+        _require_interactive_host_runner_context()
     env_values = _env_file_values(PROJECT_ROOT / '.env')
     cdp_url = _configure_runtime(args, env_values)
     if args.probe_url:
@@ -245,6 +317,7 @@ def main() -> int:
         print(f'LOCAL_PROBE_BLOCKED error={payload["error"]}')
         return 2
 
+    _prepare_vpn_admission_directory()
     from app.db import get_db_context
     from app.service.cycle import MonitoringCycleService
     from app.service.scan_progress import ScanProgressTracker
@@ -260,9 +333,19 @@ def main() -> int:
         print('LOCAL_CHROME_STARTED' if started else 'LOCAL_CHROME_REUSED')
         print(f'LOCAL_SCAN_PACE {args.pace}')
     while True:
+        # Recheck immediately before the DB-writing cycle. Probe mode remains
+        # deliberately outside this full-cycle admission boundary.
+        _require_vpn_admission()
         with get_db_context() as db:
             try:
-                result = MonitoringCycleService(db, progress_callback=progress, before_browser=start_browser).run()
+                service = MonitoringCycleService(
+                    db, progress_callback=progress, before_browser=start_browser
+                )
+                result = (
+                    service.retry(args.retry_cycle)
+                    if args.retry_cycle
+                    else service.run()
+                )
             except Exception as exc:
                 print(f'LOCAL_CYCLE_FAILED {type(exc).__name__}: {exc}', file=sys.stderr)
                 return 1

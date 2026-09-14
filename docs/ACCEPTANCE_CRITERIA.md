@@ -4,6 +4,9 @@
 > означают закрытие текущего M7: для production используйте
 > [M7 acceptance runbook](production/ACCEPTANCE_M7.md), где нужны свежие
 > evidence, целевые устройства и owner decision.
+> Current host contract additionally supersedes the old direct `/scan` model:
+> only the Mac host runner with valid VPN admission and inherited host-lock FD can
+> create a marketplace cycle; `cloud_no_vpn`, `local_no_vpn` and `local_vpn` cannot.
 
 ## 1. Локальный исполнитель
 
@@ -49,7 +52,9 @@
 - [x] Терминал и dashboard показывают площадку, фильтр и страницу текущего прогона.
 - [ ] Карточечные снимки и номера страниц подтверждены владельцем на живом прогоне.
 - [ ] Бизнес-метрика видимости исключает технически неизвестные результаты из знаменателя либо явно показывает покрытие.
-- [x] Прямой `/scan` при `local_vpn|unknown` блокируется до создания наблюдений.
+- [x] Прямой `/scan` при любом non-Mac/unadmitted profile, включая
+  `cloud_no_vpn`, `local_no_vpn`, `local_vpn` и `unknown`, блокируется до создания
+  наблюдений; одного boolean/file недостаточно без inherited host-lock FD.
 - [x] Недоверенные VPN-наблюдения не входят в KPI, превью и статистику страниц.
 
 ## 5. Эпизоды непоказа

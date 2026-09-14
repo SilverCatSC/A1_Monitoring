@@ -16,7 +16,7 @@ def _operator_request():
     )
 
 
-@pytest.mark.parametrize('profile', ['unknown', 'local_vpn'])
+@pytest.mark.parametrize('profile', ['unknown', 'local_vpn', 'local_no_vpn', 'cloud_no_vpn'])
 def test_scan_endpoint_rejects_untrusted_profile_before_writes(tmp_path, monkeypatch, profile):
     monkeypatch.setattr('app.service.monitor.settings.network_profile', profile)
     engine = create_engine(f'sqlite:///{tmp_path / "scan-api.db"}')

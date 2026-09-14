@@ -7,10 +7,10 @@ MacBook, а не MSI / Windows 11. Это меняет целевую среду
 **не** является результатом M7-приёмки и не утверждает, что расписание уже
 работает в production.
 
-Windows-скрипты и Windows-инструкция остаются в репозитории как резервный
-портируемый handoff. Их статическая проверка и отсутствие живого MSI-прогона
-не блокируют MacBook acceptance; если Windows снова станет рабочим host, для
-него потребуется отдельная приёмка с нуля.
+Windows-скрипты и Windows-инструкция остаются в репозитории как deliberately
+fail-closed переносимый handoff. Scanner/full/watch/host runner и Task Scheduler
+`-Apply` отказываются и не блокируют MacBook acceptance; если Windows снова
+станет рабочим host, для него потребуется отдельное решение и приёмка с нуля.
 
 ## Целевой MacBook-контур
 
@@ -23,8 +23,8 @@ Windows-скрипты и Windows-инструкция остаются в ре�
 - VPSUS остаётся включённым. ChatGPT/Codex и Auto.ru/Avito проверяются только по
   согласованному split-tunnel, без отключения VPN, reconnect или изменения bypass
   правил без отдельного решения владельца;
-- `SCHEDULER_ENABLED=false` в web-контейнере: контейнер не получает доступ к
-  GUI-сессии, профилю Chrome и состоянию VPSUS.
+- только `SCHEDULER_ENABLED=false`: `true` отвергается во всех окружениях;
+  контейнер не получает доступ к GUI-сессии, профилю Chrome и состоянию VPSUS.
 
 Подтверждённые stage-facts и незакрытые границы зафиксированы в
 [stage gate](STAGE_GATE_2026-09-14.md),
@@ -37,7 +37,8 @@ Windows-скрипты и Windows-инструкция остаются в ре�
 Планируемая, но ещё не принятая автоматизация состоит из двух macOS-скриптов:
 
 - `scripts/run_monitoring_host_macos.sh` — ровно один cautious cycle через
-  видимый host Chrome, без вложенного `--watch`;
+  видимый host Chrome, без вложенного `--watch`; central cycle принимает только
+  его inherited Mac host-lock FD, а не один environment flag;
 - `scripts/register_monitoring_launchagent_macos.sh` — per-user GUI
   `LaunchAgent` `com.silvercatsc.a1monitoring.interactive-cycle` с ежедневным
   `StartCalendarInterval`, `RunAtLoad=false` и `KeepAlive=false`.
@@ -89,17 +90,22 @@ VPSUS/browser route, controlled cycle, TCC/Desktop результат и owner r
 перед применением LaunchAgent. Не интерпретировать этот короткий preflight как
 проверку Chrome, VPN или production scheduler.
 
-До отдельного MacBook gate оператор использует только ручной one-cycle запуск;
-`local_scan.sh --watch` остаётся foreground-loop открытого Terminal и не
-считается production scheduler. Нельзя запускать `--watch`, host-runner и
-container scheduler одновременно.
+До отдельного MacBook gate оператор использует только ручной one-cycle запуск.
+`local_scan.sh`, `local_scan.py --watch` и `make watch` намеренно отказываются;
+они не являются production scheduler или запасным entrypoint.
+
+Host runner удерживает kernel lock и передаёт проверяемый inherited Mac host-lock
+FD своему child. Это operational защита от случайного прямого/container запуска,
+а не hostile-security доказательство против того же GUI-пользователя: один
+`LOCAL_BROWSER_HOST_ADMISSION=true` или локальный файл не открывают cycle.
 
 ## Что нужно подтвердить до включения расписания
 
 1. VPSUS split-tunnel в обычном Chrome для ChatGPT, Auto.ru и Avito без изменения
    VPN-конфигурации.
 2. Один ручной MacBook controlled cycle с видимым Chrome и разбором результата.
-3. Отсутствие другого worker и `SCHEDULER_ENABLED=false`.
+3. Отсутствие другого worker и подтверждение, что `SCHEDULER_ENABLED=true`
+   отвергается; допускается только `false`.
 4. Plan-only проверка LaunchAgent и явный owner review перед `--apply`.
 5. После первого trigger — один cycle ID, privacy-safe status/log и отсутствие
    параллельного запуска; `partial` не повторяется автоматически.

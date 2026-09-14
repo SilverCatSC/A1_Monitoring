@@ -97,36 +97,44 @@ Monitoring/
 └── requirements.lock
 ```
 
-Главная точка запуска браузерного мониторинга — [scripts/local_scan.py](../scripts/local_scan.py). Полный канонический исходный код подключён именно этой ссылкой, чтобы приложение и документация не расходились при следующем изменении. Ниже приведён его публичный интерфейс и алгоритм.
+Единственная точка запуска marketplace-cycle —
+[scripts/run_monitoring_host_macos.sh](../scripts/run_monitoring_host_macos.sh) на
+MacBook. [scripts/local_scan.py](../scripts/local_scan.py) — его guarded internal
+child: прямой запуск, `--watch` и `make watch` отказываются. Central cycle требует
+и VPN admission, и проверяемый inherited Mac host-lock FD; один environment flag
+или файл недостаточны. Это operational anti-accidental boundary, не hostile-
+security proof против того же локального пользователя.
 
 ## 5. Принцип работы по этапам
 
 ```mermaid
 flowchart TD
-    A[Запуск local_scan.py] --> B[Чтение .env и параметров]
-    B --> C[Видимый Chrome через CDP]
-    C --> D[Импорт свежего Monitoring]
-    D --> E{Импорт безопасен?}
-    E -- Нет --> X[Карантин и остановка]
-    E -- Да --> F[Фильтры и назначения]
-    F --> G[Каталоги продавца Auto.ru/Avito]
-    G --> H{ID подтверждён?}
-    H -- Нет --> I[Сверка старой ссылки и очередь review]
-    H -- Да --> J[Первые 3 страницы каждого фильтра]
-    I --> J
-    J --> K[Сохранить ID, страницу, цену, фильтр и снимок]
-    K --> L[Открыть прямые карточки]
-    L --> M[Статус, цена, VIN, год, наличие, НДС, screenshot]
-    M --> N[История и дашборд]
-    N --> O[Отдельные аудиты сайта и таблицы]
-    O --> P[Hermes: поля/изображение]
-    P --> Q[Ouroboros: полнота и противоречия]
-    Q --> R[Ручное решение менеджера по спорным случаям]
+    A[Mac host runner] --> B[GUI/VPN/host-lock admission]
+    B --> C[Guarded local_scan.py]
+    C --> D[Видимый Chrome через CDP]
+    D --> E[Импорт свежего Monitoring]
+    E --> F{Импорт безопасен?}
+    F -- Нет --> X[Карантин и остановка]
+    F -- Да --> G[Фильтры и назначения]
+    G --> H[Каталоги продавца Auto.ru/Avito]
+    H --> I{ID подтверждён?}
+    I -- Нет --> J[Сверка старой ссылки и очередь review]
+    I -- Да --> K[Первые 3 страницы каждого фильтра]
+    J --> K
+    K --> L[Сохранить ID, страницу, цену, фильтр и снимок]
+    L --> M[Открыть прямые карточки]
+    M --> N[Статус, цена, VIN, год, наличие, НДС, screenshot]
+    N --> O[История и дашборд]
+    O -. offline only .-> P[Hermes/Ouroboros над сохранёнными evidence]
 ```
 
 ### Этап 1. Настройка
 
-`local_scan.py` читает `.env`, включает `NETWORK_PROFILE=local_browser`, указывает локальный PostgreSQL, CDP-порт `19222`, видимый Chrome и каталог доказательств. Профиль `cautious` делает длинные паузы: 12–20 секунд между фильтрами и 6–12 секунд между страницами. Это снижает частоту обращений, но не гарантирует отсутствие CAPTCHA.
+Host runner читает admission, удерживает Mac host-lock и запускает внутренний
+`local_scan.py` с `NETWORK_PROFILE=local_browser`, локальным PostgreSQL,
+CDP-портом `19222`, видимым Chrome и каталогом доказательств. Профиль `cautious`
+делает длинные паузы: 12–20 секунд между фильтрами и 6–12 секунд между страницами.
+Это снижает частоту обращений, но не гарантирует отсутствие CAPTCHA.
 
 ### Этап 2. Обновление источника
 
@@ -183,8 +191,9 @@ Hermes получает малое задание на одну машину/к�
 - Положительный критерий «карточка активна» недостаточно строг при новой вёрстке.
 - Аудиты сайта и головной таблицы имеют ограничения по страницам и объёму выборки.
 - Плановый MacBook host-runner/LaunchAgent ещё не принят живым GUI-trigger: его
-  mutex/recovery, один cycle и отсутствие автоматического retry должны быть
-  подтверждены отдельно. Windows Task Scheduler остаётся непринятым fallback.
+  mutex/recovery, inherited host-lock FD, один cycle и отсутствие автоматического
+  retry должны быть подтверждены отдельно. Windows Task Scheduler и live scripts
+  deliberately fail-closed.
 - Полный живой MacBook прогон с подтверждённым VPSUS split-tunnel не принят;
   Windows/MSI проверяется отдельно только при возврате в эксплуатационный scope.
 
@@ -253,26 +262,15 @@ cd /Users/filaret/Desktop/Monitoring
 JSON последнего поиска: http://127.0.0.1:18000/api/v1/status/scans/latest<br>
 Прогресс: http://127.0.0.1:18000/api/v1/status/scans/progress
 
-Расширенный инженерный запуск с аудитами и локальным AI — не M7 entrypoint и
-только после успешного core-cycle:
+`scripts/run_full_monitoring_macos.sh` намеренно fail-closed. Hermes/Ouroboros
+используются отдельно и только над уже сохранёнными evidence; это не M7 entrypoint.
 
-```bash
-./scripts/run_full_monitoring_macos.sh
-```
+### Windows 11 — fail-closed handoff
 
-### Windows 11 — резервный handoff
-
-```powershell
-Set-Location C:\work\A1_Monitoring
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\setup_windows.ps1
-.\scripts\start_windows.ps1 -OpenDashboard
-.\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
-```
-
-Полная инструкция находится в [ENVIRONMENT.md](operations/ENVIRONMENT.md). Это
-не текущий production-путь: на Windows сначала нужен отдельный browser-only
-acceptance, затем Hermes/Ouroboros и модель.
+На Windows допустимы setup/readiness/dashboard, но scanner/full/watch/host runner,
+raw probe и Task Scheduler `-Apply` намеренно отказываются. Они не создают
+marketplace cycle. Полная граница находится в
+[ENVIRONMENT.md](operations/ENVIRONMENT.md).
 
 ## 11. Тестирование и приёмка
 
@@ -325,9 +323,14 @@ aggregate-only страницу после свежего owner allowlist. Ре�
 - [Исходник точки запуска](../scripts/local_scan.py)
 - [Исходник coordinator](../src/app/service/cycle.py)
 
-## Приложение A. Исходный код скрипта запуска мониторинга
+## Приложение A. Исторический листинг прежнего скрипта запуска
 
-Ниже приведён встроенный листинг рабочей точки запуска `scripts/local_scan.py` на дату редакции документа. Точная каноническая копия файла находится по ссылке [scripts/local_scan.py](../scripts/local_scan.py); при изменении скрипта сначала проверяется именно она, чтобы документация не стала источником другой версии.
+Ниже приведён замороженный исторический листинг `scripts/local_scan.py` на дату
+редакции документа. Он **не** определяет текущий entrypoint и не является
+инструкцией запуска. Текущая каноническая реализация доступна по ссылке
+[scripts/local_scan.py](../scripts/local_scan.py), но её `--watch` намеренно
+отказывается; macOS `--probe-url` — только manual non-DB диагностика, не M7/prod
+cycle, а Windows raw probes отказываются.
 
 ```python
 #!/usr/bin/env python3
@@ -586,4 +589,4 @@ if __name__ == '__main__':
         raise SystemExit(1) from exc
 ```
 
-В состав проекта также входит coordinator [src/app/service/cycle.py](../src/app/service/cycle.py), который выполняет полный цикл: импорт Monitoring → сверка кабинетов → поиск → прямые карточки. `local_scan.py` отвечает за CLI, видимый Chrome, pacing, прогресс и вызов coordinator; бизнес-логика намеренно находится в `src/app`, а не в одном монолитном файле.
+В состав проекта также входит coordinator [src/app/service/cycle.py](../src/app/service/cycle.py), который выполняет полный цикл: импорт Monitoring → сверка кабинетов → поиск → прямые карточки. Сегодня его вызывает только Mac host runner через guarded `local_scan.py`, при VPN admission и inherited Mac host-lock FD; бизнес-логика намеренно находится в `src/app`, а не в одном монолитном файле.

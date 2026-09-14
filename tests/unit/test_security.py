@@ -47,14 +47,15 @@ def test_production_refuses_disabled_or_weak_auth():
         validate_security_configuration(
             environment='production', enabled=True, username='admin', password='short'
         )
-    validate_security_configuration(
-        environment='production',
-        enabled=True,
-        username='admin',
-        password='long-random-password',
-        network_profile='cloud_no_vpn',
-        auth_users_json=_production_users_json('operator', 'marketing', 'sales_director'),
-    )
+    with pytest.raises(SecurityConfigurationError, match='accepted MacBook'):
+        validate_security_configuration(
+            environment='production',
+            enabled=True,
+            username='admin',
+            password='long-random-password',
+            network_profile='cloud_no_vpn',
+            auth_users_json=_production_users_json('operator', 'marketing', 'sales_director'),
+        )
     validate_security_configuration(
         environment='production',
         enabled=True,
@@ -106,7 +107,7 @@ def test_app_environment_is_normalized_and_rejects_production_policy_bypasses():
             Settings(APP_ENV=invalid)
 
 
-def test_local_browser_scheduler_requires_verified_host_cdp_architecture():
+def test_container_scheduler_is_rejected_even_with_a_verified_host_cdp_claim():
     base = {
         'environment': 'stage',
         'enabled': False,
@@ -115,34 +116,36 @@ def test_local_browser_scheduler_requires_verified_host_cdp_architecture():
         'network_profile': 'local_browser',
         'scheduler_enabled': True,
     }
-    with pytest.raises(SecurityConfigurationError, match='HOST_CDP_SCHEDULER_VERIFIED'):
+    with pytest.raises(SecurityConfigurationError, match='SCHEDULER_ENABLED=true is not accepted'):
         validate_security_configuration(
             **base,
             browser_cdp_url='http://host.docker.internal:19222',
             host_cdp_scheduler_verified=False,
         )
-    with pytest.raises(SecurityConfigurationError, match='non-loopback'):
+    with pytest.raises(SecurityConfigurationError, match='SCHEDULER_ENABLED=true is not accepted'):
         validate_security_configuration(
             **base,
             browser_cdp_url='http://127.0.0.1:19222',
             host_cdp_scheduler_verified=True,
         )
-    validate_security_configuration(
-        **base,
-        browser_cdp_url='http://host.docker.internal:19222',
-        host_cdp_scheduler_verified=True,
-    )
+    with pytest.raises(SecurityConfigurationError, match='SCHEDULER_ENABLED=true is not accepted'):
+        validate_security_configuration(
+            **base,
+            browser_cdp_url='http://host.docker.internal:19222',
+            host_cdp_scheduler_verified=True,
+        )
 
 
-def test_scheduler_guard_does_not_change_stage_local_vpn_behavior():
-    validate_security_configuration(
-        environment='stage',
-        enabled=False,
-        username=None,
-        password=None,
-        network_profile='local_vpn',
-        scheduler_enabled=True,
-    )
+def test_scheduler_guard_rejects_stage_local_vpn_too():
+    with pytest.raises(SecurityConfigurationError, match='SCHEDULER_ENABLED=true is not accepted'):
+        validate_security_configuration(
+            environment='stage',
+            enabled=False,
+            username=None,
+            password=None,
+            network_profile='local_vpn',
+            scheduler_enabled=True,
+        )
 
 
 def test_configured_roles_are_server_owned_and_require_valid_accounts():

@@ -3,6 +3,8 @@ import json
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 SCRIPT = Path(__file__).parents[2] / 'scripts' / 'local_scan.py'
 SPEC = importlib.util.spec_from_file_location('local_scan_script', SCRIPT)
 assert SPEC and SPEC.loader
@@ -97,7 +99,11 @@ def test_local_scan_reports_cycle_id_before_its_final_status(monkeypatch, capsys
 
     monkeypatch.setattr(local_scan, '_env_file_values', lambda _: {'DB_PASSWORD': 'safe-pass'})
     monkeypatch.setattr(local_scan, '_configure_runtime', lambda *_: 'http://127.0.0.1:19222')
+    monkeypatch.setattr(local_scan, '_prepare_vpn_admission_directory', lambda: None)
+    monkeypatch.setattr(local_scan, '_require_vpn_admission', lambda: None)
+    monkeypatch.setattr(local_scan, '_require_interactive_host_runner_context', lambda: None)
     monkeypatch.setattr(local_scan, '_ensure_local_chrome', lambda *_: False)
+    monkeypatch.setenv('A1_MONITORING_HOST_RUNNER_CONTEXT', '1')
     monkeypatch.setattr('app.db.get_db_context', lambda: Context())
     monkeypatch.setattr('app.service.cycle.MonitoringCycleService', Service)
     monkeypatch.setattr(
@@ -108,3 +114,55 @@ def test_local_scan_reports_cycle_id_before_its_final_status(monkeypatch, capsys
     assert local_scan.main() == 0
     output = capsys.readouterr().out
     assert output.index('LOCAL_CYCLE_ID cycle-1') < output.index('LOCAL_SCAN_OK')
+
+
+def test_local_scan_routes_an_explicit_retry_through_the_cycle_service(monkeypatch, tmp_path):
+    events = []
+    cycle_result = {
+        'scan': {'filters_scanned': 1, 'found': 0, 'missed_confirmed': 0, 'missed_uncertain': 0},
+        'completion': {
+            'status': 'completed', 'technical_errors': 0, 'links_need_review': 0,
+            'direct_cards_incomplete': 0,
+        },
+        'cycle': {'id': 'retry-cycle-1'},
+        'seller_preflight': {},
+        'direct_cards': {},
+    }
+
+    class Context:
+        def __enter__(self):
+            return 'db'
+
+        def __exit__(self, *_):
+            return None
+
+    class Service:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def retry(self, cycle_id):
+            events.append(cycle_id)
+            return cycle_result
+
+        def run(self):
+            pytest.fail('ordinary run must not replace an explicit retry')
+
+    monkeypatch.setattr(local_scan, '_env_file_values', lambda _: {'DB_PASSWORD': 'safe-pass'})
+    monkeypatch.setattr(local_scan, '_configure_runtime', lambda *_: 'http://127.0.0.1:19222')
+    monkeypatch.setattr(local_scan, '_prepare_vpn_admission_directory', lambda: None)
+    monkeypatch.setattr(local_scan, '_require_vpn_admission', lambda: None)
+    monkeypatch.setattr(local_scan, '_require_interactive_host_runner_context', lambda: None)
+    monkeypatch.setattr(local_scan, '_ensure_local_chrome', lambda *_: False)
+    monkeypatch.setenv('A1_MONITORING_HOST_RUNNER_CONTEXT', '1')
+    monkeypatch.setattr('app.db.get_db_context', lambda: Context())
+    monkeypatch.setattr('app.service.cycle.MonitoringCycleService', Service)
+    monkeypatch.setattr(
+        'sys.argv',
+        [
+            'local_scan.py', '--retry-cycle', '11111111-1111-4111-8111-111111111111',
+            '--evidence-dir', str(tmp_path / 'evidence'),
+        ],
+    )
+
+    assert local_scan.main() == 0
+    assert events == ['11111111-1111-4111-8111-111111111111']

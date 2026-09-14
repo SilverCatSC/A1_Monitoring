@@ -48,7 +48,7 @@ Monitoring/
 
 | Ответственность | Файл / функция |
 | --- | --- |
-| Видимый запуск Chrome и цикл | `scripts/local_scan.py`, `_ensure_local_chrome`, `main` |
+| Единственный live entrypoint / видимый Chrome | `scripts/run_monitoring_host_macos.sh`; guarded child `scripts/local_scan.py`, `_ensure_local_chrome`, `main` |
 | Импорт → кабинеты → поиск → карточки | `src/app/service/cycle.py`, `MonitoringCycleService` |
 | Защита импорта и обновление реестра | `src/app/importer/service.py`, `SourceImporter` |
 | Назначение фильтров | `src/app/service/filters.py`, `FilterRegistryService` |
@@ -61,7 +61,8 @@ Monitoring/
 | Сборка AI-пакетов | `scripts/build_live_agent_packet.py`, `build_ai_work_units.py` |
 | Малые задания Hermes | `scripts/run_ai_work_units.py` |
 | Проверка структуры AI-вывода | `scripts/validate_ai_review.py`, `validate_staged_review.py` |
-| Полный цикл ОС | `scripts/run_full_monitoring_macos.sh`, `run_full_monitoring_windows.ps1` |
+| Legacy full-cycle wrappers | `scripts/run_full_monitoring_macos.sh`, `run_full_monitoring_windows.ps1` — намеренно fail-closed |
+| Controlled retry | `Makefile` target `make retry-cycle CYCLE_ID=<UUID>` → Mac host runner |
 | Контекст HTML-отчётов | `src/app/service/report.py` |
 | Офлайн-смета API | `tools/estimate_api_cost.py` |
 

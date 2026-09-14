@@ -88,7 +88,8 @@ partial и failed циклы вместе с `partial_reasons` или ошибк
 Основной production host по текущему решению владельца — MacBook: разработка,
 контролируемая приёмка и будущий интерактивный host-runner выполняются в его
 пользовательской GUI-сессии. Это не отменяет M7-gates и не означает, что
-LaunchAgent уже принят или включён. Windows 11 / MSI остаётся резервным
-портируемым handoff; его статические тесты не заменяют живую приёмку, но больше
-не являются обязательным gate MacBook release. Детали —
+LaunchAgent уже принят или включён. Windows 11 / MSI остаётся deliberately
+fail-closed переносимым handoff: его scanner/full/watch/host runner и Task
+Scheduler `-Apply` не создают marketplace cycle. Его статические тесты не
+заменяют живую приёмку и не являются обязательным gate MacBook release. Детали —
 [MacBook primary-host decision](MACBOOK_PRIMARY_HOST_2026-09-14.md).

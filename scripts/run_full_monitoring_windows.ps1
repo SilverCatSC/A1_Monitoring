@@ -9,6 +9,8 @@ $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 Set-Location $Root
 . (Join-Path $PSScriptRoot 'windows_common.ps1')
+[Console]::Error.WriteLine('MONITORING_SYSTEM_REFUSED reason=windows_fallback_not_accepted')
+exit 64
 $python = Join-Path $Root '.venv312\Scripts\python.exe'
 New-Item -ItemType Directory -Force artifacts | Out-Null
 $log = Join-Path $Root ("artifacts\full_monitoring_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))

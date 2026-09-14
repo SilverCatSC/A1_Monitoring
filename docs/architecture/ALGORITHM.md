@@ -3,41 +3,37 @@
 Срез исходников 14.09.2026, приложение 0.14.0. Карта описывает существующий код;
 предлагаемая архитектура находится в [плане улучшений](../analysis/OPTIMIZATION.md).
 
-## Карта текущего полного цикла
+## Карта текущего MacBook marketplace cycle
 
 ```mermaid
 flowchart TD
-    A[Ручной запуск полного сценария ОС] --> B[local_scan.py: настройки и блокировка цикла]
-    B --> C[Создать MonitoringCycle]
-    C --> D[Чтение Monitoring и проверка входных данных]
-    D --> E{Импорт принят?}
-    E -- Нет --> F[Сохранить диагностику и failed cycle; остановить цикл]
-    E -- Да --> G[Обновить реестр и назначения фильтров]
-    G --> H[Один раз сохранить roster manifest]
-    H --> I[Открыть служебный видимый Chrome]
-    I --> J[Каталоги продавца: Auto.ru cars и LCV; Avito]
-    J --> K{Текущий ID объявления подтверждён?}
-    K -- Нет --> L[Очередь сверки; ограниченная проверка старой ссылки]
-    K -- Да --> M[Поиск по назначенным фильтрам до трёх страниц]
-    L --> N[Неподтверждённые ожидания: technical_error]
-    M --> O{Выдача разобрана полностью в нужном окне?}
-    O -- Нет --> P[technical_error; при блокировке остановить площадку]
-    O -- Да --> Q{ID найден?}
-    Q -- Да --> R[found: страница, позиция, цена и точный card screenshot]
-    Q -- Нет --> S[Непоказ в проверенном окне; серия достоверных пропусков]
-    R --> T[Прямая карточка: screenshot + manifest до статуса]
-    S --> T
-    P --> T
-    N --> T
-    T --> U[Offer queue: цена, НДС, status, ghost/missing]
-    U --> V[Отдельный аудит сайта A1Auto]
-    V --> W[Отдельный аудит таблицы маркетинга]
-    W --> X[Собрать latest-файлы и последние scan runs в AI-пакет]
-    X --> Y[Разбить пакет по автомобилю и снимку]
-    Y --> Z[Hermes Data, Vision; затем краткая Synthesis]
-    Z --> AA[Проверить JSON и связь итогов с малыми findings]
-    AA --> AB[Ouroboros: аудит staged-отчёта]
-    AB --> AC[Сохранить AI-файлы; оператор смотрит отчёт и замечания]
+    A[Gate-approved Mac host runner] --> B[GUI/preflight + VPN attestation + inherited host-lock FD]
+    B --> C{Admission принят?}
+    C -- Нет --> X[Fail closed до Chrome и нового cycle]
+    C -- Да --> D[Guarded internal local_scan.py]
+    D --> E[Создать MonitoringCycle]
+    E --> F[Чтение Monitoring и проверка входных данных]
+    F --> G{Импорт принят?}
+    G -- Нет --> H[Сохранить диагностику и failed cycle; остановить цикл]
+    G -- Да --> I[Обновить реестр и назначения фильтров]
+    I --> J[Один раз сохранить roster manifest]
+    J --> K[Открыть служебный видимый Chrome]
+    K --> L[Каталоги продавца: Auto.ru cars и LCV; Avito]
+    L --> M{Текущий ID объявления подтверждён?}
+    M -- Нет --> N[Очередь сверки; ограниченная проверка старой ссылки]
+    M -- Да --> O[Поиск по назначенным фильтрам до трёх страниц]
+    N --> P[Неподтверждённые ожидания: technical_error]
+    O --> Q{Выдача разобрана полностью в нужном окне?}
+    Q -- Нет --> R[technical_error; при блокировке остановить площадку]
+    Q -- Да --> S{ID найден?}
+    S -- Да --> T[found: страница, позиция, цена и точный card screenshot]
+    S -- Нет --> U[Непоказ в проверенном окне; серия достоверных пропусков]
+    T --> V[Прямая карточка: screenshot + manifest до статуса]
+    U --> V
+    R --> V
+    P --> V
+    V --> W[Offer queue, история и dashboard]
+    W -. отдельный offline workflow .-> Y[Hermes/Ouroboros над сохранёнными evidence]
 ```
 
 Поиск и прямые карточки теперь формируют единый итог цикла: ошибка, неразрешённая
@@ -56,15 +52,21 @@ fixtures описаны в [Evidence contract](../production/EVIDENCE_CONTRACT.m
 
 ## 1. Подготовка
 
-`local_scan.py` читает `.env`, выбирает обе площадки и три страницы, назначает
-`NETWORK_PROFILE=local_browser`, локальный PostgreSQL и каталог доказательств.
+Только `scripts/run_monitoring_host_macos.sh` может начать marketplace cycle.
+Он передаёт внутреннему `local_scan.py` `NETWORK_PROFILE=local_browser`, валидную
+VPN attestation и проверяемый inherited Mac host-lock FD. Прямой `local_scan.py`,
+его `--watch`, `make watch`, container и non-Mac process fail-closed; boolean
+`LOCAL_BROWSER_HOST_ADMISSION` либо файл по отдельности недостаточны. Это
+операционная защита от случайного entrypoint, не hostile-security proof против
+того же локального пользователя. Chrome использует CDP на `127.0.0.1:19222` в
+постоянном отдельном профиле.
 Chrome запускается через CDP на `127.0.0.1:19222` в постоянном отдельном профиле.
 Если endpoint уже доступен, используется существующий браузер; строгой проверки
 владельца endpoint сейчас недостаточно.
 
 В PostgreSQL есть advisory locks полного цикла, сканирования и discovery. Они
-защищают от части параллельных запусков. Весь внешний сценарий с AI под общей
-долговременной блокировкой не находится.
+дополняют удерживаемый Mac host lock и защищают от части параллельных запусков.
+AI выполняется только отдельно над сохранёнными evidence, не как marketplace cycle.
 
 ## 2. Обновление Monitoring
 

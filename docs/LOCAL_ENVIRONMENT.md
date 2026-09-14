@@ -27,12 +27,13 @@ Preflight поднимает локальные app/db/backup и проверя�
 
 Перед ним VPSUS остаётся включённым; ChatGPT/Codex и Auto.ru/Avito проверяются
 по согласованному split-tunnel без отключения VPN или изменения правил.
-`SCHEDULER_ENABLED=false`: контейнер не заменяет host Chrome.
+`SCHEDULER_ENABLED` может быть только `false`: `true` отвергается во всех
+окружениях, а контейнер не заменяет host Chrome.
 
-`local_scan.sh --watch` — низкоуровневый инженерный foreground-loop Terminal, не
-MacBook production entrypoint. Будущая автоматизация должна быть per-user GUI LaunchAgent через
-`register_monitoring_launchagent_macos.sh`, плановой по умолчанию и с явным
-`--apply`; она поставлена static-only и не заявлена живо принятой. Отдельно
+`local_scan.sh`, `local_scan.py --watch` и `make watch` намеренно отказываются и
+не являются MacBook production entrypoint. Будущая автоматизация должна быть
+per-user GUI LaunchAgent через `register_monitoring_launchagent_macos.sh`,
+plan-only до отдельного owner gate. Отдельно
 проверяются TCC/Desktop-доступ, активный console GUI user и поведение на lock
 screen; permissions не выдаются автоматически. Подробнее:
 [MacBook primary-host decision](production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
@@ -76,38 +77,12 @@ Python 3.12 и Google Chrome. Скрипт создаёт `.venv312`, устан
 .\scripts\start_windows.ps1 -OpenDashboard
 ```
 
-Если Windows снова войдёт в scope, живой мониторинг выполняется после подтверждения VPSUS split-tunnel: VPN и
-ChatGPT/Codex остаются включёнными, а Auto.ru/Avito открываются в отдельном Chrome
-профиле по approved direct browser rules:
-
-```powershell
-.\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
-```
-
-Полный последовательный цикл с освобождением памяти перед локальной моделью:
-
-```powershell
-.\scripts\run_full_monitoring_windows.ps1
-```
-
-Ручной foreground-повтор каждые шесть часов после завершения прошлого цикла:
-
-```powershell
-.\scripts\local_scan_windows.ps1 -Watch -IntervalMinutes 360 -Pace cautious
-```
-
-`--watch` не является Windows-службой: он требует открытого терминала и не может
-работать параллельно с host-runner/Task Scheduler. Запускатель использует видимый
-Chrome, `NETWORK_PROFILE=local_browser`, loopback CDP и отдельный
-`artifacts/local_chrome_profile`. CAPTCHA остаётся ручным событием; 401/403/429,
-таймаут и неизвестная выдача сохраняются как technical error.
-
-После отдельной ручной MSI-приёмки и owner review fallback-расписание использует ровно один
-`run_monitoring_host_windows.ps1` на trigger. План
-`register_monitoring_task_windows.ps1 -At HH:mm` без `-Apply` только описывает
-`\A1Monitoring\InteractiveCycle`; `-Apply` отдельно регистрирует интерактивную
-задачу с mutex, `MultipleInstances=IgnoreNew` и `RestartCount=0`. Это M7 gate,
-а не доказательство принятого Windows runtime.
+Windows не может сейчас стать live host даже после локальной установки:
+`local_scan_windows.ps1`, `run_full_monitoring_windows.ps1`, `-Watch`,
+`run_monitoring_host_windows.ps1` и Task Scheduler `-Apply` намеренно
+fail-closed. Они не создают marketplace cycle. Сохраняется только переносимый
+setup/readiness/dashboard handoff; возврат Windows в scope требует нового
+решения владельца и отдельной приёмки.
 
 Остановка сервисов без удаления данных:
 
@@ -184,19 +159,18 @@ DB_PASSWORD. Пароль не печатается. Для существующ
 Стандартные порты: Web 127.0.0.1:18000, PostgreSQL 127.0.0.1:15433, Chrome CDP
 127.0.0.1:19222. Хост-worker задаёт DATABASE_DSN на loopback, контейнер использует db:5432.
 AUTH_ENABLED=false допустим только при этих локальных bind-адресах.
-SCHEDULER_ENABLED=false предотвращает фоновые обращения контейнера к площадкам и
-не заменяет интерактивный host Chrome runner.
+Только `SCHEDULER_ENABLED=false` допускается: `true` отвергается во всех
+окружениях и не заменяет интерактивный host Chrome runner.
 
 ## Каждый день
 
 «Открыть дашборд.command» поднимает приложение и открывает отчёт только если
 его executable-bit прошёл preflight выше.
-«Запустить мониторинг.command» выполняет осторожный общий запуск с импортом
-источника, сверкой каталогов продавца и журналом; caffeinate удерживает компьютер
-от idle sleep на время процесса.
+«Запустить мониторинг.command» выполняет только readiness-only preflight и
+открывает dashboard; он не создаёт marketplace cycle.
 Эти файлы лежат в корне проекта на рабочем столе. Требуется активная сессия macOS.
-`--watch` и будущий LaunchAgent не запускаются одновременно; регистрация
-LaunchAgent не выполняет marketplace scan.
+`--watch` намеренно отказывается; будущий LaunchAgent, если будет принят,
+не выполняет marketplace scan при регистрации.
 
 Источник: SOURCE_GOOGLE_SHEET_EXPORT_URL, текущий gid=755848469. «Monitoring» в
 интерфейсе обозначает локальный реестр; программа не запускает Apps Script для

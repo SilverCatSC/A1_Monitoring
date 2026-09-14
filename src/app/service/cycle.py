@@ -11,6 +11,10 @@ from app.service.completion import summarize_cycle_completion
 from app.service.cycle_ledger import CycleLedgerService
 from app.service.evidence import cleanup_evidence
 from app.service.filters import FilterRegistryService
+from app.service.host_runner_context import (
+    HostRunnerContextError,
+    require_verified_macos_host_runner_context,
+)
 from app.service.locks import operation_lock
 from app.service.monitor import (
     MonitorService,
@@ -19,6 +23,7 @@ from app.service.monitor import (
     validate_scan_sources,
 )
 from app.service.reconciliation import SellerReconciliationService
+from app.service.vpn_admission import VPNAdmissionError, require_vpn_admission
 
 
 class CycleConfigurationError(RuntimeError):
@@ -52,6 +57,47 @@ def refresh_monitoring_source(db: Session, cycle_id: str | None = None) -> dict:
     }
 
 
+def require_local_browser_vpn_admission() -> None:
+    """Require a current host-owned admission record before a local Chrome cycle.
+
+    The verifier deliberately does not probe, change, or reconnect VPSUS.  It
+    only admits a cycle after a separately collected, short-lived owner
+    attestation is available through the configured private host path.
+    """
+    if settings.network_profile != 'local_browser':
+        return
+    if not settings.local_browser_host_admission:
+        raise ScanConfigurationError(
+            'local_browser monitoring must be started by the approved interactive host runner'
+        )
+    try:
+        require_verified_macos_host_runner_context()
+    except HostRunnerContextError as exc:
+        raise ScanConfigurationError(
+            'local_browser monitoring must be started by the approved interactive host runner'
+        ) from exc
+    try:
+        require_vpn_admission(settings.vpn_admission_path)
+    except VPNAdmissionError as exc:
+        raise ScanConfigurationError(
+            'local_browser monitoring requires a current VPN admission attestation'
+        ) from exc
+
+
+def require_macos_primary_monitoring_profile() -> None:
+    """Admit marketplace work only from the selected MacBook execution model.
+
+    Legacy profile labels remain readable for historical reporting, but they
+    must not silently become a new browser worker after the owner selected the
+    MacBook interactive host as the sole accepted production runtime.
+    """
+    if settings.network_profile != 'local_browser':
+        raise ScanConfigurationError(
+            'MacBook primary monitoring requires NETWORK_PROFILE=local_browser; '
+            f'current={settings.network_profile}'
+        )
+
+
 class MonitoringCycleService:
     def __init__(self, db: Session, progress_callback=None, before_browser=None):
         self.db = db
@@ -59,11 +105,13 @@ class MonitoringCycleService:
         self.before_browser = before_browser
 
     def run(self, *, retry_of_cycle_id: str | None = None) -> dict:
+        require_macos_primary_monitoring_profile()
         if settings.network_profile not in SCAN_ALLOWED_NETWORK_PROFILES:
             raise ScanConfigurationError(f'scan requires a trusted local profile; current={settings.network_profile}')
         if not settings.browser_cdp_url:
             raise ScanConfigurationError('Полный мониторинг требует видимого локального Chrome. Используйте scripts/local_scan.sh.')
         validate_scan_sources()
+        require_local_browser_vpn_admission()
         with cycle_lock(self.db):
             ledger = CycleLedgerService(self.db)
             cycle = (

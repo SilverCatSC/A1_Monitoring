@@ -18,22 +18,72 @@ import sys
 from pathlib import Path
 
 
-def parse_args() -> tuple[Path, list[str]]:
+def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--lock-path', required=True)
+    parser.add_argument(
+        '--verify-inherited-fd',
+        type=int,
+        help='Validate/acquire the lock on one already inherited descriptor.',
+    )
     parser.add_argument('command', nargs=argparse.REMAINDER)
     args = parser.parse_args()
+    if args.verify_inherited_fd is not None:
+        if args.command:
+            print('HOST_RUNNER_LOCK_FAILED reason=verification_does_not_accept_command', file=sys.stderr)
+            raise SystemExit(64)
+        return args
     command = args.command
     if command[:1] == ['--']:
         command = command[1:]
     if not command:
         print('HOST_RUNNER_LOCK_FAILED reason=command_required', file=sys.stderr)
         raise SystemExit(64)
-    return Path(args.lock_path), command
+    args.command = command
+    return args
+
+
+def verify_inherited_lock(lock_path: Path, fd: int) -> int:
+    """Verify that ``fd`` names this runner's lock and holds/acquires it.
+
+    The shell runner must never trust an ambient environment variable as proof
+    of a lock.  A genuine helper-exec descriptor references the same open file
+    description and passes this check.  A forged descriptor either refers to a
+    different object or cannot acquire the lock while another runner owns it.
+    """
+    if fd < 3:
+        print('HOST_RUNNER_LOCK_FAILED reason=inherited_fd_invalid', file=sys.stderr)
+        return 1
+    try:
+        expected = lock_path.stat()
+        actual = os.fstat(fd)
+    except OSError:
+        print('HOST_RUNNER_LOCK_FAILED reason=inherited_fd_unavailable', file=sys.stderr)
+        return 1
+    if (
+        not os.path.isfile(lock_path)
+        or actual.st_dev != expected.st_dev
+        or actual.st_ino != expected.st_ino
+    ):
+        print('HOST_RUNNER_LOCK_FAILED reason=inherited_fd_mismatch', file=sys.stderr)
+        return 1
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError as exc:
+        if exc.errno in {errno.EACCES, errno.EAGAIN}:
+            print('HOST_RUNNER_LOCK_FAILED reason=inherited_fd_not_locked', file=sys.stderr)
+            return 1
+        print('HOST_RUNNER_LOCK_FAILED reason=kernel_lock_unavailable', file=sys.stderr)
+        return 1
+    return 0
 
 
 def main() -> int:
-    lock_path, command = parse_args()
+    args = parse_args()
+    lock_path = Path(args.lock_path)
+    if args.verify_inherited_fd is not None:
+        return verify_inherited_lock(lock_path, args.verify_inherited_fd)
+    command = args.command
     try:
         lock_path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
         fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)

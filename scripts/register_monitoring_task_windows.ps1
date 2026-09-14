@@ -125,6 +125,9 @@ if (-not $Apply) {
     exit 0
 }
 
+[Console]::Error.WriteLine('TASK_REGISTRATION_REFUSED reason=windows_fallback_not_accepted')
+exit 64
+
 foreach ($commandName in @(
     'New-ScheduledTaskAction', 'New-ScheduledTaskTrigger', 'New-ScheduledTaskSettingsSet',
     'New-ScheduledTaskPrincipal', 'Register-ScheduledTask'

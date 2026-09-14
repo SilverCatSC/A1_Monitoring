@@ -1,3 +1,4 @@
+import os
 import stat
 import subprocess
 import sys
@@ -156,7 +157,23 @@ def test_windows_host_runner_requires_interactive_desktop_and_is_single_cycle():
     )
     assert "$Pace = 'cautious'" in runner
     assert "'-Pace' $Pace" in runner
+    assert 'HOST_RUNNER_REFUSED reason=windows_fallback_not_accepted' in runner
     assert 'HOST_RUNNER_PARTIAL: no automatic retry was started.' in runner
+
+
+def test_windows_fallback_entrypoints_fail_closed_until_separate_acceptance():
+    root = Path(__file__).resolve().parents[2]
+    local_scan = (root / 'scripts' / 'local_scan_windows.ps1').read_text(encoding='utf-8')
+    full_run = (root / 'scripts' / 'run_full_monitoring_windows.ps1').read_text(encoding='utf-8')
+
+    assert 'LOCAL_SCAN_REFUSED reason=windows_fallback_not_accepted' in local_scan
+    assert 'MONITORING_SYSTEM_REFUSED reason=windows_fallback_not_accepted' in full_run
+    assert local_scan.index('windows_fallback_not_accepted') < local_scan.index(
+        "Invoke-A1Native 'docker'"
+    )
+    assert full_run.index('windows_fallback_not_accepted') < full_run.index(
+        "scripts/local_scan.py"
+    )
 
 
 def test_windows_task_registration_is_plan_only_and_never_autostarts_scan():
@@ -183,6 +200,9 @@ def test_windows_task_registration_is_plan_only_and_never_autostarts_scan():
     assert '-MultipleInstances IgnoreNew -RestartCount 0' in registrar
     assert 'Start-ScheduledTask' not in registrar
     assert '--watch' not in registrar
+    assert registrar.index('windows_fallback_not_accepted') < registrar.index(
+        'Ensure-A1TaskFolder -Path $TaskPath'
+    )
 
 
 def test_macos_host_runner_requires_visible_console_and_uses_kernel_lock():
@@ -198,6 +218,8 @@ def test_macos_host_runner_requires_visible_console_and_uses_kernel_lock():
     assert 'screen_locked_or_state_unavailable' in runner
     assert runner.count('require_console_gui_user') >= 3
     assert 'with_monitoring_host_lock_macos.py' in runner
+    assert 'LOCK_CONTEXT_REQUESTED' in runner
+    assert '--verify-inherited-fd' in runner
     assert 'HOST_RUNNER_SKIPPED_ACTIVE' in (
         root / 'scripts' / 'with_monitoring_host_lock_macos.py'
     ).read_text(encoding='utf-8')
@@ -213,6 +235,51 @@ def test_macos_host_runner_requires_visible_console_and_uses_kernel_lock():
     assert '--watch' not in runner
     assert '/usr/bin/mktemp' in runner
     assert '/bin/mv -f' in runner
+
+
+def test_macos_lock_helper_validates_inherited_descriptor_identity(tmp_path):
+    if fcntl is None:
+        pytest.skip('fcntl lock semantics are verified on POSIX hosts only')
+
+    root = Path(__file__).resolve().parents[2]
+    helper = root / 'scripts' / 'with_monitoring_host_lock_macos.py'
+    lock_path = tmp_path / 'runner.lock'
+    wrong_path = tmp_path / 'wrong.lock'
+    lock_path.touch()
+    wrong_path.touch()
+    inherited_fd = os.open(lock_path, os.O_RDWR)
+    wrong_fd = os.open(wrong_path, os.O_RDWR)
+    try:
+        fcntl.flock(inherited_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        os.set_inheritable(inherited_fd, True)
+        os.set_inheritable(wrong_fd, True)
+        valid = subprocess.run(
+            [
+                sys.executable, str(helper), '--lock-path', str(lock_path),
+                '--verify-inherited-fd', str(inherited_fd),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            pass_fds=(inherited_fd,),
+        )
+        forged = subprocess.run(
+            [
+                sys.executable, str(helper), '--lock-path', str(lock_path),
+                '--verify-inherited-fd', str(wrong_fd),
+            ],
+            check=False,
+            capture_output=True,
+            text=True,
+            pass_fds=(wrong_fd,),
+        )
+    finally:
+        os.close(inherited_fd)
+        os.close(wrong_fd)
+
+    assert valid.returncode == 0
+    assert forged.returncode == 1
+    assert 'inherited_fd_mismatch' in forged.stderr
 
 
 def test_macos_lock_helper_skips_an_active_runner_and_releases_after_exec(tmp_path):

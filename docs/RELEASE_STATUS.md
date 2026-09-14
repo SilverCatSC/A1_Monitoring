@@ -9,6 +9,11 @@
 инструкцией: текущий route contract требует сохранить VPSUS и ChatGPT/Codex,
 подтвердив split-tunnel для Auto.ru и Avito по
 [M7 acceptance](production/ACCEPTANCE_M7.md#gate-1--vpsus-split-tunnel).
+Текущий full-cycle/retry entrypoint — только MacBook host runner (retry через
+`make retry-cycle CYCLE_ID=<UUID>`); `local_scan`/watch/full wrappers и Windows
+live scripts не являются допустимыми заменами. Новый cycle additionally requires
+valid VPN admission и inherited Mac host-lock FD; это supersedes historical
+profile/scheduler wording ниже.
 
 Исторический срез: 10 сентября 2026 года. Версия stage в этом срезе: `0.9.0`.
 

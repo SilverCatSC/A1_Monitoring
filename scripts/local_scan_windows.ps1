@@ -20,6 +20,11 @@ $env:PYTHONUNBUFFERED = '1'
 $Python = Join-Path $Root '.venv312\Scripts\python.exe'
 if (-not (Test-Path $Python)) { throw 'Окружение не найдено. Выполните .\scripts\setup_windows.ps1.' }
 
+# Windows/MSI is an explicitly unaccepted fallback. Do not let a manually
+# created local file turn an unaccepted static path into a production scan.
+[Console]::Error.WriteLine('LOCAL_SCAN_REFUSED reason=windows_fallback_not_accepted')
+exit 64
+
 Invoke-A1Native 'docker' @('compose', 'up', '-d', 'db', 'backup')
 $arguments = @('scripts/local_scan.py', '--engines', $Engines, '--pages', $Pages, '--pace', $Pace)
 if ($Watch) { $arguments += @('--watch', '--interval-minutes', $IntervalMinutes) }

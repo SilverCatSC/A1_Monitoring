@@ -112,9 +112,10 @@ Drom и новый сайт не подключались. Fixtures доказы
 ## M6.1 реализован в коде: controlled retry и операции
 
 Новый retry запускает **новый** цикл с `retry_of_cycle_id`: он не может
-дописать новые факты к старому roster manifest. В system status видны активные,
-retryable и недавние failed циклы; scheduler coalesces пропуски и не допускает
-параллельных запусков. Детали — [M6 Operations](OPERATIONS.md).
+дописать новые факты к старому roster manifest. Операторский retry идёт только
+через `make retry-cycle CYCLE_ID=<UUID>` и Mac host runner; scheduler не является
+альтернативой и `SCHEDULER_ENABLED=true` отвергается. Детали —
+[M6 Operations](OPERATIONS.md).
 
 M6 остаётся открытым до проверенных backup/restore, publication allowlist и
 целевой runtime-приёмки. Офлайн-test не считается восстановлением production.

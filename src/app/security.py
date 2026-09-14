@@ -6,8 +6,6 @@ import hmac
 import json
 from dataclasses import dataclass
 
-from app.config import is_non_loopback_cdp_url
-
 
 class SecurityConfigurationError(RuntimeError):
     pass
@@ -130,26 +128,15 @@ def validate_security_configuration(
             'production requires AUTH_ENABLED=true, admin/operator/marketing/sales_director roles, '
             'and 16+ character passwords for all users'
         )
-    if environment == 'production' and network_profile not in {
-        'local_browser',
-        'cloud_no_vpn',
-    }:
+    if environment == 'production' and network_profile != 'local_browser':
         raise SecurityConfigurationError(
-            'production requires NETWORK_PROFILE=local_browser or cloud_no_vpn '
+            'production requires the accepted MacBook NETWORK_PROFILE=local_browser '
             'after connectivity verification'
         )
-    if (
-        scheduler_enabled
-        and network_profile.lower().strip() == 'local_browser'
-        and (
-            not host_cdp_scheduler_verified
-            or not is_non_loopback_cdp_url(browser_cdp_url)
-        )
-    ):
+    if scheduler_enabled:
         raise SecurityConfigurationError(
-            'SCHEDULER_ENABLED=true with NETWORK_PROFILE=local_browser requires '
-            'HOST_CDP_SCHEDULER_VERIFIED=true and a non-loopback BROWSER_CDP_URL '
-            'with an explicit port'
+            'SCHEDULER_ENABLED=true is not accepted: marketplace work must use '
+            'the reviewed MacBook interactive host runner, not a web container'
         )
 
 

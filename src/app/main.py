@@ -10,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 from app.api import router
 from app.config import settings
 from app.db import init_db
-from app.scheduler import start_scheduler
 from app.security import (
     AuthenticatedActor,
     authenticate_basic_authorization,
@@ -32,16 +31,7 @@ async def lifespan(_app: FastAPI):
         host_cdp_scheduler_verified=settings.host_cdp_scheduler_verified,
     )
     init_db()
-    scheduler = (
-        start_scheduler()
-        if settings.scheduler_enabled and settings.app_env in {'stage', 'production'}
-        else None
-    )
-    try:
-        yield
-    finally:
-        if scheduler is not None:
-            scheduler.shutdown(wait=False)
+    yield
 
 
 app = FastAPI(title='A1 Search Monitor', lifespan=lifespan)

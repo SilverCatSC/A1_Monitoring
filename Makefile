@@ -17,14 +17,14 @@ smoke: doctor
 ui-check:
 	$(PYTHON) scripts/check_ui.py
 scan:
-	./scripts/run_full_monitoring_macos.sh
-scan-core:
-	./scripts/local_scan.sh --engines auto_ru,avito --pages 3 --pace cautious
+	./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
+scan-core: scan
 watch:
-	./scripts/local_scan.sh --watch --interval-minutes 360 --pace cautious
+	@echo "WATCH_REFUSED reason=use_a_gated_MacBook_LaunchAgent_after_M7_acceptance" >&2
+	@exit 64
 retry-cycle:
 	@test -n "$(CYCLE_ID)" || (echo "Use: make retry-cycle CYCLE_ID=<partial-or-failed-cycle-id>" >&2; exit 2)
-	$(PYTHON) -m app.cli retry-cycle $(CYCLE_ID)
+	./scripts/run_monitoring_host_macos.sh --retry-cycle "$(CYCLE_ID)"
 backup:
 	./scripts/backup_now.sh
 restore-test:

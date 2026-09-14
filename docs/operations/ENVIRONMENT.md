@@ -85,14 +85,14 @@ Set-ExecutionPolicy -Scope Process Bypass
 Не добавлять `-SkipDocker`, если требуется работающее приложение: этот режим
 проверяет только Python-часть.
 
-6. Если Windows снова войдёт в scope, сначала принять обход без AI по
-   [рабочей инструкции](OPERATOR.md).
-7. Только если нужен локальный AI:
+6. Windows не допускается как host marketplace-cycle: scanner/full/watch/host
+   runner и Task Scheduler `-Apply` намеренно fail-closed. На ней можно
+   проверить только установку, Docker/readiness и dashboard.
+7. Если нужен локальный AI для офлайн-анализа уже сохранённых артефактов:
 
 ```powershell
 .\scripts\install_ai_tools_windows.ps1
 .\scripts\download_local_model_windows.ps1
-.\scripts\run_full_monitoring_windows.ps1
 ```
 
 Дополнительные параметры и исторические установочные команды:
@@ -139,7 +139,7 @@ cd /Users/filaret/Desktop/Monitoring
 | CDP Chrome | 19222, только localhost |
 | LLM | 18080, только localhost |
 | `COMPOSE_PROJECT_NAME` | `a1_search_monitor_noapi`, сохранить для прежних volumes |
-| `SCHEDULER_ENABLED` | false: container scheduler не является host-Chrome scheduler |
+| `SCHEDULER_ENABLED` | только `false`: `true` отвергается во всех окружениях; container не является host-Chrome scheduler |
 | NETWORK_PROFILE | Метка происхождения запуска; не настройка VPN |
 
 Не открывать CDP, БД и LLM-порт в локальную сеть/интернет. В текущем локальном
@@ -148,18 +148,17 @@ cd /Users/filaret/Desktop/Monitoring
 
 ## Плановый запуск на основном MacBook — только после gate
 
-`local_scan.sh --watch` — только ручной foreground-loop открытого Terminal: он
-завершается при logout/сне и не должен работать одновременно с другим worker.
-Для production-расписания не включать `SCHEDULER_ENABLED=true`: web-container
-не управляет видимым Chrome пользовательской GUI-сессии.
+`local_scan.sh`, `local_scan.py --watch` и `make watch` намеренно отказываются;
+они не являются допустимым scheduler или обходом host runner. Не включать
+`SCHEDULER_ENABLED=true`: он отвергается во всех окружениях, а web-container не
+управляет видимым Chrome пользовательской GUI-сессии.
 
 После ручного MacBook controlled cycle и owner review планируется один
 `run_monitoring_host_macos.sh` на trigger. Регистратор
-`register_monitoring_launchagent_macos.sh --at HH:MM` без `--apply` только
-показывает план; `--apply` отдельно создаёт per-user GUI LaunchAgent
-`com.silvercatsc.a1monitoring.interactive-cycle` с mutex, `RunAtLoad=false` и
-`KeepAlive=false`. Он запускает один cycle, не вложенный `--watch`, и не
-выполняет scan при регистрации. Это future gate, а не принятое расписание.
+`register_monitoring_launchagent_macos.sh --at HH:MM` только показывает plan-only
+контракт. Per-user GUI LaunchAgent, если его позже примут, должен использовать
+mutex, `RunAtLoad=false` и `KeepAlive=false`, запускать один host cycle и не
+выполнять scan при регистрации. Это future gate, не принятое расписание.
 Полный порядок — в
 [MacBook primary-host decision](../production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
@@ -169,9 +168,10 @@ readiness, но не создаёт cycle, не открывает Chrome, не 
 изменяет VPN и не подтверждает TCC browser-control. Это evidence готовности
 host, а не M7 acceptance.
 
-Windows `local_scan_windows.ps1 -Watch`, host-runner и Task Scheduler остаются
-непринятым fallback-путём. Если он понадобится, отдельная процедура приведена в
-[Windows handoff](../WINDOWS_11_INSTALL.md).
+Windows scanner/full/watch/host-runner и Task Scheduler `-Apply` намеренно
+fail-closed; они не являются fallback-путём, который оператор может включить.
+Если Windows когда-либо вернётся в scope, требуется новое решение владельца и
+новая приёмка с нуля; см. [Windows handoff](../WINDOWS_11_INSTALL.md).
 
 ## Память
 

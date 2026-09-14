@@ -77,35 +77,25 @@ policy. Не выключайте VPN и не закрывайте ChatGPT ка�
 требует действия оператора. Граница проверки —
 [VPSUS split-tunnel gate](docs/production/VPN_GATE_2026-09-14.md).
 
-Автоматического production-расписания пока нет. Низкоуровневый
-`local_scan.sh --watch` — инженерный foreground-loop открытого Terminal, а не
-MacBook production entrypoint. Скрипты
-`run_monitoring_host_macos.sh` и `register_monitoring_launchagent_macos.sh`
-поставлены как static-only contract и имеют отдельный MacBook gate: LaunchAgent
-должен быть per-user, plan-only до явного `--apply`, не может заменять видимый
-Chrome/VPSUS и не запускается при lock screen. Детали —
-[primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
+Автоматического production-расписания пока нет. Единственный путь полного
+marketplace-cycle и retry — `run_monitoring_host_macos.sh` на MacBook; retry
+оператор запускает только как `make retry-cycle CYCLE_ID=<UUID>`, который
+делегирует этому runner. Низкоуровневые `local_scan.sh`, `local_scan.py --watch`
+и `make watch` теперь намеренно отказываются; это не запасные точки входа.
+`scripts/run_full_monitoring_macos.sh` и `scripts/probe_page.py` также
+fail-closed. Последний не заменяется «ручным probe»: `--probe-url` на macOS —
+только non-DB диагностика, не M7/prod cycle.
 
-Windows после отдельного решения владельца — резервный ручной сценарий, не
-основной путь:
+`SCHEDULER_ENABLED=true` запрещён во всех окружениях. Будущий per-user
+LaunchAgent остаётся отдельным MacBook gate: он не может заменить видимый
+Chrome/VPSUS, не запускается при lock screen и не является принятым расписанием.
+Детали — [primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md).
 
-```powershell
-Set-Location C:\work\A1_Monitoring
-Set-ExecutionPolicy -Scope Process Bypass
-.\scripts\start_windows.ps1 -OpenDashboard
-.\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
-```
-
-Расширенный инженерный сценарий с локальными Hermes/Ouroboros на основном Mac —
-`scripts/run_full_monitoring_macos.sh`; он не является M7 controlled cycle и
-не запускается Finder-ярлыком. Windows-вариант
-`scripts/run_full_monitoring_windows.ps1` не является принятой альтернативой и
-требует отдельной живой приёмки, если этот host когда-либо будет использован.
-
-Windows-команды выше — только ручной controlled cycle. `--watch` остаётся
-foreground-циклом открытого PowerShell; container scheduler не управляет host
-Chrome. Отдельные host-runner/Task Scheduler допустимы лишь после отдельной
-Windows-приёмки по [Windows handoff](docs/WINDOWS_11_INSTALL.md).
+Windows/MSI — deliberately fail-closed fallback. Его scanner/full/watch/host
+runner, а также регистрация Windows Task `-Apply`, явно отказываются и не могут
+создать marketplace cycle. На Windows допустимы лишь установка, локальная
+readiness-диагностика и dashboard до нового отдельного решения владельца; см.
+[Windows handoff](docs/WINDOWS_11_INSTALL.md).
 
 Дашборд: [127.0.0.1:18000](http://127.0.0.1:18000/api/v1/dashboard).
 Карточки отдела продаж: [Автомобили](http://127.0.0.1:18000/api/v1/dashboard/listings).

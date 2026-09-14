@@ -98,8 +98,9 @@ dashboard; он не запускает cycle, AI или Chrome. После со
 
 Host runner выполняет обе площадки с осторожным темпом и защищает GUI-сессию,
 readiness и mutex. Закрытие крышки или завершение пользовательской сессии может
-прервать работу. Он не запускает Hermes/Ouroboros; расширенный AI-сценарий —
-отдельный инженерный шаг только после успешного core-cycle.
+прервать работу. Он не запускает Hermes/Ouroboros; они остаются отдельными
+офлайн-задачами над уже сохранёнными evidence. `run_full_monitoring_macos.sh`
+намеренно отказывается и не является альтернативой host runner.
 
 Последовательность: импорт реестра → каталоги продавца и сверка ссылок →
 поисковые фильтры → последовательное открытие прямых карточек → сохранение результата.
@@ -140,10 +141,11 @@ cautious цикла с видимым Chrome в активной пользов�
 VPSUS и не доказывает TCC browser-control. Это техническое evidence host, а не
 M7 acceptance и не разрешение включать расписание.
 
-Регистратор по умолчанию показывает план; только явный `--apply` может создать
-`com.silvercatsc.a1monitoring.interactive-cycle`. Он не запускает scan при
-регистрации. `RunAtLoad=false` и `KeepAlive=false`; `--watch` остаётся ручным
-foreground-loop. Не включайте `SCHEDULER_ENABLED=true` как замену этому контуру.
+Регистратор по умолчанию показывает план; он не запускает scan при регистрации.
+Будущий `com.silvercatsc.a1monitoring.interactive-cycle` обязан иметь
+`RunAtLoad=false` и `KeepAlive=false`. `local_scan.py --watch` и `make watch`
+намеренно отказываются. `SCHEDULER_ENABLED=true` отвергается во всех окружениях
+и не может быть заменой этому контуру.
 Ни runner, ни LaunchAgent не заявлены живо проверенными: пока есть только
 static-only contract. Отдельный M7 record должен зафиксировать GUI-trigger, один
 `cycle_id`, отсутствие параллельного worker, корректную обработку `partial` и

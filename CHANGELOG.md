@@ -1,5 +1,24 @@
 # Журнал изменений
 
+## M6.9 — MacBook-only execution boundary и VPN admission — 2026-09-14
+
+- Полный marketplace cycle и controlled retry теперь проходят только через
+  `run_monitoring_host_macos.sh`: GUI/unlocked-user, kernel lock, host readiness,
+  recovery и видимый Chrome остаются в одном entrypoint. Прямой CLI/API/container
+  путь не может выдать себя за host-runner только переменными конфигурации.
+- Перед full cycle нужен локальный owner-authored `artifacts/vpn_admission/`
+  record: строгая schema v1 для ChatGPT/Auto.ru/Avito, 24-hour TTL, `0700/0600`,
+  отсутствие extended ACL и fail-closed проверка до recovery/Chrome/записи цикла.
+  Он не является доказательством egress и не меняет VPSUS.
+- `SCHEDULER_ENABLED=true`, Mac extended pipeline, raw headless diagnostic,
+  recurring `--watch` и Windows marketplace entrypoints намеренно отказываются.
+  Legacy/cloud profiles остаются читаемыми для исторических отчётов, но больше не
+  могут начать новый cycle; Windows — только непринятый setup/dashboard handoff.
+- M7 остаётся **не принят**: валидная attestation не выпускалась, VPSUS IPv6/
+  egress proof, controlled shadow-run, реальные роли и TCC/LaunchAgent gates
+  всё ещё требуют отдельного owner evidence. Никакой VPN change, live scan или
+  scheduler registration этим изменением не выполнялись.
+
 ## M6.8 — production-auth hardening и post-deploy stage verification — 2026-09-14
 
 - `fdd3ef4` fail-closed проверяет production-конфигурацию, обязательный roster

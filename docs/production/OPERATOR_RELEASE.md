@@ -44,6 +44,10 @@ production-доступ без входа. Проверка гарантируе
 `POST /filters` и `PATCH /filters/{id}`. Это не отменяет отдельные M7-gates для
 видимого Chrome, VPSUS и controlled cycle.
 
+Role permission не является entrypoint bypass: новый marketplace cycle принимает
+только MacBook host runner с валидной VPN admission и inherited host-lock FD.
+Прямой API-вызов не может заменить этот operational gate.
+
 ## Локальные технические проверки при Basic-auth
 
 `doctor.py`, `check_ui.py` и `build_live_agent_packet.py` продолжают работать

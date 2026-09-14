@@ -51,7 +51,13 @@ from app.schemas import (
 from app.scraper.base import canonical_listing_key
 from app.service.analytics import STATES, activity_context, analytics_context
 from app.service.company_site_report import company_site_audit_context
-from app.service.cycle import CycleConfigurationError, MonitoringCycleService, cycle_lock
+from app.service.cycle import (
+    CycleConfigurationError,
+    MonitoringCycleService,
+    cycle_lock,
+    require_local_browser_vpn_admission,
+    require_macos_primary_monitoring_profile,
+)
 from app.service.cycle_ledger import CycleLedgerError
 from app.service.dealer_discovery import DealerDiscoveryService, DiscoveryAlreadyRunning
 from app.service.evidence import (
@@ -203,7 +209,9 @@ def retry_monitoring_cycle(
     require_roles(request, 'admin', 'operator')
     try:
         result = MonitoringCycleService(db).retry(cycle_id)
-    except (CycleConfigurationError, ScanConfigurationError, ScanAlreadyRunning) as exc:
+    except (CycleConfigurationError, ScanConfigurationError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ScanAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except CycleLedgerError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -577,7 +585,11 @@ def trigger_cycle(request: Request, db: Session = Depends(get_db)):
 def discover_dealer_listings(request: Request, db: Session = Depends(get_db)):
     require_roles(request, 'admin', 'operator')
     try:
+        require_macos_primary_monitoring_profile()
+        require_local_browser_vpn_admission()
         return DealerDiscoveryService(db).run()
+    except ScanConfigurationError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     except DiscoveryAlreadyRunning as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

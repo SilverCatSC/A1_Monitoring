@@ -32,6 +32,9 @@ records имеют приоритет над старым аудитом и об
 - [Operator release](production/OPERATOR_RELEASE.md) — M5-роли, feedback по finding и отчёт по исключениям.
 - [Operations](production/OPERATIONS.md) — M6 controlled retry, status и границы scheduler.
 - [M7 acceptance](production/ACCEPTANCE_M7.md) — живые MacBook stop-gates, shadow-run и rollback.
+- [VPN gate](production/VPN_GATE_2026-09-14.md) — read-only VPSUS evidence и открытые route limits.
+- [VPN admission contract](production/VPN_ADMISSION_CONTRACT_2026-09-14.md) — private owner
+  attestation перед full MacBook host cycle, её schema и fail-closed boundary.
 - [MacBook primary host](production/MACBOOK_PRIMARY_HOST_2026-09-14.md) — решение владельца,
   границы будущего LaunchAgent и статус Windows fallback.
 

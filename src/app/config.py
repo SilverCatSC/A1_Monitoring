@@ -78,6 +78,12 @@ class Settings(BaseSettings):
     )
     playwright_headless: bool = Field(default=True, alias='PLAYWRIGHT_HEADLESS')
     browser_cdp_url: str | None = Field(default=None, alias='BROWSER_CDP_URL')
+    local_browser_host_admission: bool = Field(
+        default=False, alias='LOCAL_BROWSER_HOST_ADMISSION'
+    )
+    vpn_admission_path: str = Field(
+        default='./artifacts/vpn_admission/attestation.json', alias='VPN_ADMISSION_PATH'
+    )
     request_timeout_seconds: int = Field(default=25, alias='REQUEST_TIMEOUT_SECONDS', ge=5)
     auto_ru_page_delay_seconds: float = Field(
         default=2.5, alias='AUTO_RU_PAGE_DELAY_SECONDS', ge=0.5, le=30
@@ -157,6 +163,14 @@ class Settings(BaseSettings):
             return None
         clean = str(value).strip()
         return clean or None
+
+    @field_validator('vpn_admission_path', mode='before')
+    @classmethod
+    def _validate_vpn_admission_path(cls, value: str | None) -> str:
+        clean = str(value or '').strip()
+        if not clean:
+            raise ValueError('VPN_ADMISSION_PATH must not be empty')
+        return clean
 
     @field_validator('source_google_sheet_export_url', 'head_table_google_sheet_export_url', mode='before')
     @classmethod

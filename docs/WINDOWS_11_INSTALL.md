@@ -1,30 +1,29 @@
-# A1 Monitoring: установка и запуск на Windows 11
+# A1 Monitoring: Windows 11 setup/readiness handoff
 
-Дата: 14.09.2026. Версия staged-сборки: 0.14.0. Windows/MSI — резервный
-портируемый handoff, который ещё не прошёл живую приёмку этой сборки.
+Дата: 14.09.2026. Версия staged-сборки: 0.14.0. Windows/MSI — deliberately
+fail-closed резервный handoff, который не является живым host этой сборки.
 Компьютер: MSI, Intel Core Ultra 5 125U, 16 ГБ RAM, Windows 11 x64.
 
 Основной production host — MacBook / macOS. Эта инструкция нужна только если
 владелец отдельно вернёт Windows в эксплуатационный scope.
 
-**Статус:** Mac/stage прошёл технические проверки и backup/restore, однако полная
-установка, VPN-маршрут и живой обход на MSI ещё не проверены. Успешные тесты на Mac
-не означают успешную проверку объявлений на Windows. Скрипты локальной LLM, Hermes
-и Ouroboros добавлены, но их установка и полный цикл должны быть подтверждены
-непосредственно на MSI. До этого Windows-инструкция является подготовленным
-fallback-handoff, а не доказательством production-готовности или требованием M7
-для MacBook.
+**Статус:** MacBook — единственный accepted host path. Windows scanner/full/watch/
+host runner и регистрация Task Scheduler с `-Apply` намеренно отказываются и не
+могут создать marketplace cycle; Windows raw probe также отказан. Успешные тесты
+или setup на MSI не меняют это правило. Эта инструкция сохраняет только
+setup/readiness/dashboard и offline-AI handoff, а не production-готовность или
+M7 requirement для MacBook.
 
 ## 1. Что и где работает
 
 | Компонент | Назначение | Где работает |
 | --- | --- | --- |
-| Python 3.12 и Playwright | Импорт, сверка продавца, поиск автомобилей | Windows, отдельное окружение `.venv312` |
-| Google Chrome | Видимый обход Auto.ru и Avito | Windows, отдельный профиль мониторинга |
+| Python 3.12 и Playwright | Установка и локальная QA без marketplace cycle | Windows, отдельное окружение `.venv312` |
+| Google Chrome | Локальная диагностика; scanner intentionally refuses | Windows, отдельный профиль мониторинга |
 | FastAPI, Jinja2 | Локальный дашборд | Docker |
 | PostgreSQL 16 | История машин, ссылок, проверок и замечаний | Docker volume |
 | Backup | Резервные копии базы | Отдельный Docker volume |
-| llama.cpp + Qwen3.5-9B | Локальный текстовый и визуальный анализ | Windows CPU, после остановки Chrome/Docker |
+| llama.cpp + Qwen3.5-9B | Офлайн-анализ уже сохранённых артефактов | Windows CPU |
 | Hermes | Проверка данных и снимков по одному автомобилю | Нативный Windows-процесс |
 | Ouroboros | Независимый аудит покрытия и доказательств Hermes | Нативный Windows-процесс |
 
@@ -136,9 +135,9 @@ AUTH_ENABLED=false
 не обновляет её через Apps Script и не записывает обратно. Проверьте актуальность
 исходной вкладки до живого запуска. Не публикуйте `.env` и полный журнал настройки.
 
-`SCHEDULER_ENABLED=false` относится к scheduler внутри контейнера приложения. Он
-не умеет управлять видимым Chrome в пользовательской Windows-сессии и не должен
-включаться как замена host-runner или Windows Task Scheduler.
+`SCHEDULER_ENABLED` допускает только `false`: `true` отвергается во всех
+окружениях. Контейнер не умеет управлять видимым Chrome и не является заменой
+MacBook host runner.
 
 Параметр `-SkipDocker` предназначен только для частичной подготовки Python:
 он **не запускает приложение** и не даёт готовый мониторинг.
@@ -177,50 +176,13 @@ AUTH_ENABLED=false
 Hermes имеет нативный Windows-установщик, однако сам проект помечает этот режим как
 раннюю beta. Поэтому успешная установка на Mac не является приёмкой Windows.
 
-## 6. Реальный прогон двух площадок
+## 6. Marketplace cycle на Windows заблокирован
 
-1. Завершите установку и локальные тесты.
-2. Не отключайте VPSUS и не закрывайте ChatGPT/Codex как способ «починить» доступ.
-   До запуска должен быть зафиксирован split-tunnel: ChatGPT доступен по
-   согласованному VPN/direct-маршруту, а `auto.ru` и `avito.ru` открываются в
-   обычном Chrome по прямым правилам для Monitoring. Сохраните read-only
-   screenshot/текст правил и проверьте по одной обычной странице каждого домена.
-   Не меняйте переключатель, bypass-правила или VPN-соединение без подтверждения
-   владельца. Детальный gate: [VPSUS split-tunnel](production/VPN_GATE_2026-09-14.md).
-3. Оставьте ПК включённым, с активной пользовательской сессией; не допускайте сна.
-4. В PowerShell 7 выполните:
-
-```powershell
-Set-Location C:\work\A1_Monitoring
-Set-ExecutionPolicy -Scope Process Bypass
-New-Item -ItemType Directory -Force artifacts | Out-Null
-$scanLog = Join-Path (Get-Location) ("artifacts\manual_scan_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
-Start-Transcript -Path $scanLog
-try {
-    .\scripts\local_scan_windows.ps1 -Engines auto_ru,avito -Pages 3 -Pace cautious
-} finally {
-    Stop-Transcript
-}
-```
-
-По очереди выполняются импорт реестра, сверка объявлений в каталогах продавца,
-проверка разрешённых ссылок в поисковых фильтрах. Не закрывайте и не переключайте
-вкладки Chrome, которыми управляет программа. Это **видимый отдельный профиль**,
-а не private/incognito-режим: данные сессии остаются локально для следующих запусков.
-
-Наблюдайте ход проверки в Chrome, терминале и блоке прогресса дашборда. В режиме
-`cautious` есть намеренные паузы: 12–20 секунд перед фильтром, 6–12 перед страницей
-и ожидание отрисовки. Полный прогон не должен восприниматься как мгновенный smoke-тест.
-Эти паузы не гарантируют отсутствие CAPTCHA.
-
-CAPTCHA, 403/429, таймаут, неизвестная выдача — техническая ошибка, а не доказательство
-непоказа машины. Не запускайте бесконечные повторы. Если площадка просит ручное
-действие, разберите его в браузере и затем запустите новый цикл вручную.
-
-Коды завершения: `0` — цикл завершён без отмеченных технических ошибок;
-`2 / LOCAL_SCAN_PARTIAL` — часть проверки недостоверна или ссылки требуют подтверждения;
-`1` — сбой цикла; `130` — прерывание пользователем.
-Сам по себе код 0 не заменяет выборочную проверку точности данных.
+Не запускайте `local_scan_windows.ps1`, `run_full_monitoring_windows.ps1`,
+`-Watch`, `run_monitoring_host_windows.ps1` или Windows raw probe: они
+intentionally fail-closed. Не создавайте на MSI VPN evidence, Task Scheduler
+или новый marketplace cycle как обход этого ограничения. Контракт live cycle,
+VPN admission и retry относится только к MacBook host runner.
 
 ## 7. Где результаты и что проверить вручную
 
@@ -244,7 +206,7 @@ CAPTCHA, 403/429, таймаут, неизвестная выдача — тех
 Кандидаты на новую ссылку требуют осмысленного подтверждения; совпадения модели
 и цены недостаточно. Старый номер страницы не должен переноситься на новый ID объявления.
 
-## 8. Повседневный запуск и остановка
+## 8. Повседневная readiness-диагностика и остановка
 
 Приложение:
 
@@ -252,32 +214,7 @@ CAPTCHA, 403/429, таймаут, неизвестная выдача — тех
 .\scripts\start_windows.ps1 -OpenDashboard
 ```
 
-Полный прогон с Hermes и Ouroboros:
-
-```powershell
-.\scripts\run_full_monitoring_windows.ps1
-```
-
-Сценарий выполняет фазы последовательно: Chrome-проверка → аудиты таблиц → создание
-пакета → закрытие только служебного Chrome и остановка Docker → Hermes Vision/Data →
-Ouroboros → выгрузка модели → возврат дашборда. Перед моделью требуется не менее
-7500 МБ свободной RAM; при меньшем запасе цикл остановится, а не уйдёт в тяжёлый swap.
-В терминале печатаются `MEMORY stage=...` и стадии `AI_STAGE ...`.
-
-### Ручной повтор `--watch`
-
-После успешной живой приёмки оператор может использовать повтор только поискового
-контура в своём открытом терминале:
-
-```powershell
-.\scripts\local_scan_windows.ps1 -Watch -IntervalMinutes 360 -Pace cautious
-```
-
-Интервал отсчитывается **после завершения** предыдущего цикла. Это ручной foreground
-режим: терминал и пользовательская сессия должны оставаться открытыми. Он не создаёт
-Windows-службу, не переживает logoff/сон и не должен запускаться параллельно с Task
-Scheduler или другим worker. Для остановки нажмите `Ctrl+C` и дождитесь завершения,
-затем при необходимости остановите сервисы:
+Для остановки локальных сервисов при необходимости:
 
 ```powershell
 docker compose stop
@@ -287,37 +224,12 @@ docker compose stop
 Перед обновлением и переносом сделайте проверенную резервную копию базы. Новый образ
 применяет миграции автоматически; рабочую базу не подменяйте тестовой.
 
-### Host-runner и Windows Task Scheduler — только после отдельной MSI-приёмки
+### Windows Task Scheduler и host runner
 
-Для production-повтора предназначен отдельный запускатель
-`scripts/run_monitoring_host_windows.ps1`, а не контейнерный scheduler и не
-долгоживущий `--watch`. Он запускает ровно один осторожный цикл, требует
-интерактивный desktop (не Session 0), берёт межсессионный mutex и при уже активном
-цикле завершится `HOST_RUNNER_SKIPPED_ACTIVE`. Перед scan он проверяет HTTP,
-безопасно восстанавливает только abandoned cycles и пишет privacy-safe status в
-`artifacts/monitoring_host_runner_status.json`; URL, cookies и секреты туда не
-попадают.
-
-После проверки этих скриптов в согласованном commit и **только после успешного
-ручного MSI controlled cycle** можно сначала получить план задачи:
-
-```powershell
-.\scripts\register_monitoring_task_windows.ps1 -At 09:00
-```
-
-Команда без `-Apply` не обращается к Task Scheduler, ничего не регистрирует и не
-запускает scan. После owner review план применяется отдельно:
-
-```powershell
-.\scripts\register_monitoring_task_windows.ps1 -At 09:00 -Apply
-```
-
-Допустима только задача `\A1Monitoring\InteractiveCycle` текущего интерактивного
-пользователя: `LogonType=Interactive`, `RunLevel=Limited`,
-`MultipleInstances=IgnoreNew`, `RestartCount=0`. Она запускает один host-runner в
-момент trigger, а не вложенный `--watch`; регистрация не должна сама запускать
-мониторинг и не должна автоматически повторять marketplace-цикл. До
-фактической MSI-приёмки эта схема остаётся gate, а не включённым расписанием.
+Windows host runner, scanner/full/watch и
+`register_monitoring_task_windows.ps1 -Apply` специально отказываются. Не существует допустимого Task Scheduler
+fallback и не нужно создавать его вручную. Любое будущее изменение требует нового
+решения владельца, отдельной архитектурной проверки и live acceptance с нуля.
 
 ## 9. Если что-то не работает
 
