@@ -26,6 +26,7 @@ SOURCES = {'auto_ru': 'Auto.ru', 'avito': 'Avito'}
 STATES = {
     'found': 'Найдено', 'absent_confirmed': 'Повторный непоказ',
     'absent_uncertain': 'Не найдено · нужна проверка', 'technical_error': 'Проверка не удалась',
+    'review_required': 'Требуется сверка ссылки',
     'filter_mismatch': 'Условия не совпали', 'not_checked': 'Ещё не проверено',
     'not_configured': 'Нет фильтра',
 }
@@ -50,7 +51,8 @@ def summarize(rows):
     return {
         'total': len(rows), 'found': counts['found'], 'valid': valid,
         'missed': counts['absent_confirmed'] + counts['absent_uncertain'],
-        'technical': counts['technical_error'], 'mismatch': counts['filter_mismatch'],
+        'technical': counts['technical_error'], 'review_required': counts['review_required'],
+        'mismatch': counts['filter_mismatch'],
         'rate': round(100 * counts['found'] / valid, 1) if valid else None,
         'pages': [sum(row.state.value == 'found' and row.page_number == p for row in rows) for p in (1, 2, 3)],
     }

@@ -41,6 +41,7 @@ class ObservationState(str, enum.Enum):
     ABSENT_CONFIRMED = 'absent_confirmed'
     ABSENT_UNCERTAIN = 'absent_uncertain'
     FILTER_MISMATCH = 'filter_mismatch'
+    REVIEW_REQUIRED = 'review_required'
     TECHNICAL_ERROR = 'technical_error'
 
 

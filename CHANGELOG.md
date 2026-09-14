@@ -1,5 +1,19 @@
 # Журнал изменений
 
+## M7 pre-acceptance — v6 shadow cycle and link-review state — 2026-09-14
+
+- Fresh controlled cycle `70c56c6b-bddf-4403-bb04-df4788458266` used the v6
+  Avito selected-radius catalogue. Avito completed 6/6 filters, 12 catalogue
+  pages and 10 expected hits with zero marketplace technical errors.
+- The whole cycle correctly stayed `partial`: 22 current links require
+  reconciliation and 14 direct-card records are incomplete. No stale link was
+  presented as an absence, sale or a clean M7 acceptance.
+- Added `review_required` observation state and migration `20260914_0011`.
+  Seller-link reconciliation is now an operator-action result rather than a
+  false `technical_error`; genuine CAPTCHA, HTTP, timeout and parser failures
+  remain technical errors. Immutable observations from earlier cycles are not
+  rewritten.
+
 ## M7 pre-acceptance — Avito selected radius — 2026-09-14
 
 - По уточнению владельца все шесть канонических Avito-фильтров требуют

@@ -251,6 +251,7 @@ class MonitorService:
             'found': 0,
             'missed_confirmed': 0,
             'missed_uncertain': 0,
+            'review_required': 0,
             'technical_errors': 0,
             'runs': 0,
             'blocked_sources': [],
@@ -290,6 +291,7 @@ class MonitorService:
                 scan_run.notes = 'No active filters configured; no visibility conclusion was made.\n'
 
             adapter = self.auto_adapter if source == EngineType.AUTO_RU else self.avito_adapter
+            source_review_required = 0
             for filter_index, filter_entity in enumerate(filters):
                 overall_index += 1
                 summary['filters_scanned'] += 1
@@ -304,13 +306,14 @@ class MonitorService:
                                 or canonical_listing_key(source, checked.get('url')) != canonical_listing_key(source, current_url)):
                             preflight_rejected.append(expectation)
                             self._record_observation(scan_run, expectation.listing_id, filter_entity.id, source,
-                                ObservationState.TECHNICAL_ERROR,
+                                ObservationState.REVIEW_REQUIRED,
                                 diagnostics={'error': 'seller_preflight_unresolved', 'reason': checked.get('reason', 'Нет подтверждённой сверки продавца')})
                         else:
                             eligible.append(expectation)
                     if preflight_rejected:
-                        scan_run.technical_errors += 1
-                        scan_run.notes = (scan_run.notes or '') + f'[{filter_entity.id}] seller preflight unresolved: {len(preflight_rejected)}\n'
+                        source_review_required += len(preflight_rejected)
+                        summary['review_required'] += len(preflight_rejected)
+                        scan_run.notes = (scan_run.notes or '') + f'[{filter_entity.id}] seller preflight review required: {len(preflight_rejected)}\n'
                     expectations = eligible
                     if not expectations:
                         self._progress('filter_skipped', source=source.value, filter_name=filter_entity.name,
@@ -575,9 +578,11 @@ class MonitorService:
             scan_run.finished_at = datetime.now(UTC)
             if scan_run.filters_total == 0:
                 scan_run.status = ScanRunStatus.FAILED
-            elif scan_run.filters_ok == scan_run.filters_total and scan_run.technical_errors == 0:
+            elif (scan_run.filters_ok == scan_run.filters_total
+                  and scan_run.technical_errors == 0
+                  and source_review_required == 0):
                 scan_run.status = ScanRunStatus.SUCCESS
-            elif scan_run.filters_ok == 0:
+            elif scan_run.filters_ok == 0 and source_review_required == 0:
                 scan_run.status = ScanRunStatus.FAILED
             else:
                 scan_run.status = ScanRunStatus.PARTIAL

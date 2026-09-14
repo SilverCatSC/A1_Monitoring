@@ -1,6 +1,9 @@
 # M7: production acceptance и rollback
 
-Статус: **начат на Mac/stage, не принят**. Этот runbook не разрешает сам запуск;
+Статус: **начат на Mac/stage, не принят**. Fresh v6 shadow-cycle completed with
+the correct Avito selected-radius mode but has a valid `partial` outcome; see
+[AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
+Этот runbook не разрешает сам запуск;
 он задаёт порядок приёмки после отдельного подтверждения владельца. Ни unit tests,
 ни статическая проверка Windows, ни сохранённый исторический запуск не закрывают M7.
 
@@ -91,7 +94,8 @@ production rollout останавливается.
 
 Для admission нужен `completed` только если правила M1 действительно соблюдены;
 `partial` допустим как корректный отрицательный результат реализации, но не
-закрывает M7.
+закрывает M7. The 2026-09-14 v6 run is precisely such a correct negative result:
+the Avito contract is verified, while link reconciliation remains open.
 
 ## Gate 4 — MSI / Windows 11
 

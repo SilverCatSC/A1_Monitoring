@@ -22,6 +22,7 @@ from app.models import (
     ListingReconciliation,
     ObservationState,
     ScanRun,
+    ScanRunStatus,
     SearchFilter,
     VehicleFilterExpectation,
 )
@@ -174,11 +175,13 @@ def test_unresolved_link_skips_search_and_does_not_open_absence(db):
     search = Adapter(result())
     summary = MonitorService(db, auto_adapter=search, preflight=preflight).run_full_cycle()
     assert search.calls == []
-    assert summary['technical_errors'] == 1
+    assert summary['technical_errors'] == 0
+    assert summary['review_required'] == 1
     assert summary['missed_confirmed'] == summary['missed_uncertain'] == 0
     assert db.query(AbsenceEpisode).count() == 0
     observation = db.query(ListingObservation).one()
-    assert observation.state == ObservationState.TECHNICAL_ERROR
+    assert observation.state == ObservationState.REVIEW_REQUIRED
+    assert observation.scan_run.status == ScanRunStatus.PARTIAL
     assert observation.raw_payload['seller_preflight']['state'] == 'review_required'
 
 
@@ -332,9 +335,10 @@ def test_mixed_filter_scans_verified_car_without_false_absence_for_stale_link(db
     summary = MonitorService(db, auto_adapter=search, preflight=preflight).run_full_cycle()
     observations = {row.listing_id: row for row in db.query(ListingObservation).all()}
     assert len(search.calls) == 1
-    assert summary['technical_errors'] == 1
+    assert summary['technical_errors'] == 0
+    assert summary['review_required'] == 1
     assert observations['car'].state == ObservationState.FOUND
-    assert observations['other'].state == ObservationState.TECHNICAL_ERROR
+    assert observations['other'].state == ObservationState.REVIEW_REQUIRED
     assert db.query(AbsenceEpisode).count() == 0
 
 
