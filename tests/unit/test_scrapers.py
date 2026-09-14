@@ -40,6 +40,11 @@ def test_auto_ru_deduplicates_multiple_links_for_same_listing():
 
 def test_auto_ru_stops_after_short_catalogue_is_fully_parsed():
     assert _declared_offer_count('<h1>Maextro S800 — 2 предложения</h1>') == 2
+    assert _declared_offer_count(
+        '<p>9 Предложения дня</p>'
+        '<div class="ListingGeoRadiusCounters__item ListingGeoRadiusCounters__item_active">'
+        '<span class="ListingGeoRadiusCounters__itemCount">14 предложений</span></div>'
+    ) == 14
     assert _all_offers_are_visible(2, 2)
     assert not _all_offers_are_visible(15, 14)
     assert not _all_offers_are_visible(None, 2)

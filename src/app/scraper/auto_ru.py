@@ -310,7 +310,16 @@ def _list_url(base_url: str) -> str:
 
 def _declared_offer_count(html: str) -> int | None:
     """Read the result-count label Auto.ru displays above a short catalogue."""
-    text = BeautifulSoup(html, 'html.parser').get_text(' ', strip=True)
+    soup = BeautifulSoup(html, 'html.parser')
+    active_radius_count = soup.select_one(
+        '.ListingGeoRadiusCounters__item_active .ListingGeoRadiusCounters__itemCount'
+    )
+    if active_radius_count:
+        text = active_radius_count.get_text(' ', strip=True)
+        match = re.search(r'(?<!\d)(\d{1,5})\s+предложени(?:е|я|й)\b', text, re.IGNORECASE)
+        if match:
+            return int(match.group(1))
+    text = soup.get_text(' ', strip=True)
     match = re.search(r'(?<!\d)(\d{1,5})\s+предложени(?:е|я|й)\b', text, re.IGNORECASE)
     return int(match.group(1)) if match else None
 
