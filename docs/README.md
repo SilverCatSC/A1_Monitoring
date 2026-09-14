@@ -20,6 +20,11 @@
 - [OPTIMIZATION](analysis/OPTIMIZATION.md) — план улучшений и варианты переписывания.
 - [API_COSTS](finance/API_COSTS.md) — объёмы, формулы, тарифы, сценарии и окупаемость.
 
+## Production-программа
+
+- [Production contract](production/PRODUCTION_CONTRACT.md) — роли источников, границы автоматизации и критерии статусов.
+- [Production roadmap](production/ROADMAP.md) — реперные точки, gates и текущий фокус разработки.
+
 ## Справочные материалы предыдущей реализации
 
 - [Установка Windows](WINDOWS_11_INSTALL.md), [установка Mac](MACOS_INSTALL.md).

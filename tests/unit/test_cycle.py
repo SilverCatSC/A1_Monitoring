@@ -85,6 +85,15 @@ def test_cycle_imports_before_scan(monkeypatch):
         'seller_preflight': {'batch_id': 'batch', 'verified': 1},
         'scan': {'runs': 2, 'blocked_sources': ['avito']},
         'direct_cards': {'checked': 1, 'total': 1},
+        'completion': {
+            'status': 'completed',
+            'technical_errors': 0,
+            'search_technical_errors': 0,
+            'direct_cards_technical_errors': 0,
+            'links_need_review': 0,
+            'direct_cards_incomplete': 0,
+            'partial_reasons': [],
+        },
         'evidence_removed': 3,
     }
 

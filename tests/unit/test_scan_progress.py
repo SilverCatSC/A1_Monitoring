@@ -86,11 +86,50 @@ def test_progress_tracker_persists_filter_page_and_completion(tmp_path, capsys):
         'status_code': 'active',
     })
     assert read_scan_progress(str(tmp_path))['direct_cards']['checked'] == 1
-    tracker({'event': 'direct_cards_finished', 'summary': {'active': 2, 'total': 2}})
+    direct_summary = {
+        'active': 2,
+        'total': 2,
+        'incomplete': 0,
+        'technical_errors': 0,
+    }
+    tracker({'event': 'direct_cards_finished', 'summary': direct_summary})
+    tracker({'event': 'cycle_completed', 'summary': {'status': 'completed'}})
     payload = read_scan_progress(str(tmp_path))
     assert payload['status'] == 'completed'
     assert payload['completed_filters'] == 2
-    assert payload['summary'] == summary
+    assert payload['summary'] == {'status': 'completed'}
+
+
+def test_progress_tracker_marks_direct_card_failures_as_partial(tmp_path):
+    tracker = ScanProgressTracker(str(tmp_path))
+    tracker({'event': 'cycle_started', 'total_filters': 1})
+    tracker({'event': 'cycle_finished', 'summary': {'technical_errors': 0}})
+    tracker(
+        {
+            'event': 'direct_cards_finished',
+            'summary': {
+                'blocked': 2,
+                'total': 2,
+                'incomplete': 2,
+                'technical_errors': 2,
+            },
+        }
+    )
+    tracker(
+        {
+            'event': 'cycle_completed',
+            'summary': {
+                'status': 'partial',
+                'technical_errors': 2,
+                'direct_cards_technical_errors': 2,
+                'direct_cards_incomplete': 2,
+            },
+        }
+    )
+
+    payload = read_scan_progress(str(tmp_path))
+    assert payload['status'] == 'partial'
+    assert payload['summary']['direct_cards_technical_errors'] == 2
 
 
 def test_missing_progress_file_is_idle(tmp_path):

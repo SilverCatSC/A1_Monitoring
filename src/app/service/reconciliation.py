@@ -194,8 +194,18 @@ class SellerReconciliationService:
             })
         self.db.commit()
         summary = dict(counters)
+        resolved_codes = {'active', 'sold', 'unpublished', 'closed', 'already_checked'}
+        processed = sum(counters.values())
+        resolved = sum(count for code, count in counters.items() if code in resolved_codes)
+        review_required = counters.get('missing_link', 0)
+        incomplete = max(0, total - resolved)
         summary['checked'] = sum(checked_by_source.values())
         summary['total'] = len(records)
+        summary['processed'] = processed
+        summary['completed'] = resolved
+        summary['incomplete'] = incomplete
+        summary['technical_errors'] = max(0, incomplete - review_required)
+        summary['review_required'] = review_required
         summary['blocked_sources'] = sorted(blocked)
         self.progress({'event': 'direct_cards_finished', 'summary': summary})
         return summary

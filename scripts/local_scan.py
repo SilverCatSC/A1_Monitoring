@@ -266,11 +266,18 @@ def main() -> int:
                 print(f'LOCAL_CYCLE_FAILED {type(exc).__name__}: {exc}', file=sys.stderr)
                 return 1
         summary = result['scan']
+        completion = result['completion']
         print('LOCAL_SELLER_PREFLIGHT ' + json.dumps(result['seller_preflight'], ensure_ascii=False))
         print('LOCAL_DIRECT_CARDS ' + json.dumps(result['direct_cards'], ensure_ascii=False))
         print(json.dumps(summary, ensure_ascii=False, indent=2))
-        if summary['technical_errors'] or summary.get('links_need_review'):
-            print(f'LOCAL_SCAN_PARTIAL technical_errors={summary["technical_errors"]} links_need_review={summary.get("links_need_review", 0)}')
+        print('LOCAL_CYCLE_COMPLETION ' + json.dumps(completion, ensure_ascii=False))
+        if completion['status'] != 'completed':
+            print(
+                'LOCAL_SCAN_PARTIAL '
+                f'technical_errors={completion["technical_errors"]} '
+                f'links_need_review={completion["links_need_review"]} '
+                f'direct_cards_incomplete={completion["direct_cards_incomplete"]}'
+            )
             exit_code = 2
         else:
             print(

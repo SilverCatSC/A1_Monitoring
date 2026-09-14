@@ -5,6 +5,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from app.service.completion import summarize_cycle_completion
+
 PROGRESS_FILENAME = 'scan_progress.json'
 
 
@@ -52,13 +54,7 @@ class ScanProgressTracker:
             self.state['direct_cards'] = {'total': event.get('total'), 'checked': 0}
         elif name == 'direct_cards_finished':
             self.state['direct_cards'] = event.get('summary')
-            summary = self.state.get('summary') or {}
-            self.state['status'] = (
-                'partial'
-                if int(summary.get('technical_errors') or 0)
-                or int(summary.get('links_need_review') or 0)
-                else 'completed'
-            )
+            self.state['status'] = 'checking_cards'
         elif name == 'direct_card_finished':
             direct_cards = dict(self.state.get('direct_cards') or {})
             direct_cards['checked'] = int(event.get('card_index') or 0)
@@ -68,9 +64,13 @@ class ScanProgressTracker:
             self.state['completed_filters'] = int(event.get('overall_index') or 0)
         elif name == 'cycle_finished':
             summary = event.get('summary') or {}
-            self.state['status'] = (
-                'partial' if int(summary.get('technical_errors') or 0) or int(summary.get('links_need_review') or 0) else 'completed'
-            )
+            self.state['summary'] = summary
+            self.state['status'] = 'checking_cards'
+        elif name == 'cycle_completed':
+            search_summary = self.state.get('summary') or {}
+            direct_cards = self.state.get('direct_cards') or {}
+            summary = event.get('summary') or summarize_cycle_completion(search_summary, direct_cards)
+            self.state['status'] = summary.get('status', 'partial')
             self.state['summary'] = summary
             self.state['completed_filters'] = self.state.get('total_filters', 0)
         elif name == 'cycle_failed':
@@ -228,7 +228,9 @@ def _terminal_line(event: dict[str, Any]) -> str:
     if name == 'source_finished':
         return f'[{stamp}] {source} · завершено'
     if name == 'cycle_finished':
-        return f'[{stamp}] ФИНИШ · {json.dumps(event.get("summary") or {}, ensure_ascii=False)}'
+        return f'[{stamp}] ПОИСК ЗАВЕРШЁН · переходим к прямым карточкам'
+    if name == 'cycle_completed':
+        return f'[{stamp}] ФИНИШ ЦИКЛА · {json.dumps(event.get("summary") or {}, ensure_ascii=False)}'
     if name == 'cycle_failed':
         return f'[{stamp}] СБОЙ ЦИКЛА · {event.get("error")}'
     return f'[{stamp}] {name}'

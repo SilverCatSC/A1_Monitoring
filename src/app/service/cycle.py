@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import SCAN_ALLOWED_NETWORK_PROFILES, settings
 from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
+from app.service.completion import summarize_cycle_completion
 from app.service.evidence import cleanup_evidence
 from app.service.filters import FilterRegistryService
 from app.service.locks import operation_lock
@@ -83,11 +84,14 @@ class MonitoringCycleService:
         direct_cards = SellerReconciliationService(
             self.db, progress_callback=self.progress
         ).inspect_current_cards(preflight)
+        completion = summarize_cycle_completion(scanned, direct_cards)
+        self.progress({'event': 'cycle_completed', 'summary': completion})
         return {
             **refreshed,
             'dealer_discovery': preflight['discovery'],
             'seller_preflight': {'batch_id': preflight['batch_id'], **preflight['summary']},
             'scan': scanned,
             'direct_cards': direct_cards,
+            'completion': completion,
             'evidence_removed': evidence_removed,
         }
