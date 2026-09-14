@@ -1,8 +1,5 @@
 [CmdletBinding()]
-param(
-    [switch]$PreparedPacket,
-    [ValidateSet('light','heavy')][string]$Profile = 'light'
-)
+param([switch]$PreparedPacket)
 
 $ErrorActionPreference = 'Stop'
 $Root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
@@ -10,7 +7,6 @@ Set-Location $Root
 . (Join-Path $PSScriptRoot 'windows_common.ps1')
 $lock = Get-A1LockValues $Root
 $python = Join-Path $Root '.venv312\Scripts\python.exe'
-$env:A1_AI_PROFILE = $Profile
 & (Join-Path $PSScriptRoot 'sync_ai_profiles_windows.ps1')
 if (-not $PreparedPacket) {
     Invoke-A1Native $python @('scripts/build_live_agent_packet.py')

@@ -15,8 +15,6 @@ $ouroboros = Join-Path $Root 'artifacts\ai_tools\bin\ouroboros.exe'
 if (-not (Test-Path $ouroboros)) { throw 'Ouroboros is not installed.' }
 $env:HOME = Join-Path $Root 'artifacts\ouroboros_home'
 $env:USERPROFILE = $env:HOME
-$env:HERMES_HOME = Join-Path $Root 'artifacts\hermes_ouroboros_llm_home'
-$env:PATH = (Join-Path $Root 'artifacts\hermes_agent\venv\Scripts') + [IO.Path]::PathSeparator + $env:PATH
 $env:OUROBOROS_TELEMETRY = '0'
 $env:DO_NOT_TRACK = '1'
 $env:NO_PROXY = '127.0.0.1,localhost'
@@ -28,14 +26,5 @@ $qualityBar = 'You are the independent local Ouroboros audit stage of A1 Monitor
 $status = $LASTEXITCODE
 if (-not (Test-Path $report) -or (Get-Item $report).Length -eq 0) { throw 'Ouroboros report is missing.' }
 Copy-Item -Force $report (Join-Path $outputDir 'latest.txt')
-if ($status -ne 0) {
-    Write-Warning "OUROBOROS_LIVE_AUDIT_FAILED status=$status file=$report"
-    $fallback = Join-Path $outputDir ("heavy_fallback_{0}.json" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
-    $env:A1_AI_PROFILE = 'heavy'
-    & $python scripts/run_heavy_staged_audit.py $packet $fallback
-    if ($LASTEXITCODE -ne 0) { exit 2 }
-    Copy-Item -Force $fallback (Join-Path $outputDir 'latest.json')
-    Write-Host "OUROBOROS_WINDOWS_FALLBACK_READY $fallback"
-    exit 0
-}
+if ($status -ne 0) { Write-Warning "OUROBOROS_LIVE_AUDIT_FAILED status=$status file=$report"; exit 2 }
 Write-Host "OUROBOROS_LIVE_AUDIT_READY_WINDOWS $report"

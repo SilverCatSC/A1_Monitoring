@@ -1,7 +1,9 @@
 # Программный стек
 
-Рабочая версия 0.9.0. Основной операторский контур — Python 3.12 / Windows 11 на MSI,
-Docker Desktop/WSL2 и Chrome. macOS остаётся резервным контуром и источником истории.
+Рабочая версия 0.9.0. Реализованный операторский контур — Python 3.12 / macOS / ARM64,
+контейнеры Linux ARM64. По последнему решению владельца основной компьютер —
+MacBook Pro M2 Pro, 16 ГБ памяти. [Запуск на Mac](MACOS_INSTALL.md).
+Windows 11 на MSI остаётся запасным, ещё не проверенным вариантом;
 Windows-команды находятся в `scripts/*_windows.ps1`.
 
 | Назначение | Технология / проверенная версия |
@@ -19,7 +21,7 @@ Windows-команды находятся в `scripts/*_windows.ps1`.
 | Запасной Windows-запуск | PowerShell 7, Docker Desktop/WSL2, Git for Windows, Chrome |
 | Публичный отчёт | Статический HTML/CSS/JS, GitHub Pages workflow |
 | Bitrix24 | Входящий webhook, `scripts/bitrix_publish.ps1`, dry-run по умолчанию |
-| Локальная инференс-модель | Qwen2.5-VL-3B Q4_K_M + mmproj-Q8_0 для обычного анализа; Qwen3.5-9B Q4_K_M + mmproj-F16 как heavy-профиль; llama.cpp, loopback `127.0.0.1:18080` |
+| Локальная инференс-модель | Qwen3.5-9B Q4_K_M + mmproj-F16 (текст, reasoning, изображения), llama.cpp/Metal, loopback `127.0.0.1:18080` |
 | QA-агент мониторинга | Hermes Agent 0.21.1, проектный профиль без инструментов и без cloud fallback |
 | Инженерный агент | Q00/Ouroboros 0.54.1 + Hermes, отдельный HOME и отдельные git-worktree |
 

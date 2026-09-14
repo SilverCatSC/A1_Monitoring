@@ -2,15 +2,12 @@ providers:
   a1-local:
     api: http://127.0.0.1:18080/v1
     models:
-      Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf:
-        context_length: 32768
-        supports_vision: true
       Qwen3.5-9B-Q4_K_M.gguf:
         context_length: 65536
         supports_vision: true
 model:
   provider: custom:a1-local
-  default: Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf
+  default: Qwen3.5-9B-Q4_K_M.gguf
 fallback_providers: []
 agent:
   max_turns: 1

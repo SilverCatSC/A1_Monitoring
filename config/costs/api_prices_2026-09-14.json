@@ -1,0 +1,31 @@
+{
+  "checked_at": "2026-09-14",
+  "billing_basis": "Per 1 million input and output tokens; no cache or batch discount",
+  "providers": [
+    {"id": "cloud_qwen36", "name": "Cloud.ru Qwen3.6-35B-A3B", "currency": "RUB", "input": 219.6, "output": 329.4, "source": "https://cloud.ru/products/evolution-ai-factory/catalog-foundation-models", "note": "Internal deployment and Vision listed in Cloud.ru model documentation. Tax treatment must match account quote."},
+    {"id": "cloud_kimi26", "name": "Cloud.ru Kimi-K2.6", "currency": "RUB", "input": 175.68, "output": 725.9, "source": "https://cloud.ru/products/evolution-ai-factory/catalog-foundation-models", "note": "Internal deployment and Vision listed in Cloud.ru model documentation. Tax treatment must match account quote."},
+    {"id": "openai_mini", "name": "OpenAI GPT-5.4 mini", "currency": "USD", "input": 0.75, "output": 4.5, "source": "https://developers.openai.com/api/docs/models/gpt-5.4-mini", "note": "Direct API: Russia absent from supported countries. Comparison only for supported account/region."},
+    {"id": "claude_haiku", "name": "Anthropic Claude Haiku 4.5", "currency": "USD", "input": 1.0, "output": 5.0, "source": "https://platform.claude.com/docs/en/about-claude/pricing", "note": "Direct API: Russia absent from supported regions. Comparison only for supported account/region."}
+  ],
+  "assumptions": {
+    "data_input_per_vehicle": 2000,
+    "data_output_per_vehicle": 400,
+    "vision_text_input_per_image": 1000,
+    "image_tokens_per_image": 2000,
+    "vision_output_per_image": 250,
+    "global_input_per_cycle": 20000,
+    "global_output_per_cycle": 2000,
+    "retry_overhead_factor": 1.25,
+    "days_per_month": 30
+  },
+  "observed_sample": {
+    "manifest_created_at": "2026-09-10T04:46:20.256703+00:00",
+    "vehicles": 34,
+    "images": 29,
+    "data_prompt_characters": 156785,
+    "vision_prompt_characters": 44962,
+    "data_prompt_characters_median": 4110,
+    "vision_prompt_characters_median": 1520,
+    "note": "Character counts are measured locally; tokens, output and retry budget are estimates, not API usage. Private inputs are not included."
+  }
+}

@@ -20,8 +20,7 @@ macOS остаётся резервным контуром и источнико
 | FastAPI, Jinja2 | Локальный дашборд | Docker |
 | PostgreSQL 16 | История машин, ссылок, проверок и замечаний | Docker volume |
 | Backup | Резервные копии базы | Отдельный Docker volume |
-| llama.cpp + Qwen2.5-VL-3B | Обычный локальный текстовый и визуальный анализ | Windows CPU, после остановки Chrome/Docker |
-| Qwen3.5-9B heavy-профиль | Финальная проверка спорных кейсов | Windows CPU, вручную или с `-AiProfile heavy` |
+| llama.cpp + Qwen3.5-9B | Локальный текстовый и визуальный анализ | Windows CPU, после остановки Chrome/Docker |
 | Hermes | Проверка данных и снимков по одному автомобилю | Нативный Windows-процесс |
 | Ouroboros | Независимый аудит покрытия и доказательств Hermes | Нативный Windows-процесс |
 
@@ -75,8 +74,9 @@ docker info --format '{{.OSType}}'
 
 Рабочая папка: `C:\work\A1_Monitoring`.
 
-Исходный код опубликован в
-[целевом репозитории GitHub](https://github.com/SilverCatSC/A1_Monitoring).
+На 09.09.2026 [целевой репозиторий GitHub](https://github.com/SilverCatSC/A1_Monitoring)
+пуст: команда clone пока не даст рабочий продукт. До публикации перенесите исходники
+из `/Users/filaret/Desktop/a1_search_monitor_noapi_product` на MSI приватным способом.
 Нужны `src`, `scripts`, `alembic`, `tests`, `docs`, `requirements.lock`,
 `pyproject.toml`, `alembic.ini`, `Dockerfile`, `docker-compose.yml`, `.dockerignore`,
 `.env.example` и документация. Сохраните структуру папок.
@@ -86,7 +86,7 @@ docker info --format '{{.OSType}}'
 заново на Windows. Новая установка создаёт новую базу — история с Mac сама не
 появится. Перенос существующей истории требует отдельного приватного backup/restore.
 
-Для новой установки используйте:
+После публикации проверенной версии исходников можно будет использовать:
 
 ```powershell
 New-Item -ItemType Directory -Force C:\work | Out-Null
@@ -159,11 +159,9 @@ AUTH_ENABLED=false
 ```
 
 Первая команда устанавливает закреплённую ревизию Hermes, Ouroboros 0.54.1 и
-официальную CPU-сборку llama.cpp. Вторая по умолчанию загружает Qwen2.5-VL-3B Q4_K_M
-и vision-проектор;
+официальную CPU-сборку llama.cpp. Вторая загружает Qwen3.5-9B Q4_K_M и vision-проектор;
 потребуется несколько гигабайт трафика и свободного места. Файлы можно приватно
 перенести с Mac в `artifacts\models`, но нельзя помещать их в Git.
-Для загрузки тяжёлого профиля используйте `.\scripts\download_local_model_windows.ps1 -Profile heavy`.
 
 Hermes имеет нативный Windows-установщик, однако сам проект помечает этот режим как
 раннюю beta. Поэтому успешная установка на Mac не является приёмкой Windows.
@@ -247,9 +245,7 @@ CAPTCHA, 403/429, таймаут, неизвестная выдача — тех
 Сценарий выполняет фазы последовательно: Chrome-проверка → аудиты таблиц → создание
 пакета → закрытие только служебного Chrome и остановка Docker → Hermes Vision/Data →
 Ouroboros → выгрузка модели → возврат дашборда. Перед моделью требуется не менее
-7500 МБ свободной RAM; при меньшем запасе цикл остановится. Если владелец согласовал
-swap-нагрузку, запускайте `.\scripts\run_full_monitoring_windows.ps1 -AllowSwap`.
-Для тяжёлой финальной проверки используйте `-AiProfile heavy`.
+7500 МБ свободной RAM; при меньшем запасе цикл остановится, а не уйдёт в тяжёлый swap.
 В терминале печатаются `MEMORY stage=...` и стадии `AI_STAGE ...`.
 
 После успешной живой приёмки возможны повторы только поискового контура:
@@ -296,6 +292,6 @@ docker compose stop
 замечаний менеджеров и других непубличных сведений. Сначала нужен безопасный
 публичный набор полей и отдельная проверка HTML.
 
-Читайте также: [README](../README.md), [стек](STACK.md),
-[локальное окружение](LOCAL_ENVIRONMENT.md), [план MSI/AI](MSI_AGENT_PUBLICATION_PLAN.md),
-[правила продукта](../BIBLE.md).
+Читайте также: [README](archive/2026-09-10/README.md), [стек](STACK.md),
+[локальное окружение](LOCAL_ENVIRONMENT.md), [план MSI/AI](archive/MSI_AGENT_PUBLICATION_PLAN.md),
+[правила продукта](archive/2026-09-10/BIBLE.md).

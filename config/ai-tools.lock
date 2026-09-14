@@ -1,23 +1,17 @@
 # Reviewed installation inputs for the local-only AI contour (2026-09-09).
 HERMES_COMMIT=511633be90ef8f89186aad46396afec981936ed1
 OUROBOROS_VERSION=0.54.1
-# Default light model for routine monitoring. Keep the 9B model below as the
-# heavy profile for disputed or low-confidence findings.
-AI_MODEL_REPO=ggml-org/Qwen2.5-VL-3B-Instruct-GGUF
-AI_MODEL_FILE=Qwen2.5-VL-3B-Instruct-Q4_K_M.gguf
-AI_MODEL_MMPROJ_FILE=mmproj-Qwen2.5-VL-3B-Instruct-Q8_0.gguf
-AI_MODEL_CONTEXT=32768
+AI_MODEL_REPO=unsloth/Qwen3.5-9B-GGUF
+AI_MODEL_FILE=Qwen3.5-9B-Q4_K_M.gguf
+AI_MODEL_MMPROJ_FILE=mmproj-F16.gguf
+# Hermes requires a reported window of at least 64K. Work units remain small,
+# so the large capacity is not filled during routine analysis.
+AI_MODEL_CONTEXT=65536
 AI_MODEL_PORT=18080
 AI_MODEL_THREADS=4
 AI_MODEL_BATCH_THREADS=4
 AI_MODEL_BATCH_SIZE=256
 AI_MODEL_UBATCH_SIZE=128
-AI_MODEL_MAX_OUTPUT_TOKENS=512
-AI_MODEL_REASONING_BUDGET=128
-AI_HEAVY_MODEL_REPO=unsloth/Qwen3.5-9B-GGUF
-AI_HEAVY_MODEL_FILE=Qwen3.5-9B-Q4_K_M.gguf
-AI_HEAVY_MODEL_MMPROJ_FILE=mmproj-F16.gguf
-AI_HEAVY_MODEL_CONTEXT=65536
-AI_HEAVY_MODEL_MAX_OUTPUT_TOKENS=768
-AI_HEAVY_MODEL_REASONING_BUDGET=256
+AI_MODEL_MAX_OUTPUT_TOKENS=768
+AI_MODEL_REASONING_BUDGET=256
 AI_STAGE_COOLDOWN_SECONDS=8

@@ -16,16 +16,6 @@ else:
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def compose_available():
-    if shutil.which('docker-compose') or shutil.which('docker'):
-        return True
-    if sys.platform == 'win32':
-        local_app_data = Path.home() / 'AppData' / 'Local'
-        docker = local_app_data / 'Programs' / 'DockerDesktop' / 'resources' / 'bin' / 'docker.exe'
-        return docker.is_file()
-    return False
-
-
 def env_values():
     if not (ROOT / '.env').exists():
         return {}
@@ -52,7 +42,7 @@ def main():
         'Python 3.12': sys.version_info[:2] == (3, 12),
         'Настройки .env': bool(values.get('DB_PASSWORD') and values.get('SOURCE_GOOGLE_SHEET_EXPORT_URL')),
         'Google Chrome': chrome_available(),
-        'Compose': compose_available(),
+        'Compose': bool(shutil.which('docker-compose') or shutil.which('docker')),
         'Автоскан в контейнере отключён': values.get('SCHEDULER_ENABLED', 'false').lower() == 'false',
     }
     deps = subprocess.run([sys.executable, '-m', 'pip', 'check'], capture_output=True)

@@ -6,15 +6,15 @@
 ## MSI / Windows 11
 
 Полная актуальная инструкция: [Установка и запуск Windows 11](WINDOWS_11_INSTALL.md).
-Используйте PowerShell 7. Исходники опубликованы в целевом репозитории;
-новая установка не переносит локальную историю и артефакты автоматически.
+Используйте PowerShell 7. Исходники пока не опубликованы в целевом репозитории;
+новая установка не переносит историю с Mac автоматически.
 
 Основной рабочий компьютер — MSI с Windows 11, Intel Core Ultra 5 125U и 16 ГБ RAM.
 Откройте PowerShell в корне репозитория:
 
 ```powershell
 Set-ExecutionPolicy -Scope Process Bypass
-cd C:\work\A1_Monitoring\a1_search_monitor_noapi_product
+cd C:\work\A1_Monitoring
 .\scripts\setup_windows.ps1
 .\scripts\install_ai_tools_windows.ps1
 .\scripts\download_local_model_windows.ps1

@@ -15,7 +15,6 @@ Invoke-WebRequest -UseBasicParsing -Uri 'https://raw.githubusercontent.com/NousR
 if ($LASTEXITCODE -ne 0) { throw "Hermes installer failed (exit $LASTEXITCODE)." }
 
 $uvCandidates = @(
-    (Join-Path $HermesHome 'bin\uv.exe'),
     (Join-Path $HermesInstall 'venv\Scripts\uv.exe'),
     (Join-Path $env:LOCALAPPDATA 'hermes\bin\uv.exe')
 )

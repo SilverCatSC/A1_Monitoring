@@ -168,6 +168,6 @@ Ouroboros использует отдельные `artifacts/ouroboros_home`,
 ## Другие инструкции
 
 [Windows 11 — запасной вариант](WINDOWS_11_INSTALL.md), [стек](STACK.md),
-[правила продукта](../BIBLE.md), [README](../README.md).
+[правила продукта](archive/2026-09-10/BIBLE.md), [README](archive/2026-09-10/README.md).
 GitHub/Bitrix пока не опубликованы; перед публичным экспортом требуется отдельная
 проверка исключения внутренних данных, VIN и замечаний менеджеров.
