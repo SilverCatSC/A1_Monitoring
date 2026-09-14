@@ -77,3 +77,35 @@ def test_retry_creates_a_new_cycle_with_parent_provenance(tmp_path, monkeypatch)
     finally:
         session.close()
         engine.dispose()
+
+
+def test_recover_open_cycles_preserves_evidence_and_terminal_history(tmp_path, monkeypatch):
+    engine = create_engine(f'sqlite:///{tmp_path / "recovery.db"}')
+    Base.metadata.create_all(engine)
+    session = sessionmaker(bind=engine)()
+    monkeypatch.setattr('app.service.cycle_ledger.settings.network_profile', 'local_browser')
+    try:
+        ledger = CycleLedgerService(session, evidence_dir=str(tmp_path / 'evidence'))
+        open_cycle = ledger.start()
+        open_cycle.status = 'running'
+        open_cycle.manifest_path = 'cycles/open/manifest.json'
+        terminal = ledger.start()
+        terminal.status = 'partial'
+        terminal.finished_at = datetime.now(UTC)
+        session.commit()
+
+        recovered = ledger.recover_open_cycles(actor='operator@example.test')
+
+        assert [row['id'] for row in recovered] == [open_cycle.id]
+        refreshed = session.get(MonitoringCycle, open_cycle.id)
+        assert refreshed.status == 'failed'
+        assert refreshed.finished_at is not None
+        assert refreshed.manifest_path == 'cycles/open/manifest.json'
+        assert refreshed.summary['reason'] == 'interrupted_runner_recovery'
+        assert refreshed.summary['recovered_by'] == 'operator@example.test'
+        assert session.get(MonitoringCycle, terminal.id).status == 'partial'
+        assert ledger.ensure_retryable(open_cycle.id).id == open_cycle.id
+        assert ledger.recover_open_cycles(actor='operator@example.test') == []
+    finally:
+        session.close()
+        engine.dispose()

@@ -103,6 +103,47 @@ class CycleLedgerService:
         cycle.finished_at = _utcnow()
         self.db.commit()
 
+    def recover_open_cycles(self, *, actor: str) -> list[dict]:
+        """Fail only ledger rows left open after the monitoring lock is confirmed idle.
+
+        Callers must hold the complete-cycle lock. This method never changes a
+        roster, source snapshot, observation, or completed cycle; it only gives
+        an interrupted `preparing`/`running` ledger entry a durable terminal
+        state so an operator can see and retry it.
+        """
+        recovered_by = actor.strip()
+        if not recovered_by:
+            raise CycleLedgerError('recovery actor is required')
+        cycles = (
+            self.db.query(MonitoringCycle)
+            .filter(
+                MonitoringCycle.status.in_({'preparing', 'running'}),
+                MonitoringCycle.finished_at.is_(None),
+            )
+            .order_by(MonitoringCycle.started_at, MonitoringCycle.id)
+            .all()
+        )
+        if not cycles:
+            return []
+
+        recovered_at = _utcnow()
+        reason = (
+            'Recovered after the complete-cycle lock confirmed no active runner; '
+            'the previous runner ended before writing a terminal ledger state.'
+        )
+        for cycle in cycles:
+            cycle.status = 'failed'
+            cycle.error = reason
+            cycle.finished_at = recovered_at
+            cycle.summary = {
+                'status': 'failed',
+                'reason': 'interrupted_runner_recovery',
+                'recovered_at': recovered_at.isoformat(),
+                'recovered_by': recovered_by,
+            }
+        self.db.commit()
+        return [self.describe(cycle) for cycle in cycles]
+
     @staticmethod
     def describe(cycle: MonitoringCycle) -> dict:
         return {

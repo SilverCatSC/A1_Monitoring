@@ -74,12 +74,25 @@ class MonitoringCycleService:
             self.progress({'event': 'cycle_registered', 'cycle_id': cycle.id})
             try:
                 result = self._run(cycle.id, ledger)
-            except Exception as exc:
+            except (Exception, KeyboardInterrupt) as exc:
                 ledger.fail(cycle.id, f'{type(exc).__name__}: {exc}')
                 self.progress({'event': 'cycle_failed', 'error': f'{type(exc).__name__}: {exc}'})
                 raise
             cycle_summary = ledger.complete(cycle.id, result['completion'])
             return {**result, 'cycle': cycle_summary}
+
+    def recover_open_cycles(self, *, actor: str = 'local_cli') -> dict:
+        """Safely finalize interrupted ledger rows without starting a scan.
+
+        The same lock used by a complete cycle proves that a concurrent runner
+        cannot be mistaken for an abandoned one. No marketplace, source import,
+        browser, or evidence operation occurs here.
+        """
+        with cycle_lock(self.db):
+            recovered = CycleLedgerService(self.db).recover_open_cycles(actor=actor)
+        if recovered:
+            self.progress({'event': 'open_cycles_recovered', 'recovered': recovered})
+        return {'recovered': recovered, 'count': len(recovered)}
 
     def retry(self, cycle_id: str) -> dict:
         """Retry as a new cycle, retaining only parent provenance.

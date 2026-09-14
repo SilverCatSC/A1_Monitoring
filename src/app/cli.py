@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 
 from app.config import settings
 from app.db import get_db_context, init_db
@@ -25,6 +26,7 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser('run-cycle')
     retry_cycle = sub.add_parser('retry-cycle')
     retry_cycle.add_argument('cycle_id')
+    sub.add_parser('recover-open-cycles')
     return parser
 
 
@@ -35,7 +37,7 @@ def main() -> None:
     if args.command == 'init':
         init_db()
         return
-    if args.command in {'serve', 'run-cycle', 'scan', 'retry-cycle'}:
+    if args.command in {'serve', 'run-cycle', 'scan', 'retry-cycle', 'recover-open-cycles'}:
         import uvicorn
 
         from app.main import app
@@ -50,6 +52,8 @@ def main() -> None:
                 MonitoringCycleService(db).run()
             elif args.command == 'retry-cycle':
                 MonitoringCycleService(db).retry(args.cycle_id)
+            elif args.command == 'recover-open-cycles':
+                print(json.dumps(MonitoringCycleService(db).recover_open_cycles(actor='local_cli'), ensure_ascii=False))
         return
 
     if args.command == 'import-source':

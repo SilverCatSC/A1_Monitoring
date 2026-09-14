@@ -6,6 +6,7 @@ import asyncio
 import json
 import os
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -296,6 +297,10 @@ def main() -> int:
 
 
 if __name__ == '__main__':
+    def _sigterm_as_interrupt(_signum, _frame):
+        raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, _sigterm_as_interrupt)
     try:
         raise SystemExit(main())
     except KeyboardInterrupt:

@@ -17,6 +17,9 @@ scan, external export, publication or VPN-route change was made in this gate.
   verification. The source and restored databases matched on `listings` (119),
   `source_import_snapshots` (52), `monitoring_cycles` (3), and
   `manager_feedback` (1).
+- Local secret and evidence boundaries were tightened after the gate: `.env` is
+  owner-readable only and `artifacts` (including the persistent Chrome profile)
+  is owner-traversable only. Loopback readiness remained successful afterwards.
 
 ## Boundary
 

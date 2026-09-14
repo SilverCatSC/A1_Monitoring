@@ -210,6 +210,16 @@ def retry_monitoring_cycle(
     return {'cycle': result['cycle'], 'retry_of_cycle_id': cycle_id}
 
 
+@router.post('/cycles/recover-open')
+def recover_open_monitoring_cycles(request: Request, db: Session = Depends(get_db)):
+    """Terminally record cycles interrupted after their ledger entry was created."""
+    actor = require_roles(request, 'admin', 'operator')
+    try:
+        return MonitoringCycleService(db).recover_open_cycles(actor=actor.username)
+    except ScanAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @router.get('/status/scans/progress')
 def current_scan_progress():
     return read_scan_progress(settings.evidence_dir)

@@ -1,5 +1,15 @@
 # Журнал изменений
 
+## M6.4 — interruption-safe cycle ledger — 2026-09-14
+
+- `KeyboardInterrupt` and normalized `SIGTERM` now terminalize a registered
+  monitoring cycle as `failed`, preserving its immutable roster manifest.
+- Added lock-aware `recover-open-cycles` CLI and protected recovery API. It can
+  only recover abandoned `preparing`/`running` rows after the complete-cycle
+  lock is idle; actor, timestamp and recovery reason are retained.
+- Package metadata now matches runtime version `0.14.0`. Local `.env` and
+  evidence/Chrome-profile directories are owner-only on the current Mac/stage.
+
 ## M7 pre-acceptance — v6 shadow cycle and link-review state — 2026-09-14
 
 - Fresh controlled cycle `70c56c6b-bddf-4403-bb04-df4788458266` used the v6

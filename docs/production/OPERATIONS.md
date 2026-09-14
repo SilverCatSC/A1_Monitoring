@@ -30,6 +30,24 @@ Auto.ru/Avito, поэтому это явное действие операто�
 показывают активные циклы, количество retryable попыток, последние 24-часовые
 сбои и ID очереди. Они не заменяют анализ evidence.
 
+## Interrupted-cycle recovery
+
+`KeyboardInterrupt` and a normalized `SIGTERM` now persist a terminal `failed`
+ledger record before the runner exits. If an older runner ended before that
+write, an admin/operator can perform a **non-scanning** recovery:
+
+```bash
+.venv312/bin/python -m app.cli recover-open-cycles
+```
+
+or call protected `POST /api/v1/cycles/recover-open`. The action first holds the
+same complete-cycle lock used by scans. Only then it changes abandoned
+`preparing`/`running` rows to `failed`, records `interrupted_runner_recovery`,
+timestamp and actor, and leaves their manifest, imports, observations and other
+terminal cycles untouched. The returned failed cycle becomes eligible for an
+explicit ordinary retry. If a cycle is live, recovery returns conflict rather
+than guessing that it is stale.
+
 ## Расписание
 
 При `SCHEDULER_ENABLED=true` scheduler запускает обычный полный цикл с

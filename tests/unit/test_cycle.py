@@ -206,3 +206,36 @@ def test_failed_refresh_does_not_open_chrome_or_contact_sellers(monkeypatch):
     monkeypatch.setattr(cycle_module, 'CycleLedgerService', Ledger)
     with pytest.raises(cycle_module.CycleConfigurationError):
         cycle_module.MonitoringCycleService('db', before_browser=forbidden).run()
+
+
+def test_keyboard_interrupt_writes_a_terminal_ledger_failure(monkeypatch):
+    import pytest
+
+    import app.service.cycle as cycle_module
+
+    failures = []
+
+    class Ledger:
+        def __init__(self, _):
+            pass
+
+        def start(self):
+            return type('Cycle', (), {'id': 'cycle-1'})()
+
+        def fail(self, cycle_id, error):
+            failures.append((cycle_id, error))
+
+    monkeypatch.setattr(cycle_module.settings, 'network_profile', 'local_browser')
+    monkeypatch.setattr(cycle_module.settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
+    monkeypatch.setattr(cycle_module, 'CycleLedgerService', Ledger)
+    monkeypatch.setattr(cycle_module, 'validate_scan_sources', lambda: None)
+    monkeypatch.setattr(
+        cycle_module.MonitoringCycleService,
+        '_run',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(KeyboardInterrupt()),
+    )
+
+    with pytest.raises(KeyboardInterrupt):
+        cycle_module.MonitoringCycleService('db').run()
+
+    assert failures == [('cycle-1', 'KeyboardInterrupt: ')]
