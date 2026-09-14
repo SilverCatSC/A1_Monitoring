@@ -19,6 +19,21 @@ local_scan в режиме probe. Этот режим не создаёт observ
 - Повторный Auto.ru probe: HTTP 200, одна страница, 14 распознанных карточек,
   результат LOCAL_PROBE_OK.
 
+## Stabilisation after the first partial cycle
+
+- Auto.ru model filters now request `output_type=list`; the active Moscow
+  radius counter is used instead of an unrelated offer-count phrase. A Hongqi
+  HQ9 runtime probe completed on page 1 with 14/14 cards.
+- Avito waits once for late-rendered cards and falls back from an empty
+  `catalog-serp` marker to visible sibling cards. A Hongqi HQ9 runtime probe
+  recognised page 2 as valid (46 visible non-Moscow cards, zero in-scope hits),
+  rather than a parser error.
+- The subsequent owner correction changes the Avito contract to
+  `localPriority=1`; its separate evidence and limitation are recorded in
+  [AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
+  The earlier partial run and a cycle interrupted before filter scanning are
+  historical diagnostics only, not acceptance evidence.
+
 ## Deployment evidence
 
 После исправления образ application пересобран и перезапущен. Stage smoke,

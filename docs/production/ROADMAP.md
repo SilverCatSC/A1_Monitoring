@@ -142,6 +142,12 @@ VPSUS, backup/restore, Mac shadow-run, MSI/Windows и owner rollback decision.
 read-only probes Auto.ru/Avito; evidence записано в VPN_GATE_2026-09-14.md
 и LIVE_PROBE_2026-09-14.md.
 
+Уточнение owner от 14.09.2026 усилило Avito scope: все шесть фильтров теперь
+требуют `/moskva/`, `radius=0`, `searchRadius=0` и включённый
+`localPriority=1` (каталог v6). Старый цикл с `localPriority=0` не является
+доказательством корректной московской выборки; следующий shadow-run выполняется
+только с v6. Детали: AVITO_SELECTED_RADIUS_2026-09-14.md.
+
 M7 нельзя закрыть в CI или автоматическим агентом: нужны утверждённая owner
 контрольная выборка, полноценный shadow-run с ручной сверкой, реальные
 role accounts и отдельная MSI/Windows приёмка.

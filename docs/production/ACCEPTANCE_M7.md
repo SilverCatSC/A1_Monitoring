@@ -1,8 +1,8 @@
 # M7: production acceptance и rollback
 
-Статус: **не начат**. Этот runbook не разрешает сам запуск; он задаёт порядок
-приёмки после отдельного подтверждения владельца. Ни unit tests, ни статическая
-проверка Windows, ни сохранённый исторический запуск не закрывают M7.
+Статус: **начат на Mac/stage, не принят**. Этот runbook не разрешает сам запуск;
+он задаёт порядок приёмки после отдельного подтверждения владельца. Ни unit tests,
+ни статическая проверка Windows, ни сохранённый исторический запуск не закрывают M7.
 
 Mac/stage deployment evidence: [DEPLOYMENT_2026-09-14.md](DEPLOYMENT_2026-09-14.md).
 
@@ -45,6 +45,10 @@ basic reachability result, not a replacement for the remaining M7 gates.
 Current Mac marketplace probes are recorded in
 [LIVE_PROBE_2026-09-14.md](LIVE_PROBE_2026-09-14.md). They verify adapters on
 one page each without creating a monitoring cycle.
+
+Avito selected-radius configuration and its runtime evidence are recorded in
+[AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
+A fresh shadow-run must use this v6 filter catalogue.
 
 После подтверждения оператор фиксирует screenshot/текст настроек и выполняет один
 контролируемый доступ в обычном Chrome:
