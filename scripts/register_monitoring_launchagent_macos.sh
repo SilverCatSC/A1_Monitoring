@@ -105,7 +105,12 @@ require_console_gui_user() {
     fi
     CONSOLE_LOCKED="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
         | /usr/bin/plutil -extract IOConsoleLocked raw - 2>/dev/null || true)"
-    if [[ "$CONSOLE_LOCKED" != 'false' ]]; then
+    # The system-wide console flag alone is insufficient on current macOS:
+    # the active GUI session may report its own lock independently. Refuse
+    # registration unless both signals explicitly say the session is unlocked.
+    SESSION_SCREEN_LOCKED="$(/usr/sbin/ioreg -n Root -d1 -a 2>/dev/null \
+        | /usr/bin/plutil -extract IOConsoleUsers.0.CGSSessionScreenIsLocked raw - 2>/dev/null || true)"
+    if [[ "$CONSOLE_LOCKED" != 'false' || "$SESSION_SCREEN_LOCKED" != 'false' ]]; then
         safe_message 'LAUNCHAGENT_REGISTRATION_REFUSED reason=screen_locked_or_state_unavailable'
         exit 1
     fi

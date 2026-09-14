@@ -1,5 +1,17 @@
 # Журнал изменений
 
+## M6.10 — MacBook lock-screen fail-closed correction — 2026-09-14
+
+- Обнаружена и устранена расходимость IOKit-сигналов: при
+  `IOConsoleLocked=false` активная GUI-сессия могла одновременно иметь
+  `CGSSessionScreenIsLocked=true`. MacBook host-runner и LaunchAgent registrar
+  теперь требуют явного `false` для обоих признаков; отсутствие любого из них
+  также запрещает запуск.
+- На фактически заблокированной сессии `run_monitoring_host_macos.sh --preflight`
+  завершается до поднятия сервисов с
+  `HOST_RUNNER_REFUSED reason=screen_locked_or_state_unavailable`. Это локальное
+  отрицательное evidence: Chrome, VPN и marketplace cycle не запускались.
+
 ## M6.9 — MacBook-only execution boundary и VPN admission — 2026-09-14
 
 - Полный marketplace cycle и controlled retry теперь проходят только через

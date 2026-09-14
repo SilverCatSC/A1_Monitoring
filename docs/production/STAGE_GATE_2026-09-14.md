@@ -68,6 +68,24 @@ stage-контуром, а не M7 acceptance. Валидная VPN attestation 
 VPSUS policy/IPv6 egress proof, реальные роли, controlled shadow-run, TCC и
 LaunchAgent остаются отдельными owner gates.
 
+### Lock-screen correction after the preflight evidence
+
+Во время последующей безопасной проверки 2026-09-14 системный источник IOKit
+одновременно вернул `IOConsoleLocked=false` и
+`IOConsoleUsers.0.CGSSessionScreenIsLocked=true`. Это означает, что прежняя
+проверка одного только `IOConsoleLocked` была недостаточна: она могла ошибочно
+пропустить запуск на заблокированном экране. `run_monitoring_host_macos.sh` и
+`register_monitoring_launchagent_macos.sh` скорректированы так, что оба
+сигнала обязаны быть буквально `false`; true, отсутствие или ошибка чтения
+дают отказ.
+
+После исправления `./scripts/run_monitoring_host_macos.sh --preflight` на этой
+же заблокированной сессии вернул
+`HOST_RUNNER_REFUSED reason=screen_locked_or_state_unavailable` до Docker,
+Chrome, VPN admission, cycle/recovery или сетевого обращения к площадкам. Это
+проверяет только fail-closed lock boundary; успешный preflight и M7 acceptance
+из этого не следуют и должны повторяться после ручной разблокировки владельцем.
+
 ## Boundary
 
 This closes the backup/restore technical gate for the current Mac/stage only.

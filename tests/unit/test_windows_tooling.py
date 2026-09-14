@@ -215,6 +215,8 @@ def test_macos_host_runner_requires_visible_console_and_uses_kernel_lock():
     assert 'gui/$CONSOLE_UID' in runner
     assert 'IOConsoleLocked' in runner
     assert "CONSOLE_LOCKED" in runner
+    assert 'CGSSessionScreenIsLocked' in runner
+    assert 'SESSION_SCREEN_LOCKED' in runner
     assert 'screen_locked_or_state_unavailable' in runner
     assert runner.count('require_console_gui_user') >= 3
     assert 'with_monitoring_host_lock_macos.py' in runner
@@ -337,6 +339,8 @@ def test_macos_launchagent_registration_is_plan_only_and_never_autostarts():
     assert 'root_not_allowed' in registrar
     assert "stat -f '%Su' /dev/console" in registrar
     assert 'IOConsoleLocked' in registrar
+    assert 'CGSSessionScreenIsLocked' in registrar
+    assert 'SESSION_SCREEN_LOCKED' in registrar
     assert 'screen_locked_or_state_unavailable' in registrar
     assert 'if [[ "$APPLY" -eq 0 ]]' in registrar
     assert 'LAUNCHAGENT_REGISTRATION_PLAN_ONLY' in registrar
