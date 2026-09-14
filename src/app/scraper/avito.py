@@ -119,8 +119,17 @@ class AvitoAdapter:
                         if seller_catalogue and not seller_page_matches(search_url, page.url):
                             error = 'seller page redirected outside the approved seller catalogue'
                             break
-                        parsed = self._extract(catalogue_html(html) if seller_catalogue else html, page_number,
-                                               moscow_only=not seller_catalogue and '/moskva/' in urlsplit(search_url).path)
+                        catalogue = catalogue_html(html) if seller_catalogue else html
+                        # A Moscow query can legitimately paginate into offers from
+                        # other cities.  Classify the response from all visible cards;
+                        # apply the city scope only to the returned monitoring hits.
+                        parsed_all = self._extract(catalogue, page_number)
+                        moscow_only = not seller_catalogue and '/moskva/' in urlsplit(search_url).path
+                        parsed = (
+                            [hit for hit in parsed_all if _is_moscow_listing_url(hit.url)]
+                            if moscow_only
+                            else parsed_all
+                        )
                         pagination = pagination_state(html, self.source.value)
                         diagnostics[f'page_{page_number}_pagination'] = pagination
                         if pagination['current'] is not None and pagination['current'] != page_number:
@@ -134,7 +143,8 @@ class AvitoAdapter:
                             diagnostics[f'page_{page_number}_state'] = 'pagination_repeat'
                             break
                         seen_pages.add(page_keys)
-                        page_state, reason = classify_result_page(html, len(parsed))
+                        diagnostics[f'page_{page_number}_visible_cards'] = len(parsed_all)
+                        page_state, reason = classify_result_page(html, len(parsed_all))
                         card_evidence = 0
                         missing_card_evidence: list[str] = []
                         if page_state == 'results' and target_keys:
@@ -273,3 +283,7 @@ def _page_url(base_url: str, page_number: int) -> str:
     query = [(key, value) for key, value in parse_qsl(parts.query) if key != 'p']
     query.append(('p', str(page_number)))
     return urlunsplit(parts._replace(query=urlencode(query)))
+
+
+def _is_moscow_listing_url(url: str) -> bool:
+    return urlsplit(url).path.startswith('/moskva/')

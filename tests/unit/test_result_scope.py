@@ -96,6 +96,59 @@ def test_browser_traversal_stops_at_real_end_or_rejects_duplicate_pages(tmp_path
         assert 'pagination' in result.error
 
 
+def test_avito_other_city_page_is_results_not_parser_uncertainty(tmp_path, monkeypatch):
+    for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'avito_page_delay_seconds'):
+        monkeypatch.setattr(settings, key, 0)
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            page = await browser.new_page()
+
+            async def route_page(route):
+                number = int(parse_qs(urlsplit(route.request.url).query).get('p', ['1'])[0])
+                if number == 1:
+                    html = (
+                        '<div data-marker="catalog-serp">' + avito_card('1000000001') + '</div>'
+                        '<ul data-marker="pagination-button">'
+                        '<span data-marker="pagination-button/page(1)" class="item_current-test">1</span>'
+                        '<a data-marker="pagination-button/page(2)" href="?p=2">2</a>'
+                        '<a data-marker="pagination-button/nextPage" href="?p=2"></a></ul>'
+                    )
+                else:
+                    html = (
+                        '<div data-marker="catalog-serp">' + avito_card('1000000002', 'kazan') + '</div>'
+                        '<ul data-marker="pagination-button">'
+                        '<a data-marker="pagination-button/page(1)" href="?p=1">1</a>'
+                        '<span data-marker="pagination-button/page(2)" class="item_current-test">2</span>'
+                        '</ul>'
+                    )
+                await route.fulfill(content_type='text/html', body=html)
+
+            await page.route('**/*', route_page)
+
+            @asynccontextmanager
+            async def local_page(_playwright):
+                yield page
+
+            monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
+            try:
+                return await AvitoAdapter().scan_filter(
+                    'https://www.avito.ru/moskva/avtomobili/', max_pages=3
+                )
+            finally:
+                await browser.close()
+
+    result = asyncio.run(exercise())
+    assert result.complete is True
+    assert result.exhausted is True
+    assert len(result.hits) == 1
+    assert result.diagnostics['page_2_state'] == 'results'
+    assert result.diagnostics['page_2_visible_cards'] == 1
+    assert result.diagnostics['page_2'] == 0
+
+
 def test_expected_hit_without_exact_card_evidence_fails_closed(tmp_path, monkeypatch):
     for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'avito_page_delay_seconds'):
         monkeypatch.setattr(settings, key, 0)
