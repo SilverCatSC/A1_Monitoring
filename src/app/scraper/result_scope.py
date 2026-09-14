@@ -13,8 +13,12 @@ def primary_cards(html, selector, root_selector=None):
     for node in soup.select('aside, template, [hidden], [aria-hidden="true"], '
                             '[data-marker*="recommend"], [class*="Recommendations"], [class*="RelatedOffers"]'):
         node.decompose()
-    root = soup.select_one(root_selector) if root_selector else None
-    root = root if root is not None else soup
+    roots = soup.select(root_selector) if root_selector else []
+    # A catalogue may contain both a model summary and a concrete-offer group.
+    # Taking the first matching root can silently discard the latter when the
+    # summary appears first. The approved root with the most candidate cards is
+    # the only useful result scope; ties preserve document order.
+    root = max(roots, key=lambda node: len(node.select(selector)), default=soup)
     ordered = {id(node): index for index, node in enumerate(root.find_all(True))}
     boundary = min((ordered[id(node)] for node in root.select('h2,h3,[role="heading"]')
                     if SUPPLEMENT_HEADING.search(node.get_text(' ', strip=True))), default=float('inf'))

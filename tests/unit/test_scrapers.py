@@ -106,6 +106,29 @@ def test_auto_ru_extracts_current_new_group_offer_paths():
     assert hits[0].price == 27_550_000
 
 
+def test_auto_ru_uses_offer_root_when_model_summary_precedes_it():
+    html = """
+    <div class="ListingCars__items ListingCars__items_modelCars">
+      <div class="ListingItemGroup">Модельная сводка без карточки продажи</div>
+    </div>
+    <div class="CardGroupOffersList__items">
+      <div class="ListingItemUniversal-AbCdE">
+        <a class="ListingItemTitle__link"
+           href="https://auto.ru/cars/new/group/hongqi/hq9/1/2/1133149207-2529c1ee/">
+          Hongqi HQ9
+        </a>
+        <span>8 490 000 ₽</span>
+      </div>
+    </div>
+    """
+
+    hits = AutoRuAdapter()._extract(html, page_number=1)
+
+    assert len(hits) == 1
+    assert hits[0].title == 'Hongqi HQ9'
+    assert hits[0].price == 8_490_000
+
+
 def test_avito_extracts_known_article_markup():
     html = """
     <div data-marker="catalog-serp">
