@@ -29,6 +29,7 @@
 - [Offer reconciliation](production/OFFER_RECONCILIATION.md) — M4-очередь цены, НДС, статуса и ghost/missing Offer.
 - [Operator release](production/OPERATOR_RELEASE.md) — M5-роли, feedback по finding и отчёт по исключениям.
 - [Operations](production/OPERATIONS.md) — M6 controlled retry, status и границы scheduler.
+- [M7 acceptance](production/ACCEPTANCE_M7.md) — живые stop-gates, shadow-run, MSI и rollback.
 
 ## Справочные материалы предыдущей реализации
 

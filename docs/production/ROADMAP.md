@@ -126,6 +126,13 @@ Backup пишет SHA-256 companion, restore-test сравнивает dump/Alem
 только aggregate-only HTML. Реальные backup/restore, owner review HTML и Pages
 publish не выполнялись, поэтому M6 и `0.15.0` остаются открытыми.
 
+## M7 подготовлен документально, но не начат
+
+Единый [M7 acceptance runbook](ACCEPTANCE_M7.md) задаёт live stop-gates для
+VPSUS, backup/restore, Mac shadow-run, MSI/Windows и owner rollback decision.
+Его нельзя закрыть в CI или автоматическим агентом без утверждённой контрольной
+выборки и действий владельца.
+
 ## Рабочий ритм
 
 1. Уточнение scope и критериев реперной точки.
