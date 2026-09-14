@@ -125,10 +125,10 @@ Backup пишет SHA-256 companion, restore-test сравнивает dump/Alem
 таблицы во временной БД. Public export требует свежий owner allowlist и создаёт
 только aggregate-only HTML.
 
-Current Mac/stage technical gate 14.09.2026 закрыт: controlled deploy поднял
-app 0.14.0 / Alembic 20260914_0010; stage smoke, новый checksum backup и
-isolated restore-test прошли. Historical backup старой схемы также прошёл
-restore-test. Evidence: DEPLOYMENT_2026-09-14.md.
+Current Mac/stage technical gate 14.09.2026 закрыт: the latest controlled deploy
+is at app 0.14.0 / Alembic 20260914_0011; checksum backup and isolated
+restore-test passed. Historical backup старой схемы также прошёл restore-test.
+Evidence: [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md).
 
 M6 не получает version 0.15.0 до owner review aggregate-only export и живой
 Windows проверки backup-age и controlled retry. Export, Pages publish и
@@ -145,8 +145,9 @@ read-only probes Auto.ru/Avito; evidence записано в VPN_GATE_2026-09-14
 Уточнение owner от 14.09.2026 усилило Avito scope: все шесть фильтров теперь
 требуют `/moskva/`, `radius=0`, `searchRadius=0` и включённый
 `localPriority=1` (каталог v6). Старый цикл с `localPriority=0` не является
-доказательством корректной московской выборки; следующий shadow-run выполняется
-только с v6. Детали: AVITO_SELECTED_RADIUS_2026-09-14.md.
+доказательством корректной московской выборки. Fresh v6 shadow-run verified the
+Avito contract but correctly ended `partial` pending link review; details:
+[AVITO_SELECTED_RADIUS_2026-09-14.md](AVITO_SELECTED_RADIUS_2026-09-14.md).
 
 M7 нельзя закрыть в CI или автоматическим агентом: нужны утверждённая owner
 контрольная выборка, полноценный shadow-run с ручной сверкой, реальные

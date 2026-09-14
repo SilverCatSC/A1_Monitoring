@@ -68,6 +68,11 @@ A fresh shadow-run must use this v6 filter catalogue.
 
 ## Gate 2 — восстановление
 
+Mac/stage status: **completed** on 2026-09-14 at Alembic `20260914_0011`.
+The fresh backup and isolated restore matched the required control tables;
+evidence is in [STAGE_GATE_2026-09-14.md](STAGE_GATE_2026-09-14.md). The Windows
+execution in Gate 4 remains required.
+
 На той же целевой машине, без параллельного импорта:
 
 ```bash
