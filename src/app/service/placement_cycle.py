@@ -181,6 +181,17 @@ class PlacementCycleService:
             'skipped_cards_by_source': dict(skipped),
             'unverified_cards_by_source': dict(unverified),
             'blocked_sources': sorted(blocked),
+            'observed_cards': [
+                {
+                    'source': source.value,
+                    'url': card.url,
+                    'state': card.inspection.get('state'),
+                    'evidence': card.inspection.get('evidence'),
+                    'evidence_manifest': card.inspection.get('evidence_manifest'),
+                }
+                for source in (EngineType.AUTO_RU, EngineType.AVITO)
+                for card in opened[source]
+            ],
             'findings': findings,
         }
         report_path = self._write_report(report)

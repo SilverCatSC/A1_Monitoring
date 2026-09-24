@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% set active_page = 'reconciliation' %}
+{% block title %}Сверка ID объявлений{% endblock %}
+{% block content %}
+<header class="page-heading"><div>
+  <span class="eyebrow">СВЕРКА РАЗМЕЩЕНИЙ</span>
+  <h1>ID и перевыкладки</h1>
+  <p class="muted">Сопоставление фидов с открытыми карточками продавца. Новая ссылка — кандидат на проверку, а не автоматическое исправление.</p>
+</div></header>
+
+{% if not data.cycle %}
+<section class="panel empty">Циклов мониторинга пока нет. Живые объявления не проверены.</section>
+{% elif not data.report %}
+<section class="panel">
+  <h2>Сверка ID в последнем цикле не выполнена</h2>
+  <p>Цикл {{ data.cycle.id }} · {{ data.cycle.status }}. {% if data.error == 'report_not_available' %}Этап ещё не включён или фид недоступен.{% else %}Отчёт недоступен либо требует проверки целостности.{% endif %}</p>
+  <p class="helper">Это не означает, что объявления отсутствуют или проданы.</p>
+  {% if data.available_cycles %}<p><a href="?cycle_id={{ data.available_cycles[0].id }}">Открыть последнюю ID-сверку →</a></p>{% endif %}
+</section>
+{% else %}
+{% set report = data.report %}
+<section class="panel">
+  <div class="section-head"><div>
+    <h2>Цикл {{ data.cycle.id }}</h2>
+    <p class="muted">{{ report.created_at_utc }} · полный каталог:
+      Auto.ru {{ 'да' if report.catalogue_complete.get('auto_ru') else 'нет' }},
+      Avito {{ 'да' if report.catalogue_complete.get('avito') else 'нет' }}
+    </p>
+  </div><a class="button secondary" href="/api/v1/status/cycles/{{ data.cycle.id }}/placement-report" target="_blank">Подробный JSON</a></div>
+  <p>Открыто новых карточек: {{ report.new_card_checks }}. Находок для проверки: {{ data.review|length }}. ID, которых не удалось подтвердить: {{ report.findings|selectattr('code', 'equalto', 'not_verified')|list|length }}.</p>
+  {% if data.latest_cycle and data.latest_cycle.id != data.cycle.id %}<p class="helper">После этой ID-сверки были другие циклы. Показанный отчёт не описывает их состояние.</p>{% endif %}
+  <p class="helper">Фид может обновляться позже площадки. Совпадение одного AvitoId не подтверждает перевыкладку; исходный ID и ошибки сохраняются в отчёте.</p>
+</section>
+{% if data.available_cycles|length > 1 %}<section class="panel"><h2>Другие ID-проверки</h2><p>{% for cycle in data.available_cycles %}<a href="?cycle_id={{ cycle.id }}">{{ cycle.id }}</a> · {{ cycle.status }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p></section>{% endif %}
+
+<section class="panel"><h2>Что требует проверки</h2>
+{% for row in data.review %}
+{% set item = row.finding %}
+<div class="insight"><div>
+  <strong>{{ row.label }} · {{ item.placement_id or item.suggested_placement_id or 'ID не указан' }}</strong>
+  <p>{{ row.action }}</p>
+  <details><summary>Основание проверки</summary><p class="helper">{{ item.reason }}</p><p class="helper">{{ item.feed_sheet or 'Строка фида не установлена' }}{% if item.feed_row %} · строка {{ item.feed_row }}{% endif %}{% if item.id_match_basis %} · {{ item.id_match_basis }}{% endif %} · {{ item.code }}</p></details>
+  {% if item.current_url %}<p class="helper">Ссылка в реестре: {{ item.current_url }}</p>{% endif %}
+  {% for url in row.urls %}<p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">Открыть найденное объявление →</a></p>{% endfor %}
+  {% if row.evidence_index is not none %}<p><a href="/api/v1/status/cycles/{{ data.cycle.id }}/placement-evidence/{{ row.evidence_index }}" target="_blank">Снимок карточки →</a></p>{% endif %}
+</div><span class="badge {{ 'technical_error' if item.code in ['identity_conflict','duplicate_feed_id','duplicate_platform_id'] else 'absent_uncertain' }}">{{ 'Конфликт' if item.code in ['identity_conflict','duplicate_feed_id','duplicate_platform_id'] else 'Проверить' }}</span></div>
+{% else %}<p class="empty">Явных расхождений в отчёте нет. Проверьте полноту каталога и количество неподтверждённых ID выше.</p>{% endfor %}
+</section>
+{% endif %}
+{% endblock %}

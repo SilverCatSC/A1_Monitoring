@@ -48,7 +48,7 @@ from app.schemas import (
     TriggerCycleResponse,
     TriggerScanResponse,
 )
-from app.scraper.base import canonical_listing_key
+from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
 from app.service.analytics import STATES, activity_context, analytics_context
 from app.service.company_site_report import company_site_audit_context
 from app.service.cycle import (
@@ -77,6 +77,7 @@ from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import ScanAlreadyRunning, ScanConfigurationError
 from app.service.offer_reconciliation import offer_review_queue
+from app.service.placement_report import PlacementReportError, read_cycle_placement_report
 from app.service.public_report import public_report_context
 from app.service.reconciliation import reconciliation_context
 from app.service.report import (
@@ -96,6 +97,24 @@ from app.service.scan_progress import read_scan_progress
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
+PLACEMENT_REVIEW_LABELS = {
+    'republication_candidate': ('Возможная перевыкладка', 'Сверьте снимок новой карточки и подтвердите ссылку у оператора.'),
+    'mixed_script_id': ('Похожая кириллическая буква в ID', 'Машина сопоставлена с предупреждением; исправление текста не требуется для проверки.'),
+    'mixed_script_feed_id': ('Ошибка буквы в фиде', 'Проверка продолжается, но исходный ID фида требует исправления.'),
+    'platform_id_candidate': ('Совпал только номер Avito', 'Не меняйте ссылку без ID из описания или ручного подтверждения.'),
+    'identity_conflict': ('Противоречие идентификаторов', 'Проверьте фид и карточку; связь автоматически не установлена.'),
+    'duplicate_feed_id': ('Повтор ID в фиде', 'Устраните неоднозначность перед подтверждением ссылки.'),
+    'duplicate_platform_id': ('Повтор AvitoId в фиде', 'Проверьте обе строки фида; номер площадки не даёт однозначной связи.'),
+    'duplicate_public_id': ('Несколько карточек с одним ID', 'Определите актуальную публикацию вручную.'),
+    'hidden_but_public': ('Скрыто в фиде, видно на площадке', 'Сверьте статус публикации, не делая вывода об оплате.'),
+    'invalid_card_id': ('Некорректный ID карточки', 'Проверьте исходный текст объявления.'),
+    'invalid_feed_id': ('Некорректный ID фида', 'Проверьте исходную строку фида.'),
+    'card_evidence_missing': ('Нет подтверждённого снимка', 'Повторите контролируемое открытие карточки.'),
+    'current_link_missing': ('Нет ссылки в реестре', 'Проверьте строку реестра и найденную карточку.'),
+    'current_link_invalid': ('Некорректная ссылка в реестре', 'Проверьте ссылку и найденную карточку.'),
+    'vehicle_anchor_missing': ('Нет связи с автомобилем', 'Нужен VIN или другой подтверждённый внутренний идентификатор.'),
+    'public_id_without_feed_row': ('Карточка без строки фида', 'Проверьте публикацию и актуальность выгрузки.'),
+}
 
 
 @router.get('/health', response_model=HealthResponse)
@@ -194,6 +213,44 @@ def monitoring_cycle_status(cycle_id: str, db: Session = Depends(get_db)):
     }
 
 
+@router.get('/status/cycles/{cycle_id}/placement-report')
+def monitoring_cycle_placement_report(
+    cycle_id: str, request: Request, db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator', 'marketing', 'sales_director')
+    cycle = db.get(MonitoringCycle, cycle_id)
+    if cycle is None:
+        raise HTTPException(status_code=404, detail='monitoring cycle not found')
+    try:
+        return read_cycle_placement_report(cycle, settings.evidence_dir)
+    except PlacementReportError as exc:
+        code = 404 if str(exc) == 'report_not_available' else 409
+        raise HTTPException(status_code=code, detail='placement report unavailable') from exc
+
+
+@router.get('/status/cycles/{cycle_id}/placement-evidence/{index}')
+def monitoring_cycle_placement_evidence(
+    cycle_id: str, index: int, request: Request, db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator', 'marketing', 'sales_director')
+    cycle = db.get(MonitoringCycle, cycle_id)
+    if cycle is None:
+        raise HTTPException(status_code=404, detail='monitoring cycle not found')
+    try:
+        report = read_cycle_placement_report(cycle, settings.evidence_dir)
+        cards = report['observed_cards']
+        if index < 0 or index >= len(cards) or not isinstance(cards[index], dict):
+            raise EvidenceAccessError('card evidence not found')
+        stored = cards[index].get('evidence')
+        if not isinstance(stored, str) or cards[index].get('evidence_manifest') != evidence_manifest_name(stored):
+            raise EvidenceAccessError('card evidence manifest mismatch')
+        read_evidence_manifest(stored, settings.evidence_dir)
+        path = resolve_named_evidence(stored, settings.evidence_dir)
+    except (PlacementReportError, EvidenceAccessError) as exc:
+        raise HTTPException(status_code=404, detail='card evidence unavailable') from exc
+    return FileResponse(path, media_type='image/png')
+
+
 @router.get('/status/cycles')
 def monitoring_cycles_status(limit: int = 20, db: Session = Depends(get_db)):
     return recent_monitoring_cycles(db, limit=limit)
@@ -275,6 +332,66 @@ def reconciliation_html(request: Request, db: Session = Depends(get_db)):
     data['actor_name'] = actor.username
     data['actor_role'] = actor.role
     return templates.TemplateResponse(request=request, name='reconciliation.html', context={'data': data})
+
+
+@router.get('/dashboard/placement-identity', response_class=HTMLResponse)
+def placement_identity_html(
+    request: Request, cycle_id: str | None = None, db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator', 'marketing', 'sales_director')
+    recent = db.query(MonitoringCycle).order_by(
+        MonitoringCycle.started_at.desc(), MonitoringCycle.id.desc()
+    ).limit(20).all()
+    available = [item for item in recent
+                 if isinstance(item.summary, dict)
+                 and isinstance(item.summary.get('placement_reconciliation'), dict)]
+    cycle = db.get(MonitoringCycle, cycle_id) if cycle_id else (
+        available[0] if available else recent[0] if recent else None
+    )
+    if cycle_id and cycle is None:
+        raise HTTPException(status_code=404, detail='monitoring cycle not found')
+    data = {
+        'cycle': cycle, 'latest_cycle': recent[0] if recent else None,
+        'available_cycles': available,
+        'report': None, 'review': [], 'error': None,
+    }
+    if cycle is not None:
+        try:
+            report = read_cycle_placement_report(cycle, settings.evidence_dir)
+        except PlacementReportError as exc:
+            data['error'] = str(exc)
+        else:
+            evidence_by_url = {
+                card.get('url'): index
+                for index, card in enumerate(report['observed_cards'])
+                if isinstance(card.get('url'), str) and card.get('evidence')
+            }
+            for finding in report['findings']:
+                if not isinstance(finding, dict) or finding.get('code') in {'link_current', 'not_verified'}:
+                    continue
+                urls = [
+                    url for url in finding.get('observed_urls', [])
+                    if isinstance(url, str) and (
+                        is_marketplace_listing_url(EngineType.AUTO_RU, url)
+                        or is_marketplace_listing_url(EngineType.AVITO, url)
+                    )
+                ]
+                label, action = PLACEMENT_REVIEW_LABELS.get(
+                    finding.get('code'),
+                    ('Нужна проверка ID', 'Сверьте карточку и фид вручную.'),
+                )
+                data['review'].append({
+                    'finding': finding,
+                    'label': label,
+                    'action': action,
+                    'urls': urls,
+                    'evidence_index': next((evidence_by_url[url] for url in urls
+                                            if url in evidence_by_url), None),
+                })
+            data['report'] = report
+    return templates.TemplateResponse(
+        request=request, name='placement_identity.html', context={'data': data},
+    )
 
 
 @router.get('/reconciliation/review-queue')

@@ -149,6 +149,11 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     os.environ['BROWSER_CDP_URL'] = cdp_url
     os.environ['PLAYWRIGHT_HEADLESS'] = 'false'
     os.environ['SCAN_ENABLED_ENGINES'] = args.engines
+    # One controlled host invocation opts in; a stale .env value cannot turn
+    # later ordinary cycles into repeated identity-card visits.
+    os.environ['PLACEMENT_RECONCILIATION_ENABLED'] = (
+        'true' if getattr(args, 'placement_identity', False) else 'false'
+    )
     os.environ['SCAN_PAGES_LIMIT'] = str(args.pages)
     os.environ['EVIDENCE_DIR'] = str(evidence_dir)
     # The host runner owns this file outside the writable evidence directory.
@@ -243,6 +248,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument('--pages', type=int, default=3, choices=range(1, 11), metavar='1..10')
     parser.add_argument('--probe-url', help='Check one search URL without writing observations to the DB')
     parser.add_argument(
+        '--placement-identity', action='store_true',
+        help='Enable one bounded feed-to-card ID reconciliation in this controlled cycle',
+    )
+    parser.add_argument(
         '--retry-cycle',
         help='Start one explicit retry for a completed partial/failed cycle; never combine with --watch.',
     )
@@ -277,6 +286,8 @@ def main() -> int:
         raise RuntimeError('retry-cycle cannot be combined with probe-url')
     if args.retry_cycle and args.watch:
         raise RuntimeError('retry-cycle cannot be combined with watch')
+    if args.placement_identity and args.probe_url:
+        raise RuntimeError('placement-identity requires a full controlled cycle')
     if args.watch:
         raise RuntimeError(
             'recurring monitoring is not accepted; use a reviewed MacBook LaunchAgent after M7 acceptance'

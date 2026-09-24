@@ -25,6 +25,7 @@ PREFLIGHT_ONLY=0
 ENGINES_WAS_SET=0
 PAGES_WAS_SET=0
 RETRY_CYCLE_ID=''
+WITH_PLACEMENT_ID=0
 RUNNER_STARTED_AT=''
 RUNNER_PHASE='startup'
 SCAN_EXIT_CODE=-1
@@ -37,7 +38,7 @@ LOCK_FD="${A1_MONITORING_HOST_LOCK_FD:-}"
 usage() {
     cat <<'EOF'
 Usage: scripts/run_monitoring_host_macos.sh [--preflight]
-       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10]
+       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10] [--placement-identity]
        scripts/run_monitoring_host_macos.sh --retry-cycle <completed-partial-or-failed-cycle-uuid>
 
 Runs one cautious monitoring cycle through the signed-in macOS user's visible
@@ -51,6 +52,8 @@ an automatic retry and cannot be combined with --preflight.
 session, holds the same host lock, starts app/db/backup, and waits for HTTP
 readiness. It does not open Chrome, recover cycles, or contact marketplaces.
 It cannot be combined with scan parameters.
+
+--placement-identity enables one bounded feed-to-card ID check in this run only.
 EOF
 }
 
@@ -87,6 +90,14 @@ parse_arguments() {
                 PREFLIGHT_ONLY=1
                 shift
                 ;;
+            --placement-identity)
+                if [[ "$WITH_PLACEMENT_ID" -eq 1 ]]; then
+                    safe_message 'HOST_RUNNER_REFUSED reason=duplicate_placement_identity'
+                    exit 64
+                fi
+                WITH_PLACEMENT_ID=1
+                shift
+                ;;
             --retry-cycle)
                 [[ $# -ge 2 ]] || { usage >&2; exit 64; }
                 [[ -z "$RETRY_CYCLE_ID" ]] || {
@@ -117,6 +128,7 @@ parse_arguments() {
     fi
     if [[ "$PREFLIGHT_ONLY" -eq 1 ]] && \
         { [[ "$ENGINES_WAS_SET" -eq 1 ]] || [[ "$PAGES_WAS_SET" -eq 1 ]] || \
+          [[ "$WITH_PLACEMENT_ID" -eq 1 ]] || \
           [[ -n "$RETRY_CYCLE_ID" ]]; }; then
         safe_message 'HOST_RUNNER_REFUSED reason=preflight_does_not_accept_scan_parameters'
         exit 64
@@ -411,6 +423,9 @@ main() {
     RUNNER_PHASE='scan'
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
     local scan_args=(--engines "$ENGINES" --pages "$PAGES" --pace "$PACE")
+    if [[ "$WITH_PLACEMENT_ID" -eq 1 ]]; then
+        scan_args+=(--placement-identity)
+    fi
     if [[ -n "$RETRY_CYCLE_ID" ]]; then
         scan_args+=(--retry-cycle "$RETRY_CYCLE_ID")
     fi

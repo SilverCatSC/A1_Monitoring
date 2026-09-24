@@ -52,6 +52,7 @@ def test_reused_chrome_is_prepared_before_scan(monkeypatch, tmp_path):
 
 
 def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
+    monkeypatch.setenv('PLACEMENT_RECONCILIATION_ENABLED', 'false')
     for key in local_scan.PACING_PROFILES['cautious']:
         monkeypatch.delenv(key, raising=False)
     args = SimpleNamespace(
@@ -69,6 +70,13 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['SCAN_FILTER_PAUSE_MIN_SECONDS'] == '12'
     assert local_scan.os.environ['SCAN_PAGE_PAUSE_MAX_SECONDS'] == '12'
     assert local_scan.os.environ['AUTO_RU_PAGE_DELAY_SECONDS'] == '5'
+    assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
+    args.placement_identity = True
+    local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'})
+    assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'true'
+    args.placement_identity = False
+    local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'})
+    assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
 
 
 def test_local_scan_reports_cycle_id_before_its_final_status(monkeypatch, capsys, tmp_path):

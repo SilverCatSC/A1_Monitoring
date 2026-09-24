@@ -34,6 +34,8 @@ records имеют приоритет над старым аудитом и об
 - [M7 acceptance](production/ACCEPTANCE_M7.md) — живые MacBook stop-gates, shadow-run и rollback.
 - [Сверка ID в полном цикле](production/PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md) —
   фиды, ограниченный обход новых карточек, evidence и границы включения.
+- [Готовность ID-цикла](production/M7_ID_CONTROLLED_RUN_READINESS_2026-09-24.md) —
+  подтверждённые шаги и текущие stop-factors живой приёмки.
 - [VPN gate](production/VPN_GATE_2026-09-14.md) — read-only VPSUS evidence и открытые route limits.
 - [VPN admission contract](production/VPN_ADMISSION_CONTRACT_2026-09-14.md) — private owner
   attestation перед full MacBook host cycle, её schema и fail-closed boundary.
