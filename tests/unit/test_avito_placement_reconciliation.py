@@ -88,7 +88,7 @@ def test_both_feed_tabs_are_required_for_cross_tab_uniqueness():
         )
 
 
-def test_mixed_cyrillic_latin_card_id_is_a_candidate_not_a_verified_link():
+def test_mixed_cyrillic_latin_card_id_can_identify_republication_with_warning():
     card = OpenedMarketplaceCard(
         url=NEW,
         inspection={
@@ -103,11 +103,155 @@ def test_mixed_cyrillic_latin_card_id_is_a_candidate_not_a_verified_link():
         [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
     )
 
-    assert [item.code for item in findings] == ['mixed_script_candidate', 'not_verified']
+    assert [item.code for item in findings] == ['mixed_script_id', 'republication_candidate']
     assert findings[0].suggested_placement_id == 'MBVC011220262508260009'
     assert findings[0].current_url == OLD
     assert findings[0].feed_sheet == 'avito-feed-new'
     assert findings[0].observed_urls == (NEW,)
+    assert findings[1].id_match_basis == 'visual_alias'
+    assert findings[1].observed_urls == (NEW,)
+
+
+def test_owner_sample_avito_id_confirms_mixed_script_card_match():
+    card = OpenedMarketplaceCard(
+        url=NEW,
+        inspection={
+            'state': 'active',
+            'card': {'placement_id': None, 'placement_id_raw': 'МBVC011220262508260009'},
+            'evidence': EVIDENCE,
+            'evidence_manifest': evidence_manifest_name(EVIDENCE),
+        },
+    )
+    findings = reconcile_avito_placements(
+        _feeds(new=[{
+            'Id': 'MBVC011220262508260009', 'VIN': VIN, 'AvitoId': '8176281881',
+        }]),
+        [card], first_data_rows={'avito-feed-new': 9, 'avito-feed-used': 4},
+        current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['mixed_script_id', 'republication_candidate']
+    assert findings[0].feed_row == 9
+    assert findings[0].platform_id_confirmed
+    assert findings[1].platform_id_confirmed
+    assert findings[1].id_match_basis == 'visual_alias'
+
+
+def test_missing_card_id_cannot_use_stale_prone_platform_id_as_sole_identity():
+    findings = reconcile_avito_placements(
+        _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'}]),
+        [_card(placement_id=None)], first_data_rows=FIRST_ROWS,
+        current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['platform_id_candidate', 'not_verified']
+    assert findings[0].id_match_basis == 'platform_id'
+    assert findings[0].platform_id_confirmed
+    assert findings[1].observed_urls == ()
+
+
+def test_unrepairable_card_id_is_only_a_platform_id_candidate():
+    card = OpenedMarketplaceCard(
+        url=NEW,
+        inspection={
+            'state': 'active',
+            'card': {'placement_id': None, 'placement_id_raw': 'BAD-CARD-ID'},
+            'evidence': EVIDENCE,
+            'evidence_manifest': evidence_manifest_name(EVIDENCE),
+        },
+    )
+    findings = reconcile_avito_placements(
+        _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'}]),
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['platform_id_candidate', 'not_verified']
+    assert findings[0].placement_id == 'BAD-CARD-ID'
+    assert findings[0].suggested_placement_id == PLACEMENT_ID
+    assert findings[1].observed_urls == ()
+
+
+def test_republication_with_new_avito_id_still_matches_visual_alias():
+    card = OpenedMarketplaceCard(
+        url=NEW,
+        inspection={
+            'state': 'active',
+            'card': {'placement_id': None, 'placement_id_raw': 'МBVC011220262508260009'},
+            'evidence': EVIDENCE,
+            'evidence_manifest': evidence_manifest_name(EVIDENCE),
+        },
+    )
+    findings = reconcile_avito_placements(
+        _feeds(new=[{
+            'Id': 'MBVC011220262508260009', 'VIN': VIN, 'AvitoId': '8047929828',
+        }]),
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['mixed_script_id', 'republication_candidate']
+    assert findings[1].id_match_basis == 'visual_alias'
+    assert not findings[1].platform_id_confirmed
+
+
+def test_description_id_conflicting_with_platform_id_fails_closed():
+    findings = reconcile_avito_placements(
+        _feeds(new=[
+            {'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'},
+            {'Id': 'MBVC011220262508260009', 'VIN': 'W1VVNLTZ4T4788708'},
+        ]),
+        [_card(placement_id='MBVC011220262508260009')],
+        first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == [
+        'identity_conflict', 'not_verified', 'not_verified',
+    ]
+    assert findings[0].suggested_placement_id == PLACEMENT_ID
+
+
+def test_duplicate_avito_id_across_feeds_blocks_platform_anchor():
+    findings = reconcile_avito_placements(
+        _feeds(
+            new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'}],
+            used=[{
+                'Id': 'MBVC011220262508260009', 'VIN': 'W1VVNLTZ4T4788708',
+                'AvitoId': '8176281881',
+            }],
+        ),
+        [_card(placement_id=None)], first_data_rows=FIRST_ROWS,
+    )
+
+    assert [item.code for item in findings] == [
+        'duplicate_platform_id', 'duplicate_platform_id', 'card_id_missing',
+    ]
+
+
+def test_platform_id_without_direct_card_evidence_does_not_verify():
+    findings = reconcile_avito_placements(
+        _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'}]),
+        [_card(placement_id=None, evidence=False)], first_data_rows=FIRST_ROWS,
+    )
+
+    assert [item.code for item in findings] == ['not_verified']
+
+
+def test_mixed_script_id_at_current_link_does_not_create_false_republication():
+    card = OpenedMarketplaceCard(
+        url=OLD,
+        inspection={
+            'state': 'active',
+            'card': {'placement_id': None, 'placement_id_raw': 'МBVC011220262508260009'},
+            'evidence': EVIDENCE,
+            'evidence_manifest': evidence_manifest_name(EVIDENCE),
+        },
+    )
+    findings = reconcile_avito_placements(
+        _feeds(new=[{'Id': 'MBVC011220262508260009', 'VIN': VIN}]),
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['mixed_script_id', 'link_current']
+    assert findings[1].id_match_basis == 'visual_alias'
 
 
 def test_visual_alias_without_exact_feed_id_stays_invalid():
@@ -126,3 +270,28 @@ def test_visual_alias_without_exact_feed_id_stays_invalid():
     )
 
     assert [item.code for item in findings] == ['invalid_card_id', 'not_verified']
+
+
+def test_mixed_script_feed_id_can_match_an_exact_card_without_marketing_fix():
+    findings = reconcile_avito_placements(
+        _feeds(new=[{'Id': 'МBVC011220262508260027', 'VIN': VIN}]),
+        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['mixed_script_feed_id', 'republication_candidate']
+    assert findings[0].suggested_placement_id == PLACEMENT_ID
+    assert findings[1].id_match_basis == 'visual_alias'
+
+
+def test_duplicate_after_visual_normalization_blocks_link_decision():
+    findings = reconcile_avito_placements(
+        _feeds(
+            new=[{'Id': 'МBVC011220262508260027', 'VIN': VIN}],
+            used=[{'Id': PLACEMENT_ID, 'VIN': VIN}],
+        ),
+        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == [
+        'mixed_script_feed_id', 'duplicate_feed_id', 'duplicate_feed_id'
+    ]
