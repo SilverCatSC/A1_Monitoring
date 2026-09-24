@@ -23,9 +23,9 @@ _PLACEMENT_ID_RE = re.compile(
 # labels it. Looking for a bare 22-character token in a marketing description
 # would create a false identity assertion from arbitrary copy or a VIN-like ID.
 _DESCRIPTION_PLACEMENT_ID_RE = re.compile(
-    r'(?i)(?:\ba1\s*)?\b(?:id|ид|идентификатор|placement\s*id)'
-    r'(?:\s*[-№#]?\s*(?:номер|number))?\s*[:№#-]?\s*'
-    r'(?P<placement_id>[a-z0-9]{22})\b'
+    r'(?i)(?:\ba1\s*)?\b(?:идентификатор|placement\s*id|id|ид)'
+    r'(?:\s*[-№#]?\s*(?:номер|number))?(?:\s*[:№#-]\s*|\s+)'
+    r'(?P<placement_id>\w{1,64})\b'
 )
 
 
@@ -98,18 +98,24 @@ def format_placement_id(
     return parse_placement_id(candidate).value
 
 
+def placement_id_claim_from_description(description: str | None) -> str | None:
+    """Read a labelled claim, including malformed length or Unicode text."""
+    match = _DESCRIPTION_PLACEMENT_ID_RE.search(str(description or ''))
+    return match['placement_id'] if match is not None else None
+
+
 def placement_id_from_description(description: str | None) -> str | None:
-    """Return an explicitly labelled valid placement ID from an advert description.
+    """Return an explicitly labelled valid ASCII placement ID from a description.
 
     The marketplace URL, title and an unlabelled 22-character fragment are not
     identity evidence. A value such as ``A1 ID: MBVC011220262508260027`` in
     the description is. Malformed labels fail closed as ``None``; callers
     should surface them for marketing correction rather than infer a match.
     """
-    match = _DESCRIPTION_PLACEMENT_ID_RE.search(str(description or ''))
-    if match is None:
+    claim = placement_id_claim_from_description(description)
+    if claim is None:
         return None
     try:
-        return parse_placement_id(match['placement_id']).value
+        return parse_placement_id(claim).value
     except PlacementIdError:
         return None

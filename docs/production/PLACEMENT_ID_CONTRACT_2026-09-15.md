@@ -67,13 +67,13 @@ ID when provided, and associate the current direct URL after the item is
 observed. It does **not** prove that two different placement IDs are the same
 physical car.
 
-## Direct-card declaration: current status, 22 September 2026
+## Direct-card declaration: current status, 24 September 2026
 
-The placement ID is now present in the Auto.ru description block
+The placement ID is present in the Auto.ru description block
 `<div class="CardDescriptionHTML">` for the owner-reported current listings.
-It is not yet present on Avito. This is source evidence, not yet a completed
-monitoring-cycle observation: no controlled direct-card sample has been run
-after the change.
+The owner also reports that it is now present on Avito and supplied one
+description sample. Neither platform has a completed controlled
+monitoring-cycle sample after the change.
 
 The machine-readable declaration is:
 
@@ -87,7 +87,7 @@ when it is both explicitly labelled and valid under this 22-character contract.
 A bare number in the title, URL or description is deliberately not treated as
 identity evidence.
 
-For Auto.ru, the intended safe proof chain is now structurally available
+For both platforms, the intended safe proof chain is now structurally available
 without a dealer-cabinet API:
 
 ```text
@@ -101,6 +101,9 @@ shape or the allowed action values. The ID remains unchanged when the same
 placement is republished on a platform. A genuinely new sale/publication
 receives a new ID, so the ID is not automatic proof that two different
 placements are the same physical vehicle.
+
+The owner-provided Avito sample has a mixed Cyrillic/Latin `МBVC...` ID, so it
+is not an exact valid placement ID; see [Avito reconciliation](AVITO_ID_RECONCILIATION_2026-09-24.md).
 
 The marketing source table separately has VIN and platform URL columns, but no
 placement-ID column. It is therefore a useful source of direct URLs and a
@@ -131,8 +134,9 @@ Auto.ru direct-card sample: an active `show` row must have exact equality
 between `unique_id` and the ID in `CardDescriptionHTML`. Only then feed the
 VIN-to-placement mapping into the local registry and allow an automatic URL
 update for one exact expected ID on one active opened card. Zero or multiple
-matches must remain `review_required`. Avito remains out of this gate until
-the description declaration is actually implemented there.
+matches must remain `review_required`. Avito has the same read-only comparison,
+but the supplied description declaration needs correction and a controlled
+live-cycle verification.
 
 `src/app/service/placement_identity.py` is a pure parser/formatter for this
 contract only. It neither publishes data nor changes a platform link.

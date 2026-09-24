@@ -6,6 +6,7 @@ from app.service.placement_identity import (
     PlacementIdError,
     format_placement_id,
     parse_placement_id,
+    placement_id_claim_from_description,
     placement_id_from_description,
 )
 
@@ -67,7 +68,16 @@ def test_invalid_placement_ids_fail_closed(value):
         ('Идентификатор № HOH6022120241506260206', 'HOH6022120241506260206'),
         ('Mercedes-Benz V-Class MBVC011220262508260027', None),
         ('ID: MBVC011220262508260000', None),
+        ('ID: МBVC011220262508260009', None),
+        ('ID: MBVC01122026250826009', None),
     ],
 )
 def test_placement_id_in_description_requires_a_label_and_valid_contract(description, expected):
     assert placement_id_from_description(description) == expected
+
+
+def test_mixed_script_claim_is_visible_as_invalid_but_never_normalized():
+    description = 'ID: МBVC011220262508260009\nСтатус наличия: В производстве'
+
+    assert placement_id_claim_from_description(description) == 'МBVC011220262508260009'
+    assert placement_id_from_description(description) is None

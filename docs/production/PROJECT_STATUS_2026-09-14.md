@@ -26,7 +26,7 @@ production-контур на основном MacBook, который остор
 | Инженерная основа | 90% | MacBook-only entrypoint, lock-screen gate, private VPN admission, backup/restore, тесты и документация | Поддерживать regression-gates при следующих изменениях |
 | Runtime MacBook + VPSUS | 80% | VPSUS connected, Auto.ru/Avito direct-mode exceptions видимы, dual-stack reachability, host preflight и один controlled cycle прошли | Финальный M7 owner sign-off; public egress attribution не заявляется доказанной |
 | Поиск и evidence | 75% | Controlled cycle прошёл Auto.ru и Avito без технических ошибок, evidence сохранён, Avito selected-radius соблюдён | Ручная контрольная выборка M7 и решение по расширенному run |
-| Качество ссылок/перевыкладок | 65% | 46 из 68 source-link связей подтверждены в свежем каталоге продавца; подтверждён feed mapping `VIN → unique_id`/`Id → platform item ID`; Auto.ru начал выводить ID в описании | 14 отсутствующих валидных ссылок и 8 закрытых/ambiguous связей требуют републикационной сверки; feed-to-registry import ещё не включён; Auto.ru direct-card sample и Avito implementation ожидаются |
+| Качество ссылок/перевыкладок | 65% | 46 из 68 source-link связей подтверждены в свежем каталоге продавца; подтверждён feed mapping `VIN → unique_id`/`Id → platform item ID`; обе площадки, по сообщению владельца, выводят ID в описании, read-only сверка реализована | 14 отсутствующих валидных ссылок и 8 закрытых/ambiguous связей требуют републикационной сверки; feed-to-registry import и controlled card samples ещё не включены; пример Avito содержит смешение кириллицы и латиницы в ID |
 | Формальная production-приёмка M7 | 35% | Технические gates и один корректный `partial` доказаны | Контрольная выборка, реальные роли, owner sign-off и, только если нужен график, LaunchAgent acceptance |
 
 **Интегральная готовность: около 68%.** Это означает: платформа уже работает
@@ -97,9 +97,9 @@ transparency rather than a technical precondition. Keep a read-only publication
 journal containing `a1_vehicle_id`/VIN, placement ID, platform, platform item
 ID and URL. The new pre-publication gate rejects malformed IDs, duplicates in a
 feed and an Avito `Id` accidentally replaced by `AvitoId`. A direct-card
-reader is now ready for Auto.ru, but it has no production evidentiary role
-until a controlled direct-card sample verifies the exact rendered ID. Avito
-remains excluded until the marketing rule is released there. Neither component
+reader is ready for both platforms, but it has no production evidentiary role
+until controlled direct-card samples verify the exact rendered IDs. The owner-
+provided Avito sample has a mixed-script ID and needs correction. Neither component
 publishes anything or guesses a link. Drom has no accepted identity contract
 yet because its inspected feed tab contained no values.
 
@@ -111,8 +111,9 @@ yet because its inspected feed tab contained no values.
 1. **Провести Auto.ru direct-card sample**: ID активной строки `show` из
    `unique_id` должен совпасть с ID в описании. После этого включить read-only
    import связи `VIN → placement_id` из фидов и журнал публикаций; сопоставлять
-   со считанным из карточки ID. Avito проходит тот же gate только после
-   внедрения ID в описании. Колонка `placement_id` в основной таблице
+   со считанным из карточки ID. Для Avito исправить смешанный алфавит в
+   предоставленном примере и выполнить такой же controlled sample. Колонка
+   `placement_id` в основной таблице
    рекомендуется для прозрачности, но не блокирует этот этап.
 2. **Сверить текущую очередь**: 14 записей без ссылки и 8 снятых/ambiguous
    карточек; оператор подтверждает только фактические новые URL.

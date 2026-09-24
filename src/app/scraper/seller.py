@@ -17,7 +17,7 @@ from app.scraper.base import (
 from app.scraper.browser_session import browser_page
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import SUPPLEMENT_HEADING
-from app.service.placement_identity import placement_id_from_description
+from app.service.placement_identity import placement_id_claim_from_description, placement_id_from_description
 
 SELLER_SOURCES = {
     'auto_ru': ['https://auto.ru/diler/cars/all/a1_avto_moskva/',
@@ -116,6 +116,7 @@ def _direct_card_fields(html, source):
         'vat_status': vat_status,
         'vat_required': source == EngineType.AVITO,
         'description_excerpt': (description or '')[:1800] or None,
+        'placement_id_raw': placement_id_claim_from_description(description),
         'placement_id': placement_id_from_description(description),
     }
 

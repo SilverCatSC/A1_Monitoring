@@ -425,6 +425,20 @@ def test_direct_autoru_card_reads_placement_id_from_card_description_html():
     assert result['card']['placement_id'] == 'MBVC011220262508260027'
 
 
+def test_direct_avito_card_reports_mixed_script_id_without_trusting_it():
+    url = 'https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_8176281881'
+    html = '''
+    <h1>Mercedes-Benz V-класс 2.0 AT, 2026</h1>
+    <div data-marker="item-view/item-description"><p>ID: МBVC011220262508260009<br>В производстве</p></div>
+    '''
+
+    result = direct_page_status(html, EngineType.AVITO, url, url, 200)
+
+    assert result['state'] == 'active'
+    assert result['card']['placement_id_raw'] == 'МBVC011220262508260009'
+    assert result['card']['placement_id'] is None
+
+
 def test_direct_avito_understands_not_subject_to_vat():
     avito_url = 'https://www.avito.ru/moskva/avtomobili/car_8047929828'
     html = '<h1>Автомобиль 2026</h1><div itemprop="description">Цена НДС не облагается.</div>'

@@ -35,8 +35,8 @@ The current Auto.ru feed snapshot read on 22 September had 29 `show` and four
 does not yet collect direct-card inspections for every dealer-catalogue
 candidate. Its existing collector opens current stored links; new candidate
 URLs still require an approved controlled sample and bounded browser stage.
-Avito remains outside this ID comparison until its descriptions actually
-contain the ID.
+Avito now has a separate read-only comparison after the owner reported IDs in
+its descriptions; see [Avito reconciliation](AVITO_ID_RECONCILIATION_2026-09-24.md).
 
 ## Release gate for automatic link updates
 
