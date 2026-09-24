@@ -88,7 +88,7 @@ def test_both_feed_tabs_are_required_for_cross_tab_uniqueness():
         )
 
 
-def test_mixed_cyrillic_latin_card_id_is_flagged_not_used_for_linking():
+def test_mixed_cyrillic_latin_card_id_is_a_candidate_not_a_verified_link():
     card = OpenedMarketplaceCard(
         url=NEW,
         inspection={
@@ -101,6 +101,28 @@ def test_mixed_cyrillic_latin_card_id_is_flagged_not_used_for_linking():
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': 'MBVC011220262508260009', 'VIN': VIN}]),
         [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+    )
+
+    assert [item.code for item in findings] == ['mixed_script_candidate', 'not_verified']
+    assert findings[0].suggested_placement_id == 'MBVC011220262508260009'
+    assert findings[0].current_url == OLD
+    assert findings[0].feed_sheet == 'avito-feed-new'
+    assert findings[0].observed_urls == (NEW,)
+
+
+def test_visual_alias_without_exact_feed_id_stays_invalid():
+    card = OpenedMarketplaceCard(
+        url=NEW,
+        inspection={
+            'state': 'active',
+            'card': {'placement_id': None, 'placement_id_raw': 'МBVC011220262508260009'},
+            'evidence': EVIDENCE,
+            'evidence_manifest': evidence_manifest_name(EVIDENCE),
+        },
+    )
+    findings = reconcile_avito_placements(
+        _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN}]),
+        [card], first_data_rows=FIRST_ROWS,
     )
 
     assert [item.code for item in findings] == ['invalid_card_id', 'not_verified']

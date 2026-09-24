@@ -28,6 +28,11 @@ _DESCRIPTION_PLACEMENT_ID_RE = re.compile(
     r'(?P<placement_id>\w{1,64})\b'
 )
 
+_CYRILLIC_VISUAL_ALIASES = {
+    'А': 'A', 'В': 'B', 'Е': 'E', 'К': 'K', 'М': 'M', 'Н': 'H',
+    'О': 'O', 'Р': 'P', 'С': 'C', 'Т': 'T', 'У': 'Y', 'Х': 'X',
+}
+
 
 class PlacementIdError(ValueError):
     """Raised when an identifier does not meet the placement-ID contract."""
@@ -102,6 +107,25 @@ def placement_id_claim_from_description(description: str | None) -> str | None:
     """Read a labelled claim, including malformed length or Unicode text."""
     match = _DESCRIPTION_PLACEMENT_ID_RE.search(str(description or ''))
     return match['placement_id'] if match is not None else None
+
+
+def visual_ascii_placement_candidate(raw_claim: str) -> str | None:
+    """Suggest an ASCII ID for review; never validate an advert by this alone.
+
+    Only visual Cyrillic aliases in the four-character brand/model prefix are
+    considered. Numeric fields are never transliterated or repaired.
+    """
+    normalized = raw_claim.strip().upper()
+    if len(normalized) != 22:
+        return None
+    prefix = ''.join(_CYRILLIC_VISUAL_ALIASES.get(char, char) for char in normalized[:4])
+    candidate = prefix + normalized[4:]
+    if candidate == normalized:
+        return None
+    try:
+        return parse_placement_id(candidate).value
+    except PlacementIdError:
+        return None
 
 
 def placement_id_from_description(description: str | None) -> str | None:

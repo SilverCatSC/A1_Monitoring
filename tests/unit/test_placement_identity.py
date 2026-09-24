@@ -8,6 +8,7 @@ from app.service.placement_identity import (
     parse_placement_id,
     placement_id_claim_from_description,
     placement_id_from_description,
+    visual_ascii_placement_candidate,
 )
 
 
@@ -81,3 +82,10 @@ def test_mixed_script_claim_is_visible_as_invalid_but_never_normalized():
 
     assert placement_id_claim_from_description(description) == 'МBVC011220262508260009'
     assert placement_id_from_description(description) is None
+
+
+def test_visual_alias_is_only_a_review_candidate_for_brand_model_prefix():
+    assert visual_ascii_placement_candidate('МBVC011220262508260009') == 'MBVC011220262508260009'
+    assert visual_ascii_placement_candidate('МBVC01122026250826О009') is None
+    assert visual_ascii_placement_candidate('MBVC011220262508260009') is None
+    assert visual_ascii_placement_candidate('ЁBVC011220262508260009') is None

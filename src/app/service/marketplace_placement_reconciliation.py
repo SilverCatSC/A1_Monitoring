@@ -13,7 +13,11 @@ from typing import Any
 
 from app.models import EngineType
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
-from app.service.placement_identity import PlacementIdError, parse_placement_id
+from app.service.placement_identity import (
+    PlacementIdError,
+    parse_placement_id,
+    visual_ascii_placement_candidate,
+)
 
 
 @dataclass(frozen=True)
@@ -35,6 +39,7 @@ class PlacementFinding:
     observed_urls: tuple[str, ...]
     reason: str
     feed_sheet: str | None = None
+    suggested_placement_id: str | None = None
 
 
 OpenedAutoRuCard = OpenedMarketplaceCard
@@ -179,6 +184,20 @@ def _reconcile(
                     isinstance(evidence, str)
                     and inspection.get('evidence_manifest') == evidence_manifest_name(evidence)
                 )
+                candidate = visual_ascii_placement_candidate(claim) if evidence_ok else None
+                candidate_row = feed_by_id.get(candidate) if candidate else None
+                if candidate_row is not None:
+                    current_url = (
+                        current_urls.get(candidate_row.vin)
+                        if candidate_row.vin and vin_counts[candidate_row.vin] == 1 else None
+                    )
+                    findings.append(PlacementFinding(
+                        'mixed_script_candidate', claim, candidate_row.row_number,
+                        current_url, (opened.url,),
+                        'Visual Cyrillic/Latin substitution suggests this feed ID; exact identity is not verified',
+                        candidate_row.sheet, candidate,
+                    ))
+                    continue
                 if not evidence_ok:
                     reason = 'The labelled card ID lacks direct-card evidence'
                 elif not claim.isascii():
