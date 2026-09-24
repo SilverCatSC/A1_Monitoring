@@ -26,10 +26,10 @@ production-контур на основном MacBook, который остор
 | Инженерная основа | 90% | MacBook-only entrypoint, lock-screen gate, private VPN admission, backup/restore, тесты и документация | Поддерживать regression-gates при следующих изменениях |
 | Runtime MacBook + VPSUS | 80% | VPSUS connected, Auto.ru/Avito direct-mode exceptions видимы, dual-stack reachability, host preflight и один controlled cycle прошли | Финальный M7 owner sign-off; public egress attribution не заявляется доказанной |
 | Поиск и evidence | 75% | Controlled cycle прошёл Auto.ru и Avito без технических ошибок, evidence сохранён, Avito selected-radius соблюдён | Ручная контрольная выборка M7 и решение по расширенному run |
-| Качество ссылок/перевыкладок | 55% | 46 из 68 source-link связей подтверждены в свежем каталоге продавца; закрытые старые URL не ошибочно объявляются продажей | 14 отсутствующих валидных ссылок и 8 закрытых/ambiguous связей требуют републикационной сверки |
+| Качество ссылок/перевыкладок | 65% | 46 из 68 source-link связей подтверждены в свежем каталоге продавца; подтверждён feed mapping `VIN → unique_id`/`Id → platform item ID`; Auto.ru начал выводить ID в описании | 14 отсутствующих валидных ссылок и 8 закрытых/ambiguous связей требуют републикационной сверки; feed-to-registry import ещё не включён; Auto.ru direct-card sample и Avito implementation ожидаются |
 | Формальная production-приёмка M7 | 35% | Технические gates и один корректный `partial` доказаны | Контрольная выборка, реальные роли, owner sign-off и, только если нужен график, LaunchAgent acceptance |
 
-**Интегральная готовность: около 65%.** Это означает: платформа уже работает
+**Интегральная готовность: около 68%.** Это означает: платформа уже работает
 как безопасный наблюдатель, но пока не должна называться полностью принятой
 production-системой. Главный остаточный риск — качество привязки «машина ↔
 актуальное объявление», а не очередной рефакторинг.
@@ -65,10 +65,12 @@ errors; 14 `missing_link`; восемь других non-verified записей
 
 Связь не обязана быть видна покупателю в публичной карточке. Она создаётся в
 момент публикации и хранится в нашем журнале размещений. Нужен один
-достоверный канал, предпочтительно export/API из кабинета дилера с парой:
+достоверный канал, предпочтительно export/API из кабинета дилера, с двумя
+разными связями:
 
 ```text
-внутренний ID автомобиля (или VIN) → текущий URL объявления на площадке
+стабильный ID автомобиля (или VIN) → placement ID
+placement ID → площадка → platform item ID → текущий URL
 ```
 
 После его появления правило будет строгим:
@@ -81,37 +83,46 @@ errors; 14 `missing_link`; восемь других non-verified записей
 5. нулевое или множественное совпадение остаётся `review_required`, без
    автоматической замены.
 
-Для Auto.ru Бизнес это не предположение: официальный XML-фид требует
-`dmsCarId` — уникальный ID автомобиля в Auto.ru Бизнес — и может передавать
-VIN. В обычной автозагрузке Auto.ru использует VIN или заданный пользователем
-`uniq_id` среди полей, по которым обновляет существующее объявление; изменение
-хотя бы одного обязательного поля создаёт новое объявление. Поэтому внутренний
-стабильный `a1_vehicle_id` должен стать `dmsCarId`/`uniq_id` в исходящем фиде,
-а A1 Monitoring должен получать тот же outbound mapping вместе с актуальным
-URL/ID площадки. Публично показывать этот ID не требуется.
+Read-only audit of the real outbound workbook (15 September) has now confirmed
+the second relation for the two active platforms: Auto.ru `unique_id` and
+Avito `Id` contain the 22-character **placement ID**; Avito `AvitoId` is the
+separate platform listing ID. This is a material advance, but it corrects one
+earlier assumption: `unique_id`/`Id` must not be treated as a stable vehicle
+ID, because a new sale deliberately gets a new placement ID.
 
-Для Avito нельзя автоматически переносить это допущение: до доступа к
-документации именно подключённого бизнес-кабинета/автозагрузки нужно подтвердить
-его внешний item ID и возможность передавать собственный stable ID. Если
-автозагрузка/API недоступна, минимальный безопасный вариант — короткий журнал
-выкладок: маркетинг после публикации фиксирует `a1_vehicle_id`, площадку,
-platform item ID и URL. Это не ручная сверка поиска, а регистрация результата
-своего же действия публикации.
+The remaining ownership boundary is therefore clear. The existing feed rows
+already provide an audited `VIN → placement ID` bridge, so a visible
+`placement_id` column in the main marketing table is recommended for operator
+transparency rather than a technical precondition. Keep a read-only publication
+journal containing `a1_vehicle_id`/VIN, placement ID, platform, platform item
+ID and URL. The new pre-publication gate rejects malformed IDs, duplicates in a
+feed and an Avito `Id` accidentally replaced by `AvitoId`. A direct-card
+reader is now ready for Auto.ru, but it has no production evidentiary role
+until a controlled direct-card sample verifies the exact rendered ID. Avito
+remains excluded until the marketing rule is released there. Neither component
+publishes anything or guesses a link. Drom has no accepted identity contract
+yet because its inspected feed tab contained no values.
 
 Выбор источника — owner decision: без него нельзя безопасно «угадать» связь по
 внешнему виду карточки.
 
 ## Понятный путь к 100%
 
-1. **Определить источник deterministic mapping** для перевыкладок и включить
-   M7.1. Это снимает основную причину текущих `partial`.
+1. **Провести Auto.ru direct-card sample**: ID активной строки `show` из
+   `unique_id` должен совпасть с ID в описании. После этого включить read-only
+   import связи `VIN → placement_id` из фидов и журнал публикаций; сопоставлять
+   со считанным из карточки ID. Avito проходит тот же gate только после
+   внедрения ID в описании. Колонка `placement_id` в основной таблице
+   рекомендуется для прозрачности, но не блокирует этот этап.
 2. **Сверить текущую очередь**: 14 записей без ссылки и 8 снятых/ambiguous
    карточек; оператор подтверждает только фактические новые URL.
-3. **Повторить один owner-approved shadow-cycle** после сверки. Результат
+3. **Согласовать Drom contract** только после появления непустого реального
+   фида или документации кабинета; не переносить схему Avito на него по аналогии.
+4. **Повторить один owner-approved shadow-cycle** после сверки. Результат
    `completed` должен быть следствием чистых данных, а не ослабления правил.
-4. **Закрыть owner gates M7**: контрольная выборка, реальные роли, сроки
+5. **Закрыть owner gates M7**: контрольная выборка, реальные роли, сроки
    хранения evidence и rollback sign-off.
-5. **Решить, нужен ли график.** Если да — отдельно принять LaunchAgent в
+6. **Решить, нужен ли график.** Если да — отдельно принять LaunchAgent в
    активной GUI-сессии MacBook. Если нет — оставить только ручной controlled
    runner; это допустимый production operating model.
 

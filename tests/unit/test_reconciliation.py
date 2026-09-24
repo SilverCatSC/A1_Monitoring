@@ -384,7 +384,8 @@ def test_direct_avito_card_extracts_sales_fields_and_vat():
     <h1>Mercedes-Benz VLE 2026</h1>
     <div data-marker="item-view/item-price">23 850 000 ₽</div>
     <div data-marker="item-view/item-description">
-      Новый автомобиль, в пути. Цена указана с НДС. VIN W1VVNLTZXT4617043.
+      A1 ID: MBVC011220262508260027. Новый автомобиль, в пути. Цена указана с НДС.
+      VIN W1VVNLTZXT4617043.
     </div>
     '''
 
@@ -396,6 +397,7 @@ def test_direct_avito_card_extracts_sales_fields_and_vat():
     assert result['card']['vin'] == 'W1VVNLTZXT4617043'
     assert result['card']['availability'] == 'В пути'
     assert result['card']['vat_status'] == 'С НДС'
+    assert result['card']['placement_id'] == 'MBVC011220262508260027'
 
 
 def test_direct_price_can_be_read_from_metadata_and_vat_abbreviation():
@@ -409,6 +411,18 @@ def test_direct_price_can_be_read_from_metadata_and_vat_abbreviation():
 
     assert result['card']['price'] == 23_850_000
     assert result['card']['vat_status'] == 'С НДС'
+
+
+def test_direct_autoru_card_reads_placement_id_from_card_description_html():
+    html = '''
+    <h1>Mercedes-Benz V-Class 2026</h1>
+    <div class="CardDescriptionHTML"><span>ID: MBVC011220262508260027</span><br>В наличии.</div>
+    '''
+
+    result = direct_page_status(html, EngineType.AUTO_RU, NEW, NEW, 200)
+
+    assert result['state'] == 'active'
+    assert result['card']['placement_id'] == 'MBVC011220262508260027'
 
 
 def test_direct_avito_understands_not_subject_to_vat():

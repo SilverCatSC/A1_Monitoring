@@ -1,5 +1,33 @@
 # Журнал изменений
 
+## M7.2 — Auto.ru feed-to-card identity decision — 2026-09-24
+
+- Добавлена read-only сверка `unique_id`/`action` фида с ID из открытых
+  карточек продавца и актуальной ссылкой реестра по VIN. Она отличает
+  перевыкладку от корректной ссылки, дубликата и недостаточных доказательств.
+- Смена ссылки намеренно не включена: ещё нет контролируемого обхода всех
+  карточек каталога с подтверждённым ID и полным evidence. Avito исключён до
+  фактического появления ID в описаниях.
+
+## M7.1 — owner placement-ID contract — 2026-09-15
+
+- Зафиксирован 22-символьный placement ID: код марки/модели, тип/подтип, год
+  автомобиля, дата размещения и порядковый номер. Все три owner examples
+  покрыты fail-closed parser/formatter tests.
+- ID признан идентификатором размещения, не физического автомобиля: при новой
+  продаже он может измениться. Автоматическая перевязка URL требует отдельного
+  stable `a1_vehicle_id`/VIN/складского ID и журнала публикаций.
+- По read-only аудиту реального marketing workbook зафиксирован маппинг:
+  Auto.ru `unique_id`, Avito `Id` — customer placement ID; Avito `AvitoId` —
+  ID площадки. Добавлен fail-closed pre-publication audit для malformed,
+  duplicate и перепутанного `Id`/`AvitoId`; пустой `feed-dromru` не получил
+  выдуманного контракта.
+- Auto.ru начал указывать ID в `CardDescriptionHTML`; `autoru-feed-all!B2:C39`
+  даёт 29 активных `show` и 4 скрытых `hide` ID, все соответствуют контракту.
+  Extractor остаётся read-only: автоматическая смена ссылки запрещена до
+  controlled sample точного совпадения ID на открытой карточке. Avito ещё не
+  входит в этот контур.
+
 ## M7 status map and republication decision — 2026-09-14
 
 - Добавлен единый owner-facing status map с целью системы, evidence по
