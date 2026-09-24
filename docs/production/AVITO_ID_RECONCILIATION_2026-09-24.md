@@ -57,8 +57,10 @@ URLs, multiple public cards with one ID and unobserved IDs remain review states.
 
 Avito feed rows are not assumed to be active solely because they exist in an
 export. The reconciliation does not publish feeds, edit the marketing Sheet or
-automatically replace URLs. It is not yet wired into the full dealer-catalogue
-cycle, and there is no accepted live-cycle sample after the description change.
+automatically replace URLs. The bounded catalogue-card stage is now wired into
+the full cycle behind a disabled-by-default flag; see
+[cycle integration](PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md). There is still no
+accepted live-cycle sample after the description change.
 
 Price, year, direct-card status and search placement can still be checked
 independently of the malformed ID. The malformed ID must not turn a closed old

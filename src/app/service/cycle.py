@@ -22,6 +22,7 @@ from app.service.monitor import (
     ScanConfigurationError,
     validate_scan_sources,
 )
+from app.service.placement_cycle import PlacementCycleService
 from app.service.reconciliation import SellerReconciliationService
 from app.service.vpn_admission import VPNAdmissionError, require_vpn_admission
 
@@ -187,8 +188,18 @@ class MonitoringCycleService:
         )
         direct_cards = reconciliation.inspect_current_cards(preflight)
         completion = summarize_cycle_completion(scanned, direct_cards)
+        placement = None
+        if settings.placement_reconciliation_enabled:
+            placement = PlacementCycleService(
+                self.db, progress_callback=self.progress, cycle_id=cycle_id
+            ).run(preflight, settings.placement_feed_workbook_url
+                  or settings.head_table_google_sheet_export_url)
+            completion['placement_reconciliation'] = placement
+            if placement['status'] != 'complete':
+                completion['status'] = 'partial'
+                completion['partial_reasons'].append('placement_reconciliation_incomplete')
         self.progress({'event': 'cycle_completed', 'summary': completion})
-        return {
+        result = {
             **refreshed,
             'dealer_discovery': preflight['discovery'],
             'seller_preflight': {'batch_id': preflight['batch_id'], **preflight['summary']},
@@ -198,3 +209,6 @@ class MonitoringCycleService:
             'manifest': manifest,
             'evidence_removed': evidence_removed,
         }
+        if placement is not None:
+            result['placement_reconciliation'] = placement
+        return result

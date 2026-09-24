@@ -355,6 +355,9 @@ def main() -> int:
         print(f'LOCAL_CYCLE_ID {cycle["id"]}')
         print('LOCAL_SELLER_PREFLIGHT ' + json.dumps(result['seller_preflight'], ensure_ascii=False))
         print('LOCAL_DIRECT_CARDS ' + json.dumps(result['direct_cards'], ensure_ascii=False))
+        if 'placement_reconciliation' in result:
+            print('LOCAL_PLACEMENT_RECONCILIATION '
+                  + json.dumps(result['placement_reconciliation'], ensure_ascii=False))
         print(json.dumps(summary, ensure_ascii=False, indent=2))
         print('LOCAL_CYCLE_COMPLETION ' + json.dumps(completion, ensure_ascii=False))
         if completion['status'] != 'completed':

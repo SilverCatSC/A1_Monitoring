@@ -60,6 +60,9 @@ class Settings(BaseSettings):
         ),
         alias='HEAD_TABLE_GOOGLE_SHEET_EXPORT_URL',
     )
+    placement_feed_workbook_url: str | None = Field(
+        default=None, alias='PLACEMENT_FEED_WORKBOOK_URL'
+    )
     company_site_catalog_url: str = Field(
         default='https://a1auto.ru/cars-for-sale/', alias='COMPANY_SITE_CATALOG_URL'
     )
@@ -118,6 +121,12 @@ class Settings(BaseSettings):
     seller_detail_checks_limit: int = Field(
         default=100, alias='SELLER_DETAIL_CHECKS_LIMIT', ge=0, le=250
     )
+    placement_reconciliation_enabled: bool = Field(
+        default=False, alias='PLACEMENT_RECONCILIATION_ENABLED'
+    )
+    seller_identity_checks_limit: int = Field(
+        default=40, alias='SELLER_IDENTITY_CHECKS_LIMIT', ge=0, le=100
+    )
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
     app_version: str = '0.14.0'
     min_confirmed_absence_runs: int = 2
@@ -172,7 +181,8 @@ class Settings(BaseSettings):
             raise ValueError('VPN_ADMISSION_PATH must not be empty')
         return clean
 
-    @field_validator('source_google_sheet_export_url', 'head_table_google_sheet_export_url', mode='before')
+    @field_validator('source_google_sheet_export_url', 'head_table_google_sheet_export_url',
+                     'placement_feed_workbook_url', mode='before')
     @classmethod
     def _empty_to_none_for_sheet_url(cls, value: str | None) -> str | None:
         if value is None:

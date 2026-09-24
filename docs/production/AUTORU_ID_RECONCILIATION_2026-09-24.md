@@ -31,10 +31,10 @@ photo or year.
 | `card_evidence_missing` | Extracted ID lacks the required direct-card evidence | Repeat a controlled inspection |
 
 The current Auto.ru feed snapshot read on 22 September had 29 `show` and four
-`hide` IDs. That snapshot proves feed values only. The current implementation
-does not yet collect direct-card inspections for every dealer-catalogue
-candidate. Its existing collector opens current stored links; new candidate
-URLs still require an approved controlled sample and bounded browser stage.
+`hide` IDs. That snapshot proves feed values only. The implementation now has
+a bounded catalogue-card collector behind a disabled-by-default flag;
+see [cycle integration](PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md). It still
+requires a controlled live sample before acceptance.
 Avito now has a separate read-only comparison after the owner reported IDs in
 its descriptions; see [Avito reconciliation](AVITO_ID_RECONCILIATION_2026-09-24.md).
 

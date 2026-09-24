@@ -152,6 +152,59 @@ def test_source_refresh_requires_a_configured_monitoring_table(monkeypatch):
         cycle_module.refresh_monitoring_source('db')
 
 
+def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monkeypatch):
+    import app.service.cycle as cycle_module
+
+    class Ledger:
+        def seal_roster(self, _cycle_id, _snapshot_id):
+            return {'roster_count': 1}
+
+    class Reconciliation:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self):
+            return {'batch_id': 'batch', 'summary': {}, 'discovery': {'run_ids': ['run']},
+                    'blocked_sources': []}
+
+        def inspect_current_cards(self, _preflight):
+            return {'total': 0, 'incomplete': 0, 'technical_errors': 0}
+
+    class Monitor:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run_full_cycle(self):
+            return {'technical_errors': 0, 'links_need_review': 0, 'blocked_sources': []}
+
+    class Placement:
+        def __init__(self, _db, *, progress_callback, cycle_id):
+            assert cycle_id == 'cycle-1'
+
+        def run(self, preflight, source_url):
+            assert preflight['batch_id'] == 'batch'
+            assert source_url == 'https://docs.google.com/spreadsheets/d/abc/export'
+            return {'status': 'partial', 'findings': 1, 'report_path': 'cycles/cycle-1/report.json'}
+
+    monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', True)
+    monkeypatch.setattr(cycle_module.settings, 'placement_feed_workbook_url',
+                        'https://docs.google.com/spreadsheets/d/abc/export')
+    monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_args: 0)
+    monkeypatch.setattr(cycle_module, 'refresh_monitoring_source',
+                        lambda *_args, **_kwargs: {'import': {'snapshot_id': 'snapshot'},
+                                                   'filter_assignments': {}, 'canonical_filters': {}})
+    monkeypatch.setattr(cycle_module, 'SellerReconciliationService', Reconciliation)
+    monkeypatch.setattr(cycle_module, 'MonitorService', Monitor)
+    monkeypatch.setattr(cycle_module, 'PlacementCycleService', Placement)
+
+    result = cycle_module.MonitoringCycleService('db')._run('cycle-1', Ledger())
+
+    assert result['placement_reconciliation']['status'] == 'partial'
+    assert result['completion']['placement_reconciliation']['findings'] == 1
+    assert result['completion']['status'] == 'partial'
+    assert 'placement_reconciliation_incomplete' in result['completion']['partial_reasons']
+
+
 def test_cycle_rejects_invalid_source_configuration_before_import(monkeypatch):
     import pytest
 

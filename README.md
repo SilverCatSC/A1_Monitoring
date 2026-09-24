@@ -29,6 +29,7 @@
 | Роли, обратная связь и отчёт по исключениям | [M5 Operator release](docs/production/OPERATOR_RELEASE.md) |
 | Controlled retry, backup и public allowlist | [M6 Operations](docs/production/OPERATIONS.md) |
 | Живая приёмка, VPN и rollback | [M7 Acceptance](docs/production/ACCEPTANCE_M7.md) |
+| ID в фидах и новых карточках | [Сверка в цикле](docs/production/PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md) |
 | Решение о primary host и будущий LaunchAgent | [MacBook primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
 
