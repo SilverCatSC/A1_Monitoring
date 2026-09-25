@@ -301,6 +301,87 @@ def test_sales_catalog_uses_head_table_and_direct_card_proof(tmp_path, monkeypat
         engine.dispose()
 
 
+def test_catalog_shows_reviewable_unique_id_without_replacing_old_link(tmp_path):
+    session, engine = _session(tmp_path)
+    try:
+        listing = _seed(session)
+        placement_id = 'MBVC011220252508260001'
+        session.add(ListingReconciliation(
+            id='id-review', batch_id='batch-id', listing_id=listing.id,
+            source=EngineType.AUTO_RU, state='removed', url=listing.source_auto_ru,
+            reason='Старая карточка продана', checked_at=datetime.now(UTC),
+            details={'network_profile': 'local_browser',
+                     'direct_inspection': {'state': 'removed', 'status_code': 'sold'}},
+            candidates=[{
+                'placement_id': placement_id, 'id_match_basis': 'exact',
+                'url': 'https://auto.ru/cars/new/group/mercedes/v_klasse/1133841448-test/',
+                'evidence': 'card.png',
+            }],
+        ))
+        session.commit()
+
+        catalog = listing_catalog_context(session)
+        detail = listing_detail_context(session, listing.id)
+        environment = Environment(
+            loader=FileSystemLoader(Path(__file__).parents[2] / 'src' / 'app' / 'templates'),
+            autoescape=select_autoescape(['html']),
+        )
+        catalog_html = environment.get_template('listing_catalog.html').render(
+            context=catalog, auth_enabled=False,
+        )
+        detail_html = environment.get_template('listing_detail.html').render(
+            context=detail, auth_enabled=False,
+        )
+
+        assert catalog['cards'][0]['platforms']['auto_ru']['placement_id'] == {
+            'value': placement_id, 'basis': 'review',
+        }
+        assert placement_id in catalog_html
+        assert 'Кандидат перевыкладки — подтвердить ссылку' in catalog_html
+        assert placement_id in detail_html
+        assert listing.source_auto_ru == 'https://auto.ru/cars/used/sale/brand/model/1234567890-test/'
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_catalog_hides_untrusted_or_conflicting_unique_ids(tmp_path):
+    session, engine = _session(tmp_path)
+    try:
+        listing = _seed(session)
+        record = ListingReconciliation(
+            id='id-conflict', batch_id='batch-id', listing_id=listing.id,
+            source=EngineType.AUTO_RU, state='verified', url=listing.source_auto_ru,
+            reason='Есть в каталоге', checked_at=datetime.now(UTC),
+            details={'network_profile': 'local_browser', 'direct_inspection': {
+                'state': 'active', 'card': {'placement_id': 'MBVC011220252508260001'},
+            }},
+            candidates=[{
+                'placement_id': 'MBVC011220252508260007', 'id_match_basis': 'exact',
+                'url': 'https://auto.ru/cars/new/group/mercedes/v_klasse/1133976818-test/',
+                'evidence': 'other.png',
+            }],
+        )
+        session.add(record)
+        session.commit()
+        assert listing_catalog_context(session)['cards'][0]['platforms']['auto_ru']['placement_id'] is None
+
+        record.candidates = []
+        session.commit()
+        assert listing_catalog_context(session)['cards'][0]['platforms']['auto_ru']['placement_id'] == {
+            'value': 'MBVC011220252508260001', 'basis': 'card',
+        }
+
+        record.details = {'network_profile': 'unknown', 'direct_inspection': {
+            'state': 'active', 'card': {'placement_id': 'MBVC011220252508260001'},
+        }}
+        session.commit()
+        assert listing_catalog_context(session)['cards'][0]['platforms']['auto_ru']['placement_id'] is None
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_catalog_buttons_show_latest_page_for_each_marketplace(tmp_path):
     session, engine = _session(tmp_path)
     try:

@@ -32,10 +32,47 @@ from app.service.company_site_report import company_site_audit_context
 from app.service.evidence import evidence_pages, has_card_evidence
 from app.service.feedback import ALLOWED_CATEGORIES, ALLOWED_SEVERITIES, ALLOWED_TRANSITIONS
 from app.service.filters import FilterRegistryService
+from app.service.placement_identity import PlacementIdError, parse_placement_id
 
 
 def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
     return value if is_marketplace_listing_url(source, value) else None
+
+
+def _placement_id_from_reconciliation(record: ListingReconciliation | None) -> dict | None:
+    """Expose only an exact card ID or an auditable exact-ID review candidate."""
+    if record is None:
+        return None
+    details = record.details or {}
+    if details.get('network_profile') not in BUSINESS_TRUSTED_NETWORK_PROFILES:
+        return None
+    direct = details.get('direct_inspection')
+    direct = direct if isinstance(direct, dict) else {}
+    values: dict[str, str] = {}
+    card = direct.get('card')
+    if direct.get('state') == 'active' and isinstance(card, dict):
+        raw = card.get('placement_id')
+        if isinstance(raw, str):
+            try:
+                values[parse_placement_id(raw).value] = 'card'
+            except PlacementIdError:
+                pass
+    for candidate in record.candidates or []:
+        if (not isinstance(candidate, dict)
+                or candidate.get('id_match_basis') != 'exact'
+                or not candidate.get('evidence')
+                or not is_marketplace_listing_url(record.source, candidate.get('url'))):
+            continue
+        raw = candidate.get('placement_id')
+        if isinstance(raw, str):
+            try:
+                values.setdefault(parse_placement_id(raw).value, 'review')
+            except PlacementIdError:
+                pass
+    if len(values) != 1:
+        return None
+    value, basis = next(iter(values.items()))
+    return {'value': value, 'basis': basis}
 
 
 def _head_records_for_listings(
@@ -1066,6 +1103,7 @@ def _listing_catalog_card(
             ),
             'proof': f'/api/v1/reconciliations/{reconciliation.id}/evidence'
             if reconciliation and direct.get('evidence') else None,
+            'placement_id': _placement_id_from_reconciliation(reconciliation),
         }
     return {
         'listing': listing,
@@ -1117,12 +1155,25 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         .all()
     )
     link_events = sorted(listing.link_events, key=lambda item: item.created_at, reverse=True)
+    placement_ids = {}
+    for record in (
+        session.query(ListingReconciliation)
+        .filter(ListingReconciliation.listing_id == listing.id)
+        .order_by(ListingReconciliation.checked_at.desc(), ListingReconciliation.id.desc())
+    ):
+        source = record.source
+        if source in placement_ids:
+            continue
+        current_url = listing.source_auto_ru if source == EngineType.AUTO_RU else listing.source_avito
+        if canonical_listing_key(source, record.url) == canonical_listing_key(source, current_url):
+            placement_ids[source.value] = _placement_id_from_reconciliation(record)
     return {
         'listing': listing,
         'links': {
             'auto_ru': _safe_listing_url(EngineType.AUTO_RU, listing.source_auto_ru),
             'avito': _safe_listing_url(EngineType.AVITO, listing.source_avito),
         },
+        'placement_ids': placement_ids,
         'observations': [
             {
                 'observation': observation,
