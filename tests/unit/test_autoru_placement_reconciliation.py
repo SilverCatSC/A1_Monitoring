@@ -60,3 +60,25 @@ def test_duplicate_feed_id_is_not_used_for_a_link_decision():
     findings = reconcile_autoru_placements(_feed() * 2, [_card()], current_urls_by_vin={VIN: OLD})
 
     assert [item.code for item in findings] == ['duplicate_feed_id', 'duplicate_feed_id']
+
+
+def test_text_section_divider_is_not_reported_as_invalid_car_id():
+    rows = [
+        {'car': '<car></car>', 'unique_id': PLACEMENT_ID, 'action': 'show', 'vin': VIN},
+        {'car': 'АВТОМОБИЛИ ЗА ЛИНИЕЙ СНЯТЫ С ПРОДАЖИ И УДАЛЕНЫ ИЗ ФИДА ДАННЫХ'},
+        {'car': '<car></car>', 'unique_id': 'MBVC011220252508260004',
+         'action': 'hide', 'vin': 'W1VVNLTZ5S4556796'},
+    ]
+
+    findings = reconcile_autoru_placements(rows, [], first_data_row=39)
+
+    assert [item.code for item in findings] == ['not_verified', 'not_verified']
+    assert [item.feed_row for item in findings] == [39, 41]
+
+
+def test_car_row_without_id_still_fails_closed_after_divider_fix():
+    findings = reconcile_autoru_placements(
+        [{'car': '<car></car>', 'unique_id': '', 'action': 'show', 'vin': VIN}], [],
+    )
+
+    assert [item.code for item in findings] == ['invalid_feed_id']

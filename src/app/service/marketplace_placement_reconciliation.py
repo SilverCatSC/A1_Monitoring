@@ -83,6 +83,12 @@ def reconcile_autoru_placements(
         )
         for row_number, row in enumerate(feed_rows, first_data_row)
         if any(str(value or '').strip() for value in row.values())
+        # The Auto.ru workbook has free-text section dividers between car rows.
+        # Ignore only a lone non-car label; keep malformed car rows visible.
+        and not (
+            {key for key, value in row.items() if str(value or '').strip()} == {'car'}
+            and str(row.get('car') or '').strip().lower() not in {'car', '<car></car>'}
+        )
     ]
     return _reconcile(
         normalized, opened_cards, source=EngineType.AUTO_RU,
