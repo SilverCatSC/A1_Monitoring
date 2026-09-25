@@ -16,9 +16,11 @@ from app.models import Base, DealerDiscoveryRun, ListingObservation, MonitoringC
 from app.security import AuthenticatedActor
 from app.service.cycle import MonitoringCycleService, ScanConfigurationError
 from app.service.vpn_admission import (
+    SCUTIL_PATH,
     VPNAdmissionError,
     _macos_extended_acl_present,
     prepare_attestation_directory,
+    require_operational_vpn_admission,
     require_vpn_admission,
 )
 
@@ -50,6 +52,31 @@ def _attestation(now: datetime, **changes) -> dict:
     return payload
 
 
+def _operational_policy(**changes) -> dict:
+    payload = {
+        'schema_version': 2,
+        'status': 'approved',
+        'services': {
+            'chatgpt': {'route': 'vpn_exit'},
+            'auto_ru': {'route': 'direct_physical_connection'},
+            'avito': {'route': 'direct_physical_connection'},
+        },
+    }
+    payload.update(changes)
+    return payload
+
+
+def _connected_scutil(command, **_kwargs):
+    if command == [SCUTIL_PATH, '--nc', 'list']:
+        return SimpleNamespace(
+            returncode=0,
+            stdout='* (Connected) VPN (com.vpsus.vpsus) "VPSUS" [VPN:com.vpsus.vpsus]\n',
+        )
+    if command == [SCUTIL_PATH, '--nc', 'status', 'VPSUS']:
+        return SimpleNamespace(returncode=0, stdout='Connected\nExtended Status ...\n')
+    raise AssertionError(f'unexpected command: {command}')
+
+
 def _write_attestation(path: Path, payload: dict, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
     if os.name == 'posix':
@@ -70,6 +97,7 @@ def _local_browser_settings(monkeypatch, attestation_path: Path) -> None:
     monkeypatch.setattr(settings, 'scan_enabled_engines', 'auto_ru')
     monkeypatch.setattr(settings, 'local_browser_host_admission', True)
     monkeypatch.setattr(settings, 'vpn_admission_path', str(attestation_path))
+    monkeypatch.setattr(settings, 'vpn_operational_policy_path', str(attestation_path))
 
 
 def test_valid_private_attestation_is_accepted(tmp_path):
@@ -80,6 +108,97 @@ def test_valid_private_attestation_is_accepted(tmp_path):
     admitted = require_vpn_admission(path, now=now)
 
     assert admitted.expires_at_utc == now + timedelta(hours=1)
+
+
+def test_operational_policy_accepts_connected_vpsus_without_claiming_egress(tmp_path):
+    path = tmp_path / 'policy.json'
+    _write_attestation(path, _operational_policy())
+    expired = tmp_path / 'attestation.json'
+    old_time = datetime(2026, 9, 14, 12, tzinfo=UTC)
+    _write_attestation(expired, _attestation(old_time))
+
+    admitted = require_operational_vpn_admission(
+        path, command_runner=_connected_scutil, platform='darwin',
+    )
+
+    assert admitted.service == 'VPSUS'
+    assert admitted.routes['chatgpt'] == 'vpn_exit'
+    with pytest.raises(VPNAdmissionError, match='expired'):
+        require_vpn_admission(expired, now=old_time + timedelta(days=2))
+
+
+@pytest.mark.parametrize(('payload', 'code'), [
+    (_operational_policy(status='pending'), 'operational_policy_unapproved'),
+    (_operational_policy(services={'chatgpt': {'route': 'vpn_exit'}}),
+     'operational_policy_services_invalid'),
+    (_operational_policy(services={
+        'chatgpt': {'route': 'direct_physical_connection'},
+        'auto_ru': {'route': 'direct_physical_connection'},
+        'avito': {'route': 'direct_physical_connection'},
+    }), 'operational_policy_routes_invalid'),
+])
+def test_operational_policy_fails_closed_for_unapproved_or_changed_routes(
+    tmp_path, payload, code,
+):
+    path = tmp_path / 'policy.json'
+    _write_attestation(path, payload)
+    with pytest.raises(VPNAdmissionError, match=code):
+        require_operational_vpn_admission(path, command_runner=_connected_scutil, platform='darwin')
+
+
+def test_operational_policy_requires_private_file_and_macos(tmp_path):
+    path = tmp_path / 'policy.json'
+    _write_attestation(path, _operational_policy(), mode=0o644)
+    with pytest.raises(VPNAdmissionError, match='insecure_permissions'):
+        require_operational_vpn_admission(path, command_runner=_connected_scutil, platform='darwin')
+    with pytest.raises(VPNAdmissionError, match='macos_required'):
+        require_operational_vpn_admission(path, command_runner=_connected_scutil, platform='linux')
+
+
+@pytest.mark.parametrize('list_status,connection_status', [
+    ('Disconnected', 'Disconnected'),
+    ('Connected', 'Disconnected'),
+    ('Disconnected', 'Connected'),
+])
+def test_operational_policy_rejects_disconnected_vpsus(
+    tmp_path, list_status, connection_status,
+):
+    path = tmp_path / 'policy.json'
+    _write_attestation(path, _operational_policy())
+
+    def runner(command, **_kwargs):
+        if command[-1] == 'list':
+            return SimpleNamespace(
+                returncode=0,
+                stdout=(f'* ({list_status}) VPN (com.vpsus.vpsus) "VPSUS" '
+                        '[VPN:com.vpsus.vpsus]\n'),
+            )
+        return SimpleNamespace(returncode=0, stdout=f'{connection_status}\n')
+
+    with pytest.raises(VPNAdmissionError, match='vpsus_not_connected'):
+        require_operational_vpn_admission(path, command_runner=runner, platform='darwin')
+
+
+def test_operational_policy_rejects_unavailable_or_other_vpn(tmp_path):
+    path = tmp_path / 'policy.json'
+    _write_attestation(path, _operational_policy())
+
+    def unavailable(_command, **_kwargs):
+        raise OSError('scutil unavailable')
+
+    with pytest.raises(VPNAdmissionError, match='vpn_status_unavailable'):
+        require_operational_vpn_admission(path, command_runner=unavailable, platform='darwin')
+
+    def other_vpn(command, **_kwargs):
+        if command[-1] == 'list':
+            return SimpleNamespace(
+                returncode=0,
+                stdout='* (Connected) VPN (com.other.vpn) "VPSUS" [VPN:com.other.vpn]\n',
+            )
+        return SimpleNamespace(returncode=0, stdout='Connected\n')
+
+    with pytest.raises(VPNAdmissionError, match='vpsus_not_connected'):
+        require_operational_vpn_admission(path, command_runner=other_vpn, platform='darwin')
 
 
 @pytest.mark.parametrize(
@@ -172,7 +291,7 @@ def test_cycle_rejects_missing_admission_before_ledger_or_browser(monkeypatch, t
     monkeypatch.setattr(cycle_module, 'CycleLedgerService', Ledger)
     monkeypatch.setattr(cycle_module, 'require_verified_macos_host_runner_context', lambda: None)
 
-    with pytest.raises(ScanConfigurationError, match='VPN admission'):
+    with pytest.raises(ScanConfigurationError, match='VPN operational policy'):
         MonitoringCycleService('db', before_browser=lambda: events.append('browser')).run()
 
     assert events == []
@@ -185,7 +304,7 @@ def test_cycle_rejects_configuration_only_host_claim_before_ledger_or_browser(
 
     _local_browser_settings(monkeypatch, tmp_path / 'attestation.json')
     events = []
-    monkeypatch.setattr(cycle_module, 'require_vpn_admission', lambda _path: None)
+    monkeypatch.setattr(cycle_module, 'require_operational_vpn_admission', lambda _path: None)
     monkeypatch.setattr(
         cycle_module,
         'CycleLedgerService',
@@ -254,7 +373,7 @@ def test_api_full_cycle_paths_reject_missing_admission_before_new_cycle_writes(
                 trigger_scan(_operator_request(), session)
 
         assert error.value.status_code == 422
-        assert 'VPN admission' in error.value.detail
+        assert 'VPN operational policy' in error.value.detail
         expected_cycles = 1 if endpoint == 'retry' else 0
         assert session.query(MonitoringCycle).count() == expected_cycles
         assert session.query(ScanRun).count() == 0
@@ -317,11 +436,12 @@ def test_macos_runner_checks_shared_admission_after_preflight_before_recovery():
         PROJECT_ROOT / 'src' / 'app' / 'service' / 'vpn_admission.py'
     ).read_text(encoding='utf-8')
     assert "if [[ \"$PREFLIGHT_ONLY\" -eq 0 ]]; then" in runner
-    assert runner.index("RUNNER_PHASE='vpn_admission'") < runner.index(
+    assert '--operational-policy "$VPN_POLICY_PATH"' in runner
+    assert runner.index("RUNNER_PHASE='vpn_operational_admission'") < runner.index(
         "RUNNER_PHASE='recover_open_cycles'"
     )
     assert runner.index("RUNNER_PHASE='preflight_finished'") < runner.index(
-        "RUNNER_PHASE='vpn_admission'"
+        "RUNNER_PHASE='vpn_operational_admission'"
     )
     assert 'A1_MONITORING_HOST_RUNNER_CONTEXT=1' in runner
     full_runner = (PROJECT_ROOT / 'scripts' / 'run_full_monitoring_macos.sh').read_text(
@@ -344,7 +464,7 @@ def _load_local_scan_module():
 def test_local_scan_refuses_full_cycle_before_chrome_or_db(monkeypatch, tmp_path):
     local_scan = _load_local_scan_module()
     calls = []
-    monkeypatch.setattr(local_scan, 'DEFAULT_VPN_ADMISSION', tmp_path / 'missing.json')
+    monkeypatch.setattr(local_scan, 'DEFAULT_VPN_POLICY', tmp_path / 'missing.json')
     monkeypatch.setattr(local_scan, '_env_file_values', lambda _path: {'DB_PASSWORD': 'safe-pass'})
     monkeypatch.setattr(local_scan, '_configure_runtime', lambda *_args: 'http://127.0.0.1:19222')
     monkeypatch.setenv('A1_MONITORING_HOST_RUNNER_CONTEXT', '1')

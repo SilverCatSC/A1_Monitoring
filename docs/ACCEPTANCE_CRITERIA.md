@@ -5,7 +5,7 @@
 > [M7 acceptance runbook](production/ACCEPTANCE_M7.md), где нужны свежие
 > evidence, целевые устройства и owner decision.
 > Current host contract additionally supersedes the old direct `/scan` model:
-> only the Mac host runner with valid VPN admission and inherited host-lock FD can
+> only the Mac host runner with approved VPN operational policy, connected VPSUS and inherited host-lock FD can
 > create a marketplace cycle; `cloud_no_vpn`, `local_no_vpn` and `local_vpn` cannot.
 
 ## 1. Локальный исполнитель

@@ -16,7 +16,7 @@ STATUS_PATH="$ARTIFACTS_DIR/monitoring_host_runner_macos_status.json"
 LOCK_PATH="$ARTIFACTS_DIR/.monitoring_host_runner_macos.lock"
 LOCK_HELPER="$ROOT_DIR/scripts/with_monitoring_host_lock_macos.py"
 VPN_ADMISSION_DIR="$ARTIFACTS_DIR/vpn_admission"
-VPN_ADMISSION_PATH="$VPN_ADMISSION_DIR/attestation.json"
+VPN_POLICY_PATH="$VPN_ADMISSION_DIR/policy.json"
 
 ENGINES='auto_ru,avito'
 PAGES=3
@@ -215,8 +215,8 @@ prepare_vpn_admission_directory() {
     "$PYTHON" -m app.service.vpn_admission --prepare-directory "$VPN_ADMISSION_DIR"
 }
 
-require_vpn_admission() {
-    "$PYTHON" -m app.service.vpn_admission --path "$VPN_ADMISSION_PATH"
+require_vpn_operational_policy() {
+    "$PYTHON" -m app.service.vpn_admission --operational-policy "$VPN_POLICY_PATH"
 }
 
 write_status() {
@@ -393,13 +393,13 @@ main() {
         return 0
     fi
 
-    # This is a local-only, fail-closed owner attestation. It intentionally
+    # This is a local-only, fail-closed operational policy and VPN status check. It
     # runs after readiness but before recovery, Chrome, or a DB-writing cycle,
-    # and emits only a stable refusal code rather than VPN/browser details.
-    RUNNER_PHASE='vpn_admission'
+    # and does not claim that marketplace egress or M7 acceptance is verified.
+    RUNNER_PHASE='vpn_operational_admission'
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
-    if ! require_vpn_admission; then
-        safe_message 'HOST_RUNNER_REFUSED reason=vpn_admission_required'
+    if ! require_vpn_operational_policy; then
+        safe_message 'HOST_RUNNER_REFUSED reason=vpn_operational_admission_required'
         return 1
     fi
 

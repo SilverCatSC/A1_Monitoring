@@ -24,7 +24,7 @@ from app.service.monitor import (
 )
 from app.service.placement_cycle import PlacementCycleService
 from app.service.reconciliation import SellerReconciliationService
-from app.service.vpn_admission import VPNAdmissionError, require_vpn_admission
+from app.service.vpn_admission import VPNAdmissionError, require_operational_vpn_admission
 
 
 class CycleConfigurationError(RuntimeError):
@@ -59,11 +59,10 @@ def refresh_monitoring_source(db: Session, cycle_id: str | None = None) -> dict:
 
 
 def require_local_browser_vpn_admission() -> None:
-    """Require a current host-owned admission record before a local Chrome cycle.
+    """Require owner policy plus connected VPSUS before a local Chrome cycle.
 
-    The verifier deliberately does not probe, change, or reconnect VPSUS.  It
-    only admits a cycle after a separately collected, short-lived owner
-    attestation is available through the configured private host path.
+    Operational readiness does not claim verified per-domain egress or M7
+    acceptance.  The verifier does not change or reconnect VPSUS.
     """
     if settings.network_profile != 'local_browser':
         return
@@ -78,10 +77,11 @@ def require_local_browser_vpn_admission() -> None:
             'local_browser monitoring must be started by the approved interactive host runner'
         ) from exc
     try:
-        require_vpn_admission(settings.vpn_admission_path)
+        require_operational_vpn_admission(settings.vpn_operational_policy_path)
     except VPNAdmissionError as exc:
         raise ScanConfigurationError(
-            'local_browser monitoring requires a current VPN admission attestation'
+            'local_browser monitoring requires an approved VPN operational policy '
+            'and connected VPSUS'
         ) from exc
 
 

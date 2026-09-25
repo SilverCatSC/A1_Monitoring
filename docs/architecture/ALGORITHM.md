@@ -7,7 +7,7 @@
 
 ```mermaid
 flowchart TD
-    A[Gate-approved Mac host runner] --> B[GUI/preflight + VPN attestation + inherited host-lock FD]
+    A[Gate-approved Mac host runner] --> B[GUI/preflight + VPN policy + VPSUS Connected + inherited host-lock FD]
     B --> C{Admission принят?}
     C -- Нет --> X[Fail closed до Chrome и нового cycle]
     C -- Да --> D[Guarded internal local_scan.py]
@@ -53,8 +53,9 @@ fixtures описаны в [Evidence contract](../production/EVIDENCE_CONTRACT.m
 ## 1. Подготовка
 
 Только `scripts/run_monitoring_host_macos.sh` может начать marketplace cycle.
-Он передаёт внутреннему `local_scan.py` `NETWORK_PROFILE=local_browser`, валидную
-VPN attestation и проверяемый inherited Mac host-lock FD. Прямой `local_scan.py`,
+Он передаёт внутреннему `local_scan.py` `NETWORK_PROFILE=local_browser` и
+проверяемый inherited Mac host-lock FD; оба процесса проверяют локальную VPN
+policy и текущий статус VPSUS. Прямой `local_scan.py`,
 его `--watch`, `make watch`, container и non-Mac process fail-closed; boolean
 `LOCAL_BROWSER_HOST_ADMISSION` либо файл по отдельности недостаточны. Это
 операционная защита от случайного entrypoint, не hostile-security proof против

@@ -87,6 +87,9 @@ class Settings(BaseSettings):
     vpn_admission_path: str = Field(
         default='./artifacts/vpn_admission/attestation.json', alias='VPN_ADMISSION_PATH'
     )
+    vpn_operational_policy_path: str = Field(
+        default='./artifacts/vpn_admission/policy.json', alias='VPN_OPERATIONAL_POLICY_PATH'
+    )
     request_timeout_seconds: int = Field(default=25, alias='REQUEST_TIMEOUT_SECONDS', ge=5)
     auto_ru_page_delay_seconds: float = Field(
         default=2.5, alias='AUTO_RU_PAGE_DELAY_SECONDS', ge=0.5, le=30
@@ -179,6 +182,14 @@ class Settings(BaseSettings):
         clean = str(value or '').strip()
         if not clean:
             raise ValueError('VPN_ADMISSION_PATH must not be empty')
+        return clean
+
+    @field_validator('vpn_operational_policy_path', mode='before')
+    @classmethod
+    def _validate_vpn_operational_policy_path(cls, value: str | None) -> str:
+        clean = str(value or '').strip()
+        if not clean:
+            raise ValueError('VPN_OPERATIONAL_POLICY_PATH must not be empty')
         return clean
 
     @field_validator('source_google_sheet_export_url', 'head_table_google_sheet_export_url',

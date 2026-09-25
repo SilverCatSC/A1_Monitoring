@@ -45,7 +45,8 @@ production-доступ без входа. Проверка гарантируе
 видимого Chrome, VPSUS и controlled cycle.
 
 Role permission не является entrypoint bypass: новый marketplace cycle принимает
-только MacBook host runner с валидной VPN admission и inherited host-lock FD.
+только MacBook host runner с локальной VPN operational policy, подключённым
+VPSUS и inherited host-lock FD.
 Прямой API-вызов не может заменить этот operational gate.
 
 ## Локальные технические проверки при Basic-auth

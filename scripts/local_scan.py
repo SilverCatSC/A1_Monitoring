@@ -19,7 +19,7 @@ from urllib.request import Request, urlopen
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_PROFILE = PROJECT_ROOT / 'artifacts' / 'local_chrome_profile'
 DEFAULT_EVIDENCE = PROJECT_ROOT / 'artifacts' / 'evidence'
-DEFAULT_VPN_ADMISSION = PROJECT_ROOT / 'artifacts' / 'vpn_admission' / 'attestation.json'
+DEFAULT_VPN_POLICY = PROJECT_ROOT / 'artifacts' / 'vpn_admission' / 'policy.json'
 HOST_RUNNER_CONTEXT_ENV = 'A1_MONITORING_HOST_RUNNER_CONTEXT'
 PACING_PROFILES = {
     'normal': {
@@ -158,7 +158,7 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     os.environ['EVIDENCE_DIR'] = str(evidence_dir)
     # The host runner owns this file outside the writable evidence directory.
     # A web-container API cannot opt into host-browser admission by itself.
-    os.environ['VPN_ADMISSION_PATH'] = str(DEFAULT_VPN_ADMISSION)
+    os.environ['VPN_OPERATIONAL_POLICY_PATH'] = str(DEFAULT_VPN_POLICY)
     for key, value in PACING_PROFILES[args.pace].items():
         os.environ[key] = value
 
@@ -175,17 +175,17 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
 
 
 def _require_vpn_admission() -> None:
-    """Fail before Chrome or a DB context unless the local admission is fresh."""
-    from app.service.vpn_admission import require_vpn_admission
+    """Fail before Chrome or a DB context unless owner policy and VPSUS are ready."""
+    from app.service.vpn_admission import require_operational_vpn_admission
 
-    admission = require_vpn_admission(DEFAULT_VPN_ADMISSION)
-    print(f'VPN_ADMISSION_OK expires_at_utc={admission.expires_at_utc.isoformat().replace("+00:00", "Z")}')
+    require_operational_vpn_admission(DEFAULT_VPN_POLICY)
+    print('VPN_OPERATIONAL_ADMISSION_OK vpn=connected routes=declared egress=unverified')
 
 
 def _prepare_vpn_admission_directory() -> None:
     from app.service.vpn_admission import prepare_attestation_directory
 
-    prepare_attestation_directory(DEFAULT_VPN_ADMISSION.parent)
+    prepare_attestation_directory(DEFAULT_VPN_POLICY.parent)
 
 
 def _require_interactive_host_runner_context() -> None:

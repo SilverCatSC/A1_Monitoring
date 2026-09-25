@@ -91,7 +91,7 @@ def test_cycle_imports_before_scan(monkeypatch):
     monkeypatch.setattr(cycle_module.settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
     monkeypatch.setattr(cycle_module.settings, 'local_browser_host_admission', True)
     monkeypatch.setattr(cycle_module, 'require_verified_macos_host_runner_context', lambda: None)
-    monkeypatch.setattr(cycle_module, 'require_vpn_admission', lambda _path: None)
+    monkeypatch.setattr(cycle_module, 'require_operational_vpn_admission', lambda _path: None)
     monkeypatch.setattr(cycle_module.settings, 'dealer_discovery_enabled', True)
     monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_: 3)
 
@@ -242,7 +242,7 @@ def test_failed_refresh_does_not_open_chrome_or_contact_sellers(monkeypatch):
     monkeypatch.setattr(cycle_module.settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
     monkeypatch.setattr(cycle_module.settings, 'local_browser_host_admission', True)
     monkeypatch.setattr(cycle_module, 'require_verified_macos_host_runner_context', lambda: None)
-    monkeypatch.setattr(cycle_module, 'require_vpn_admission', lambda _path: None)
+    monkeypatch.setattr(cycle_module, 'require_operational_vpn_admission', lambda _path: None)
     monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_: 0)
     class Ledger:
         def __init__(self, _):
@@ -288,7 +288,7 @@ def test_keyboard_interrupt_writes_a_terminal_ledger_failure(monkeypatch):
     monkeypatch.setattr(cycle_module.settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
     monkeypatch.setattr(cycle_module.settings, 'local_browser_host_admission', True)
     monkeypatch.setattr(cycle_module, 'require_verified_macos_host_runner_context', lambda: None)
-    monkeypatch.setattr(cycle_module, 'require_vpn_admission', lambda _path: None)
+    monkeypatch.setattr(cycle_module, 'require_operational_vpn_admission', lambda _path: None)
     monkeypatch.setattr(cycle_module, 'CycleLedgerService', Ledger)
     monkeypatch.setattr(cycle_module, 'validate_scan_sources', lambda: None)
     monkeypatch.setattr(

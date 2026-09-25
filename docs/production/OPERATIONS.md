@@ -69,7 +69,7 @@ status в `artifacts`. При занятом mutex это штатный skip, �
 
 Central cycle принимает только проверяемый inherited Mac host-lock FD, который
 удерживает этот runner; `LOCAL_BROWSER_HOST_ADMISSION=true`, путь к lock-файлу или
-VPN attestation по отдельности не открывают цикл. Это operational anti-accidental
+VPN operational policy по отдельности не открывают цикл. Это operational anti-accidental
 boundary, не hostile-security proof против того же локального пользователя.
 
 `register_monitoring_launchagent_macos.sh --at HH:MM` показывает только plan-only

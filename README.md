@@ -29,6 +29,7 @@
 | Роли, обратная связь и отчёт по исключениям | [M5 Operator release](docs/production/OPERATOR_RELEASE.md) |
 | Controlled retry, backup и public allowlist | [M6 Operations](docs/production/OPERATIONS.md) |
 | Живая приёмка, VPN и rollback | [M7 Acceptance](docs/production/ACCEPTANCE_M7.md) |
+| Повседневный VPN-допуск MacBook и его ограничения | [VPN operational policy](docs/production/VPN_OPERATIONAL_POLICY_2026-09-25.md) |
 | ID в фидах и новых карточках | [Сверка в цикле](docs/production/PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md) |
 | Решение о primary host и будущий LaunchAgent | [MacBook primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
@@ -63,8 +64,10 @@ cd /Users/filaret/Desktop/Monitoring
 Finder-ярлык «Запустить мониторинг.command» делает тот же preflight и затем
 открывает локальный dashboard; двойной клик никогда не создаёт monitoring cycle.
 
-Только после закрытия Gate 0/1 M7 и явного решения владельца о VPSUS policy
-допустим один controlled cycle через защищённый Mac-host путь:
+Обычный host-runner требует приватную локальную политику маршрутов и текущий
+статус `Connected` для VPSUS; это не закрывает Gate 1/M7 и не разрешает обход
+ограничений площадок. Контролируемый цикл через Mac-host путь запускают только
+при допустимом штатном доступе к обеим площадкам:
 
 ```bash
 ./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3

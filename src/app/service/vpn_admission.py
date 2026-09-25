@@ -20,13 +20,21 @@ from pathlib import Path
 from typing import Any
 
 ATTESTATION_FILENAME = 'attestation.json'
+OPERATIONAL_POLICY_FILENAME = 'policy.json'
 SCHEMA_VERSION = 1
+OPERATIONAL_SCHEMA_VERSION = 2
 MAX_FILE_BYTES = 8 * 1024
 MAX_VALIDITY = timedelta(hours=24)
 MAX_FUTURE_CLOCK_SKEW = timedelta(minutes=5)
 REQUIRED_SERVICES = ('chatgpt', 'auto_ru', 'avito')
 REQUIRED_IP_FAMILIES = ('ipv4', 'ipv6')
 ALLOWED_ROUTES = frozenset({'vpn_exit', 'direct_physical_connection'})
+OPERATIONAL_ROUTES = {
+    'chatgpt': 'vpn_exit',
+    'auto_ru': 'direct_physical_connection',
+    'avito': 'direct_physical_connection',
+}
+SCUTIL_PATH = '/usr/sbin/scutil'
 _TIMESTAMP_RE = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$')
 
 
@@ -46,9 +54,72 @@ class VPNAdmission:
     expires_at_utc: datetime
 
 
+@dataclass(frozen=True)
+class OperationalVPNAdmission:
+    """Current host readiness, not proof of marketplace egress or M7 acceptance."""
+
+    service: str
+    routes: dict[str, str]
+
+
 def default_attestation_path(project_root: Path) -> Path:
     """Return the canonical owner-side path for a local host run."""
     return project_root / 'artifacts' / 'vpn_admission' / ATTESTATION_FILENAME
+
+
+def default_operational_policy_path(project_root: Path) -> Path:
+    return project_root / 'artifacts' / 'vpn_admission' / OPERATIONAL_POLICY_FILENAME
+
+
+def require_operational_vpn_admission(
+    path: str | Path, *, command_runner=None, platform: str | None = None,
+) -> OperationalVPNAdmission:
+    """Require the owner's stable route policy and a connected VPSUS service.
+
+    This intentionally does not claim to verify per-domain IPv4/IPv6 egress.
+    Full M7 route acceptance remains a separate evidence-based decision.
+    """
+    if (platform or sys.platform) != 'darwin':
+        raise VPNAdmissionError('macos_required')
+    policy_path = Path(path)
+    _require_private_directory(policy_path.parent)
+    payload = _read_json(policy_path)
+    if set(payload) != {'schema_version', 'status', 'services'}:
+        raise VPNAdmissionError('unexpected_operational_policy_schema')
+    if payload['schema_version'] != OPERATIONAL_SCHEMA_VERSION or payload['status'] != 'approved':
+        raise VPNAdmissionError('operational_policy_unapproved')
+    services = payload['services']
+    if not isinstance(services, dict) or set(services) != set(OPERATIONAL_ROUTES):
+        raise VPNAdmissionError('operational_policy_services_invalid')
+    if any(
+        not isinstance(services[name], dict)
+        or services[name] != {'route': expected}
+        for name, expected in OPERATIONAL_ROUTES.items()
+    ):
+        raise VPNAdmissionError('operational_policy_routes_invalid')
+
+    run = command_runner or subprocess.run
+    try:
+        listed = run(
+            [SCUTIL_PATH, '--nc', 'list'],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        status = run(
+            [SCUTIL_PATH, '--nc', 'status', 'VPSUS'],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise VPNAdmissionError('vpn_status_unavailable') from exc
+    if listed.returncode != 0 or status.returncode != 0:
+        raise VPNAdmissionError('vpn_status_unavailable')
+    matching = [
+        line for line in listed.stdout.splitlines()
+        if 'VPN (com.vpsus.vpsus) "VPSUS"' in line and '[VPN:com.vpsus.vpsus]' in line
+    ]
+    if (len(matching) != 1 or not matching[0].lstrip().startswith('* (Connected)')
+            or status.stdout.splitlines()[:1] != ['Connected']):
+        raise VPNAdmissionError('vpsus_not_connected')
+    return OperationalVPNAdmission('VPSUS', dict(OPERATIONAL_ROUTES))
 
 
 def prepare_attestation_directory(path: str | Path) -> None:
@@ -272,6 +343,10 @@ def _main(argv: list[str] | None = None) -> int:
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument('--path', help='Read one existing attestation JSON file.')
     action.add_argument(
+        '--operational-policy',
+        help='Check the owner policy and current VPSUS connection without claiming route acceptance.',
+    )
+    action.add_argument(
         '--prepare-directory',
         help='Create or verify one empty owner-only directory before a host run.',
     )
@@ -280,6 +355,10 @@ def _main(argv: list[str] | None = None) -> int:
         if args.prepare_directory:
             prepare_attestation_directory(args.prepare_directory)
             print('VPN_ADMISSION_DIRECTORY_READY')
+            return 0
+        if args.operational_policy:
+            require_operational_vpn_admission(args.operational_policy)
+            print('VPN_OPERATIONAL_ADMISSION_OK vpn=connected routes=declared egress=unverified')
             return 0
         admission = require_vpn_admission(args.path)
     except VPNAdmissionError as exc:

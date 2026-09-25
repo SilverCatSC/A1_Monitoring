@@ -82,12 +82,12 @@ connection`) для каждого сервиса, его нужных subdomain
 401/403/429 или CAPTCHA остаётся `technical_error`; не отключать защиту площадки
 ради зелёного результата.
 
-Перед полным `local_browser` cycle host-runner получает только короткоживущую
-private attestation по [VPN admission contract](VPN_ADMISSION_CONTRACT_2026-09-14.md).
-Она требует подтверждения IPv4 и IPv6 каждого сервиса, действует не более 24
-часов и fail-closed блокирует runner при отсутствии, expiry или небезопасных
-правах. Она не заменяет owner decision/evidence маршрута и не разрешает VPN
-change/reconnect.
+С 25.09 повседневный `local_browser` runner проверяет приватную
+[operational policy](VPN_OPERATIONAL_POLICY_2026-09-25.md) и текущее подключение
+VPSUS. Это не подтверждает фактический IPv4/IPv6 egress. Для закрытия Gate 1/M7
+нужны отдельные наблюдения маршрутов и решение владельца. Прежняя короткоживущая
+[attestation](VPN_ADMISSION_CONTRACT_2026-09-14.md) сохранена как исторический
+формат такого подтверждения, но не является ежедневным допуском runner.
 
 ## Gate 2 — восстановление
 
