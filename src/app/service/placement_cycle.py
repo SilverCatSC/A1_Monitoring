@@ -171,6 +171,29 @@ class PlacementCycleService:
             catalogue_complete=coverage[EngineType.AVITO],
         ) if EngineType.AVITO in selected_sources else ()
         findings = [asdict(item) for item in (*auto, *avito)]
+        # Reuse a current, evidenced card opened for ID comparison as the
+        # direct-card check for this cycle. Never reuse an unknown/blocked card.
+        opened_inspections = {}
+        opened_counts = Counter()
+        for source, cards in opened.items():
+            for card in cards:
+                key = (source, canonical_listing_key(source, card.url))
+                opened_counts[key] += 1
+                opened_inspections[key] = card.inspection
+        reused_direct_cards = 0
+        for record in previous:
+            if record.state != 'verified' or (record.details or {}).get('direct_inspection'):
+                continue
+            key = (record.source, canonical_listing_key(record.source, record.url))
+            inspection = opened_inspections.get(key)
+            if (opened_counts[key] != 1 or not isinstance(inspection, dict)
+                    or inspection.get('state') != 'active'
+                    or not isinstance(inspection.get('evidence'), str)
+                    or inspection.get('evidence_manifest')
+                    != evidence_manifest_name(inspection['evidence'])):
+                continue
+            record.details = {**(record.details or {}), 'direct_inspection': inspection}
+            reused_direct_cards += 1
         candidate_updates = self._operator_candidate_updates(
             findings, snapshot, opened, candidates, listings, previous,
         )
@@ -184,6 +207,7 @@ class PlacementCycleService:
             'new_card_checks': new_checks,
             'skipped_cards_by_source': dict(skipped),
             'unverified_cards_by_source': dict(unverified),
+            'reused_direct_cards': reused_direct_cards,
             'blocked_sources': sorted(blocked),
             'observed_cards': [
                 {
@@ -201,7 +225,7 @@ class PlacementCycleService:
         report_path = self._write_report(report)
         for record, updated in candidate_updates:
             record.candidates = updated
-        if candidate_updates:
+        if candidate_updates or reused_direct_cards:
             self.db.commit()
         self.progress({'event': 'placement_reconciliation_finished', 'findings': len(findings)})
         return {

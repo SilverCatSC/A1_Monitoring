@@ -44,6 +44,65 @@ def test_missing_feed_stops_before_any_catalogue_card_inspection(monkeypatch):
     assert result == {'status': 'unavailable', 'reason': 'feed export unavailable', 'findings': 0}
 
 
+def test_active_card_opened_for_id_is_reused_for_current_direct_check(tmp_path, monkeypatch):
+    monkeypatch.setattr(settings, 'network_profile', 'local_browser')
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path / 'evidence'))
+    monkeypatch.setattr(settings, 'seller_identity_checks_limit', 80)
+    monkeypatch.setattr('app.service.placement_cycle.read_placement_feed_snapshot',
+                        lambda _url: _snapshot())
+    engine = create_engine(f'sqlite:///{tmp_path / "reuse.db"}')
+    Base.metadata.create_all(engine)
+    calls = []
+
+    async def inspector(source, url, _progress):
+        calls.append((source, url))
+        return {
+            'state': 'active', 'status_code': 'active',
+            'card': {'placement_id': PLACEMENT_ID},
+            'evidence': EVIDENCE,
+            'evidence_manifest': evidence_manifest_name(EVIDENCE),
+        }
+
+    with sessionmaker(bind=engine)() as db:
+        db.add(Listing(id='car', vehicle_signature='car', vin=VIN,
+                       source_avito=NEW, is_active=True))
+        db.add(ListingReconciliation(
+            id='current-check', cycle_id='cycle-reuse', batch_id='batch-reuse',
+            listing_id='car', source=EngineType.AVITO, state='verified',
+            url=NEW, reason='URL in seller catalogue', details={}, candidates=[],
+        ))
+        auto_run = DealerDiscoveryRun(
+            source=EngineType.AUTO_RU, dealer_url='https://auto.ru/diler/cars/all/a1/',
+            network_profile='local_browser', complete=True,
+        )
+        avito_run = DealerDiscoveryRun(
+            source=EngineType.AVITO, dealer_url='https://www.avito.ru/brands/a1/all/avtomobili',
+            network_profile='local_browser', complete=True,
+        )
+        db.add_all([auto_run, avito_run])
+        db.flush()
+        db.add(DealerListingCandidate(
+            source=EngineType.AVITO, external_key=canonical_listing_key(EngineType.AVITO, NEW),
+            dealer_url=avito_run.dealer_url, listing_url=NEW,
+            network_profile='local_browser', active=True,
+            raw_payload={'discovery_run_id': avito_run.id},
+        ))
+        db.commit()
+
+        result = PlacementCycleService(db, inspector=inspector, cycle_id='cycle-reuse').run(
+            {'batch_id': 'batch-reuse', 'discovery': {'run_ids': [auto_run.id, avito_run.id]},
+             'blocked_sources': []}, 'https://docs.google.com/spreadsheets/d/abc/export',
+        )
+
+        assert result['status'] == 'complete'
+        assert calls == [(EngineType.AVITO, NEW)]
+        record = db.get(ListingReconciliation, 'current-check')
+        assert record.details['direct_inspection']['evidence'] == EVIDENCE
+        report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
+        assert report['reused_direct_cards'] == 1
+    engine.dispose()
+
+
 def _snapshot():
     return PlacementFeedSnapshot(
         rows_by_sheet={

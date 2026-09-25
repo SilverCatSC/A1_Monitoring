@@ -173,10 +173,10 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
 
     class Monitor:
         def __init__(self, *_args, **_kwargs):
-            raise AssertionError('search must not run before complete link reconciliation')
+            pass
 
         def run_full_cycle(self):
-            raise AssertionError('search must not run')
+            return {'technical_errors': 0, 'links_need_review': 0, 'blocked_sources': []}
 
     class Placement:
         def __init__(self, _db, *, progress_callback, cycle_id):
@@ -211,8 +211,9 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
     assert result['placement_reconciliation']['status'] == 'partial'
     assert result['completion']['placement_reconciliation']['findings'] == 1
     assert result['completion']['status'] == 'partial'
-    assert 'link_reconciliation_incomplete' in result['completion']['partial_reasons']
-    assert result['completion']['search_skipped'] is True
+    assert 'placement_reconciliation_incomplete' in result['completion']['partial_reasons']
+    assert result['scan']['blocked_sources'] == []
+    assert result['completion'].get('search_skipped') is not True
 
 
 def test_exact_id_link_stage_precedes_roster_search_and_direct_cards(monkeypatch):
@@ -278,6 +279,57 @@ def test_exact_id_link_stage_precedes_roster_search_and_direct_cards(monkeypatch
         'seller_catalogue', 'placement_ids', 'link_sync', 'seal_roster', 'search', 'direct_cards',
     ]
     assert result['completion']['status'] == 'completed'
+
+
+def test_unavailable_identity_stage_skips_search(monkeypatch):
+    import app.service.cycle as cycle_module
+
+    class Ledger:
+        def seal_roster(self, *_args):
+            return {'roster_count': 1}
+
+    class Reconciliation:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self):
+            return {'batch_id': 'batch', 'summary': {}, 'discovery': {},
+                    'blocked_sources': [], 'checks': {}}
+
+        def inspect_current_cards(self, _preflight):
+            raise AssertionError('direct cards must not run')
+
+    class Placement:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self, *_args):
+            return {'status': 'unavailable', 'findings': 0}
+
+    class LinkSync:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self, *_args):
+            return {'status': 'unavailable', 'updated': [], 'blocked': ['no_report']}
+
+    class Monitor:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError('search must not run')
+
+    monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', True)
+    monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_args: 0)
+    monkeypatch.setattr(cycle_module, 'refresh_monitoring_source', lambda *_args, **_kwargs: {
+        'import': {'snapshot_id': 'snapshot'}, 'filter_assignments': {}, 'canonical_filters': {},
+    })
+    monkeypatch.setattr(cycle_module, 'SellerReconciliationService', Reconciliation)
+    monkeypatch.setattr(cycle_module, 'PlacementCycleService', Placement)
+    monkeypatch.setattr(cycle_module, 'AutomaticLinkSyncService', LinkSync)
+    monkeypatch.setattr(cycle_module, 'MonitorService', Monitor)
+
+    result = cycle_module.MonitoringCycleService('db')._run('cycle-1', Ledger())
+    assert result['completion']['search_skipped'] is True
+    assert result['completion']['status'] == 'partial'
 
 
 def test_cycle_rejects_invalid_source_configuration_before_import(monkeypatch):

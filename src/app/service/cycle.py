@@ -195,10 +195,15 @@ class MonitoringCycleService:
             'cycle_id': cycle_id,
             'roster_count': manifest['roster_count'],
         })
-        links_ready = placement is None or (
-            placement['status'] == 'complete' and link_sync['status'] == 'complete'
+        # Incomplete catalogue coverage must not suppress search for listings
+        # whose current seller link was verified. MonitorService gates each
+        # expectation individually; unresolved links become REVIEW_REQUIRED.
+        # Only an unavailable ID stage stops the whole search.
+        link_stage_available = placement is None or (
+            placement['status'] in {'complete', 'partial'}
+            and link_sync['status'] in {'complete', 'partial'}
         )
-        if links_ready:
+        if link_stage_available:
             scanned = MonitorService(
                 self.db,
                 progress_callback=self.progress,
@@ -222,6 +227,12 @@ class MonitoringCycleService:
         if placement is not None:
             completion['placement_reconciliation'] = placement
             completion['automatic_link_sync'] = link_sync
+            if placement['status'] != 'complete':
+                completion['status'] = 'partial'
+                completion['partial_reasons'].append('placement_reconciliation_incomplete')
+            if link_sync['status'] != 'complete':
+                completion['status'] = 'partial'
+                completion['partial_reasons'].append('automatic_link_sync_incomplete')
         self.progress({'event': 'cycle_completed', 'summary': completion})
         result = {
             **refreshed,

@@ -128,7 +128,7 @@ class Settings(BaseSettings):
         default=False, alias='PLACEMENT_RECONCILIATION_ENABLED'
     )
     seller_identity_checks_limit: int = Field(
-        default=40, alias='SELLER_IDENTITY_CHECKS_LIMIT', ge=0, le=100
+        default=80, alias='SELLER_IDENTITY_CHECKS_LIMIT', ge=0, le=100
     )
     import_min_valid_ratio: float = Field(default=0.7, alias='IMPORT_MIN_VALID_RATIO', gt=0, le=1)
     app_version: str = '0.14.0'
