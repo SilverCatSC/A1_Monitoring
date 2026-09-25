@@ -37,6 +37,7 @@
 | Автоактуализация точных ID до поиска и приватный браузер | [Решение и границы](docs/production/TASK_AUTOMATIC_LINK_SYNC_2026-09-25.md) |
 | Последний цикл Auto.ru и Avito, частичная приёмка и причины блокировки | [Проверка 25.09](docs/production/TASK_FULL_UNIQUE_ID_CHECK_2026-09-25.md) |
 | CAPTCHA, блокировка IP и критерии продолжения проверок | [План устойчивости](docs/production/CAPTCHA_RESILIENCE_2026-09-25.md) |
+| Автономная проверка Avito при HTTP 429: требуемый доступ и границы | [Задача доступа Avito](docs/production/TASK_AVITO_UNATTENDED_ACCESS_2026-09-25.md) |
 | Решение о primary host и будущий LaunchAgent | [MacBook primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
 
