@@ -62,6 +62,7 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
         pages=3,
         probe_url=None,
         pace='cautious',
+        captcha_wait_seconds=180,
     )
 
     assert local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'}) == (
@@ -71,6 +72,7 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['SCAN_PAGE_PAUSE_MAX_SECONDS'] == '12'
     assert local_scan.os.environ['AUTO_RU_PAGE_DELAY_SECONDS'] == '5'
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'true'
+    assert local_scan.os.environ['CAPTCHA_OPERATOR_WAIT_SECONDS'] == '180'
     args.placement_identity = True
     local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'})
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'true'
@@ -85,6 +87,7 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
 def test_private_chrome_uses_a_separate_extension_free_endpoint():
     args = local_scan._parser().parse_args([])
     assert args.cdp_port == 19223
+    assert args.captcha_wait_seconds == 180
     assert args.browser_profile == str(local_scan.DEFAULT_PROFILE)
     assert args.browser_profile.endswith('local_chrome_isolated_profile')
 

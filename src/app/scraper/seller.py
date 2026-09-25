@@ -15,7 +15,7 @@ from app.scraper.base import (
     evidence_manifest_name,
 )
 from app.scraper.browser_session import browser_page
-from app.scraper.challenge_retry import refresh_explicit_captcha
+from app.scraper.challenge_retry import operator_wait_seconds, refresh_explicit_captcha
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import SUPPLEMENT_HEADING
 from app.service.placement_identity import placement_id_claim_from_description, placement_id_from_description
@@ -124,7 +124,8 @@ def _direct_card_fields(html, source):
 
 def direct_page_status(html, source, expected_url, final_url, http_status):
     final = urlsplit(final_url)
-    if final.hostname == 'auth.auto.ru' or '/login' in final.path or '/captcha' in final.path.lower():
+    if (final.hostname == 'auth.auto.ru' or '/login' in final.path
+            or any(marker in final.path.lower() for marker in ('/captcha', '/showcaptcha'))):
         return {'state': 'blocked', 'status_code': 'blocked', 'reason': 'Требуется вход или проверка пользователя'}
     if source_challenged(f'HTTP {http_status}', {}):
         return {'state': 'blocked', 'status_code': 'blocked', 'reason': f'HTTP {http_status}'}
@@ -197,10 +198,34 @@ async def inspect_direct_link(source, url, progress=None):
                 response = await page.goto(url, timeout=settings.request_timeout_seconds * 1000, wait_until='domcontentloaded')
                 await asyncio.sleep(settings.auto_ru_page_delay_seconds if source.value == 'auto_ru' else settings.avito_page_delay_seconds)
                 html = await page.content()
-                response, html, _refreshes = await refresh_explicit_captcha(
+                captcha_wait = operator_wait_seconds(source.value)
+                recovery = await refresh_explicit_captcha(
                     page, response, html, progress=progress, source=source.value, url=url,
+                    wait_seconds=captcha_wait,
+                    capture_challenge=(
+                        lambda challenge_page, challenge_response: capture_page_evidence(
+                            challenge_page, source=source, search_url=url, page_number=1,
+                            evidence_dir=settings.evidence_dir, purpose='captcha_challenge',
+                            final_url=challenge_page.url,
+                            http_status=challenge_response.status if challenge_response else None,
+                        )
+                    ) if captcha_wait else None,
                 )
+                response, html = recovery.response, recovery.html
                 result = direct_page_status(html, source, url, page.url, response.status if response else None)
+                if recovery.outcome in {'unresolved', 'operator_timeout', 'wrong_destination',
+                                        'challenge_evidence_missing', 'no_document_response'}:
+                    reason = ('Не получен ответ страницы' if recovery.outcome == 'no_document_response'
+                              else f'CAPTCHA {recovery.outcome}')
+                    result = {'state': 'blocked', 'status_code': 'blocked',
+                              'reason': reason}
+                if recovery.refreshes:
+                    result['captcha_outcome'] = recovery.outcome
+                    if recovery.challenge_evidence:
+                        result['captcha_challenge_evidence'] = recovery.challenge_evidence
+                        result['captcha_challenge_evidence_manifest'] = evidence_manifest_name(
+                            recovery.challenge_evidence
+                        )
                 evidence = await capture_page_evidence(
                     page,
                     source=source,

@@ -107,6 +107,7 @@ def test_pending_report_keeps_captcha_and_first_request_429_unfinished(tmp_path,
             'error': 'blocked page 2: showcaptcha',
             'page_2_final_url': 'https://auto.ru/showcaptcha',
             'page_2_evidence': 'auto-captcha.png',
+            'page_2_captcha_evidence': 'auto-captcha-before-operator.png',
         })
         _observation(db, cycle.id, 'avito', ObservationState.TECHNICAL_ERROR, {
             'error': 'source scan halted after marketplace challenge',
@@ -136,7 +137,7 @@ def test_pending_report_keeps_captcha_and_first_request_429_unfinished(tmp_path,
                     and item['source'] == 'auto_ru' and item['reason'] == 'captcha')
         assert auto['filter_id'] == 'filter-auto_ru'
         assert auto['blocked_page'] == 2
-        assert auto['evidence'] == 'auto-captcha.png'
+        assert auto['evidence'] == 'auto-captcha-before-operator.png'
         assert db.get(MonitoringCycle, cycle.id).summary['pending_checks']['count'] == 5
     finally:
         db.close()

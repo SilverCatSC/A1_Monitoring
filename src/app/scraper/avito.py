@@ -113,13 +113,15 @@ class AvitoAdapter:
                                 except PlaywrightTimeoutError:
                                     pass
                         html = await page.content()
-                        response, html, captcha_refreshes = await refresh_explicit_captcha(
+                        recovery = await refresh_explicit_captcha(
                             page, response, html, progress=self.progress_callback,
                             source=self.source.value, url=url,
                         )
-                        if captcha_refreshes:
+                        response, html = recovery.response, recovery.html
+                        if recovery.refreshes:
                             http_status = response.status if response is not None else None
-                            diagnostics[f'page_{page_number}_captcha_refreshes'] = captcha_refreshes
+                            diagnostics[f'page_{page_number}_captcha_refreshes'] = recovery.refreshes
+                            diagnostics[f'page_{page_number}_captcha_outcome'] = recovery.outcome
                             diagnostics[f'page_{page_number}_http_status'] = http_status or 0
                         diagnostics[f'page_{page_number}_requested_url'] = url
                         diagnostics[f'page_{page_number}_final_url'] = page.url
@@ -141,6 +143,13 @@ class AvitoAdapter:
                         else:
                             error = f'evidence capture failed page {page_number}'
                             diagnostics[f'page_{page_number}_state'] = 'evidence_missing'
+                            break
+                        if recovery.outcome in {'unresolved', 'operator_timeout', 'wrong_destination',
+                                                'no_document_response'}:
+                            reason = ('no document response' if recovery.outcome == 'no_document_response'
+                                      else f'CAPTCHA {recovery.outcome}')
+                            error = f'blocked page {page_number}: {reason}'
+                            diagnostics[f'page_{page_number}_state'] = 'blocked'
                             break
                         if http_status is not None and http_status >= 400:
                             error = f'page {page_number}: RuntimeError: HTTP {http_status}'

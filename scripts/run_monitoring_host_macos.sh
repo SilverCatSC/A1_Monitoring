@@ -21,6 +21,8 @@ VPN_POLICY_PATH="$VPN_ADMISSION_DIR/policy.json"
 ENGINES='auto_ru,avito'
 PAGES=3
 PACE='cautious'
+CAPTCHA_WAIT_SECONDS=180
+CAPTCHA_WAIT_WAS_SET=0
 PREFLIGHT_ONLY=0
 ENGINES_WAS_SET=0
 PAGES_WAS_SET=0
@@ -38,7 +40,7 @@ LOCK_FD="${A1_MONITORING_HOST_LOCK_FD:-}"
 usage() {
     cat <<'EOF'
 Usage: scripts/run_monitoring_host_macos.sh [--preflight]
-       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10] [--placement-identity]
+       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10] [--captcha-wait-seconds 0..600] [--placement-identity]
        scripts/run_monitoring_host_macos.sh --retry-cycle <completed-partial-or-failed-cycle-uuid>
 
 Runs one cautious monitoring cycle through the signed-in macOS user's visible
@@ -55,6 +57,9 @@ It cannot be combined with scan parameters.
 
 --placement-identity is a compatibility flag; ID link synchronization now runs
 before search in every full cycle.
+
+--captcha-wait-seconds sets a bounded wait for a person to clear Auto.ru CAPTCHA
+in the visible private Chrome tab. Default: 180; 0 disables the wait.
 EOF
 }
 
@@ -81,6 +86,12 @@ parse_arguments() {
                 [[ $# -ge 2 ]] || { usage >&2; exit 64; }
                 PAGES="$2"
                 PAGES_WAS_SET=1
+                shift 2
+                ;;
+            --captcha-wait-seconds)
+                [[ $# -ge 2 ]] || { usage >&2; exit 64; }
+                CAPTCHA_WAIT_SECONDS="$2"
+                CAPTCHA_WAIT_WAS_SET=1
                 shift 2
                 ;;
             --preflight)
@@ -127,8 +138,13 @@ parse_arguments() {
         safe_message 'HOST_RUNNER_REFUSED reason=invalid_pages'
         exit 64
     fi
+    if [[ ! "$CAPTCHA_WAIT_SECONDS" =~ ^[0-9]{1,3}$ ]] || (( CAPTCHA_WAIT_SECONDS > 600 )); then
+        safe_message 'HOST_RUNNER_REFUSED reason=invalid_captcha_wait_seconds'
+        exit 64
+    fi
     if [[ "$PREFLIGHT_ONLY" -eq 1 ]] && \
         { [[ "$ENGINES_WAS_SET" -eq 1 ]] || [[ "$PAGES_WAS_SET" -eq 1 ]] || \
+          [[ "$CAPTCHA_WAIT_WAS_SET" -eq 1 ]] || \
           [[ "$WITH_PLACEMENT_ID" -eq 1 ]] || \
           [[ -n "$RETRY_CYCLE_ID" ]]; }; then
         safe_message 'HOST_RUNNER_REFUSED reason=preflight_does_not_accept_scan_parameters'
@@ -423,7 +439,8 @@ main() {
 
     RUNNER_PHASE='scan'
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
-    local scan_args=(--engines "$ENGINES" --pages "$PAGES" --pace "$PACE")
+    local scan_args=(--engines "$ENGINES" --pages "$PAGES" --pace "$PACE"
+        --captcha-wait-seconds "$CAPTCHA_WAIT_SECONDS")
     if [[ "$WITH_PLACEMENT_ID" -eq 1 ]]; then
         scan_args+=(--placement-identity)
     fi

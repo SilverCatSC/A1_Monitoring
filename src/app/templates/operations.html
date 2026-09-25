@@ -156,7 +156,32 @@ document.querySelector('#listing-link-form').addEventListener('submit',async(e)=
 document.querySelector('#feedback-form').addEventListener('submit',async(e)=>{e.preventDefault();const f=new FormData(e.target),out=document.querySelector('#feedback-result');out.textContent='Отправка…';try{await send('/api/v1/feedback',{manager_name:f.get('manager'),severity:f.get('severity'),category:f.get('category'),listing_id:f.get('listing_id')||null,message:f.get('message'),source:'dashboard'});out.textContent='Замечание принято';e.target.reset();setTimeout(()=>location.reload(),900)}catch(x){out.textContent=x.message}});
 const sourceName=(value)=>({auto_ru:'Auto.ru',avito:'Avito'})[value]||value||'—';
 const eventLine=(event)=>{const time=event.at?new Date(event.at).toLocaleTimeString('ru-RU'):'';const source=sourceName(event.source);switch(event.event){case'source_refresh_started':return`${time} · Реестр · обновление Monitoring из Google Sheets`;case'source_refresh_finished':return`${time} · Реестр · обновлён: ${event.rows_valid||0}/${event.rows_total||0} валидных строк`;case'source_refresh_failed':return`${time} · Реестр · ошибка: ${event.error||''}`;case'filter_wait':return`${time} · ${source} · пауза ${event.wait_seconds} с перед фильтром ${event.filter_name}`;case'filter_retry':return`${time} · ${source} · вкладка Chrome закрыта, повтор через ${event.retry_seconds} с`;case'filter_started':return`${time} · ${source} · фильтр ${event.source_index}/${event.source_total}: ${event.filter_name}`;case'page_wait':return`${time} · ${source} · пауза ${event.wait_seconds} с перед страницей ${event.page}/${event.pages_total}`;case'page_started':return`${time} · ${source} · страница ${event.page}/${event.pages_total}: загрузка`;case'page_finished':return`${time} · ${source} · страница ${event.page}: ${event.cards||0} карточек, целевых снимков ${event.target_cards||0}`;case'page_failed':return`${time} · ${source} · страница ${event.page}: ошибка ${event.error||''}`;case'filter_finished':return`${time} · ${source} · ${event.filter_name}: ${event.status}, найдено ${event.found||0}/${event.expected||0}`;case'filter_skipped':return`${time} · ${source} · ${event.filter_name}: пропущен`;case'cycle_finished':return`${time} · проверка завершена`;case'cycle_failed':return`${time} · сбой проверки: ${event.error||''}`;default:return''}};
-async function refreshScanProgress(){try{const r=await fetch('/api/v1/status/scans/progress',{cache:'no-store'});if(!r.ok)throw new Error('HTTP '+r.status);const d=await r.json(),c=d.current||{},total=Number(d.total_filters||0),done=Number(d.completed_filters||0),percent=total?Math.min(100,Math.round(done*100/total)):0;const labels={idle:'не запущена',starting:'запуск',running:'выполняется',completed:'завершена',partial:'частично',failed:'сбой',unavailable:'недоступно'};const badge=document.querySelector('#scan-progress-status');badge.textContent=labels[d.status]||d.status;badge.className='pill '+(d.status==='completed'?'SUCCESS':d.status==='running'?'':d.status==='idle'?'':'PARTIAL');document.querySelector('#scan-progress-bar').style.width=percent+'%';document.querySelector('#scan-progress-counts').textContent=`${done} из ${total} фильтров · ${percent}%`;let current='Проверка не запущена';if(d.status==='running'){current=`${sourceName(c.source)} · ${c.filter_name||'подготовка'}${c.page?' · страница '+c.page+'/'+(c.pages_total||3):''}`;}else if(d.status==='completed'||d.status==='partial'){current='Последняя проверка завершена';}else if(d.error){current=d.error;}document.querySelector('#scan-progress-current').textContent=current;const lines=(d.events||[]).map(eventLine).filter(Boolean).slice(-12);if(lines.length)document.querySelector('#scan-progress-log').textContent=lines.join('\n');}catch(error){document.querySelector('#scan-progress-current').textContent='Не удалось получить ход проверки: '+error.message;}}
+async function refreshScanProgress(){
+  try{
+    const r=await fetch('/api/v1/status/scans/progress',{cache:'no-store'});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const d=await r.json(),c=d.current||{};
+    const total=Number(d.total_filters||0),done=Number(d.completed_filters||0);
+    const percent=total?Math.min(100,Math.round(done*100/total)):0;
+    const labels={idle:'не запущена',starting:'запуск',running:'выполняется',waiting_captcha:'пройдите CAPTCHA',completed:'завершена',partial:'частично',failed:'сбой',unavailable:'недоступно'};
+    const badge=document.querySelector('#scan-progress-status');
+    badge.textContent=labels[d.status]||d.status;
+    badge.className='pill '+(d.status==='completed'?'SUCCESS':d.status==='running'?'':d.status==='idle'?'':'PARTIAL');
+    document.querySelector('#scan-progress-bar').style.width=percent+'%';
+    document.querySelector('#scan-progress-counts').textContent=`${done} из ${total} фильтров · ${percent}%`;
+    let current='Проверка не запущена';
+    if(d.status==='waiting_captcha'){
+      current='Пройдите CAPTCHA в открытом приватном окне Chrome. Проверка ждёт, а не пропускает объявление.';
+    }else if(d.status==='running'){
+      current=`${sourceName(c.source)} · ${c.filter_name||'подготовка'}${c.page?' · страница '+c.page+'/'+(c.pages_total||3):''}`;
+    }else if(d.status==='completed'||d.status==='partial'){
+      current='Последняя проверка завершена';
+    }else if(d.error){current=d.error;}
+    document.querySelector('#scan-progress-current').textContent=current;
+    const lines=(d.events||[]).map(eventLine).filter(Boolean).slice(-12);
+    if(lines.length)document.querySelector('#scan-progress-log').textContent=lines.join('\n');
+  }catch(error){document.querySelector('#scan-progress-current').textContent='Не удалось получить ход проверки: '+error.message;}
+}
 refreshScanProgress();setInterval(refreshScanProgress,1000);
 </script>
 </body>

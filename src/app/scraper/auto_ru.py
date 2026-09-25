@@ -22,7 +22,7 @@ from app.scraper.base import (
     is_marketplace_listing_url,
 )
 from app.scraper.browser_session import browser_page
-from app.scraper.challenge_retry import refresh_explicit_captcha
+from app.scraper.challenge_retry import operator_wait_seconds, refresh_explicit_captcha
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import pagination_state, primary_cards
 from app.scraper.seller import catalogue_html, seller_page_matches
@@ -97,14 +97,31 @@ class AutoRuAdapter:
                             await page.evaluate('window.scrollTo(0, 0)')
                             await asyncio.sleep(settings.auto_ru_page_delay_seconds)
                         html = await page.content()
-                        response, html, captcha_refreshes = await refresh_explicit_captcha(
+                        captcha_wait = operator_wait_seconds(self.source.value)
+                        recovery = await refresh_explicit_captcha(
                             page, response, html, progress=self.progress_callback,
                             source=self.source.value, url=url,
+                            wait_seconds=captcha_wait,
+                            capture_challenge=(
+                                lambda challenge_page, challenge_response, current_page=page_number: capture_page_evidence(
+                                    challenge_page, source=self.source, search_url=search_url,
+                                    page_number=current_page, evidence_dir=settings.evidence_dir,
+                                    purpose='captcha_challenge', final_url=challenge_page.url,
+                                    http_status=challenge_response.status if challenge_response else None,
+                                )
+                            ) if captcha_wait else None,
                         )
-                        if captcha_refreshes:
+                        response, html = recovery.response, recovery.html
+                        if recovery.refreshes:
                             http_status = response.status if response is not None else None
-                            diagnostics[f'page_{page_number}_captcha_refreshes'] = captcha_refreshes
+                            diagnostics[f'page_{page_number}_captcha_refreshes'] = recovery.refreshes
+                            diagnostics[f'page_{page_number}_captcha_outcome'] = recovery.outcome
                             diagnostics[f'page_{page_number}_http_status'] = http_status or 0
+                            if recovery.challenge_evidence:
+                                diagnostics[f'page_{page_number}_captcha_evidence'] = recovery.challenge_evidence
+                                diagnostics[f'page_{page_number}_captcha_evidence_manifest'] = evidence_manifest_name(
+                                    recovery.challenge_evidence
+                                )
                         diagnostics[f'page_{page_number}_requested_url'] = url
                         diagnostics[f'page_{page_number}_final_url'] = page.url
                         evidence_path = await capture_page_evidence(
@@ -125,6 +142,13 @@ class AutoRuAdapter:
                         else:
                             error = f'evidence capture failed page {page_number}'
                             diagnostics[f'page_{page_number}_state'] = 'evidence_missing'
+                            break
+                        if recovery.outcome in {'unresolved', 'operator_timeout', 'wrong_destination',
+                                                'challenge_evidence_missing', 'no_document_response'}:
+                            reason = ('no document response' if recovery.outcome == 'no_document_response'
+                                      else f'CAPTCHA {recovery.outcome}')
+                            error = f'blocked page {page_number}: {reason}'
+                            diagnostics[f'page_{page_number}_state'] = 'blocked'
                             break
                         if http_status is not None and http_status >= 400:
                             error = f'page {page_number}: RuntimeError: HTTP {http_status}'

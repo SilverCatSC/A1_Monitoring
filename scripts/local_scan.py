@@ -155,6 +155,7 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     os.environ['PLACEMENT_RECONCILIATION_ENABLED'] = 'false' if args.probe_url else 'true'
     os.environ['SCAN_PAGES_LIMIT'] = str(args.pages)
     os.environ['EVIDENCE_DIR'] = str(evidence_dir)
+    os.environ['CAPTCHA_OPERATOR_WAIT_SECONDS'] = str(args.captcha_wait_seconds)
     # The host runner owns this file outside the writable evidence directory.
     # A web-container API cannot opt into host-browser admission by itself.
     os.environ['VPN_OPERATIONAL_POLICY_PATH'] = str(DEFAULT_VPN_POLICY)
@@ -255,6 +256,10 @@ def _parser() -> argparse.ArgumentParser:
         help='Start one explicit retry for a completed partial/failed cycle; never combine with --watch.',
     )
     parser.add_argument('--cdp-port', type=int, default=19223)
+    parser.add_argument(
+        '--captcha-wait-seconds', type=int, default=180,
+        help='Bounded wait for a person to clear Auto.ru CAPTCHA in visible Chrome (0 disables)',
+    )
     parser.add_argument('--browser-profile', default=str(DEFAULT_PROFILE))
     parser.add_argument('--evidence-dir', default=str(DEFAULT_EVIDENCE))
     parser.add_argument(
@@ -275,6 +280,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
+    if not 0 <= args.captcha_wait_seconds <= 600:
+        raise RuntimeError('captcha-wait-seconds must be between 0 and 600')
     # Windows/MSI is deliberately source-only fallback material after the
     # MacBook primary-host decision. Reject even the read-only probe path here
     # because this raw Python entry point could otherwise bypass its PowerShell

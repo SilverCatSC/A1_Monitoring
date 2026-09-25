@@ -47,7 +47,12 @@ def _blocked_reason(diagnostics: dict) -> tuple[str, str | None]:
     captcha_page = next((key.removesuffix('_final_url') for key, value in diagnostics.items()
                          if key.endswith('_final_url') and 'captcha' in str(value).lower()), None)
     if 'captcha' in error or captcha_page:
-        evidence = diagnostics.get(f'{captcha_page}_evidence') if captcha_page else None
+        evidence = diagnostics.get(f'{captcha_page}_captcha_evidence') if captcha_page else None
+        if not evidence and captcha_page:
+            evidence = diagnostics.get(f'{captcha_page}_evidence')
+        if not evidence:
+            evidence = next((value for key, value in diagnostics.items()
+                             if key.endswith('_captcha_evidence')), None)
         return 'captcha', evidence
     return 'technical_error', None
 

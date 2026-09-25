@@ -1,6 +1,6 @@
 // Read-only progress view. Starting a live scan remains an explicit local action.
 (() => {
-  const label = {idle:'Не запущена',starting:'Запуск',preparing:'Обновление реестра',reconciling:'Сверка каталога',link_sync:'Актуализация ссылок',running:'Выполняется',completed:'Завершена',partial:'Частично',failed:'Сбой',unavailable:'Нет связи'};
+  const label = {idle:'Не запущена',starting:'Запуск',preparing:'Обновление реестра',reconciling:'Сверка каталога',link_sync:'Актуализация ссылок',running:'Выполняется',waiting_captcha:'Требуется действие',completed:'Завершена',partial:'Частично',failed:'Сбой',unavailable:'Нет связи'};
   const source = s => ({auto_ru:'Auto.ru',avito:'Avito'})[s] || '';
   const eventLine = e => {
     const stamp = e.at ? new Date(e.at).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow'}) : '';
@@ -22,6 +22,10 @@
       case 'page_started': message = `${source(e.source)} · загрузка страницы ${e.page}/${e.pages_total}`; break;
       case 'page_finished': message = `Страница ${e.page}: ${e.cards || 0} карточек, ${e.target_cards || 0} снимков своих объявлений`; break;
       case 'page_failed': message = `Страница ${e.page}: ${e.error || 'сбой'}`; break;
+      case 'captcha_refresh': message = `${source(e.source)} · CAPTCHA: одно обычное обновление`; break;
+      case 'captcha_operator_required': message = `${source(e.source)} · пройдите CAPTCHA в открытом Chrome (${e.wait_seconds} с)`; break;
+      case 'captcha_operator_resolved': message = `${source(e.source)} · CAPTCHA пройдена, продолжаем`; break;
+      case 'captcha_operator_unresolved': message = `${source(e.source)} · CAPTCHA не снята, проверка остаётся незавершённой`; break;
       case 'filter_finished': message = e.status === 'technical_error' ? `${e.filter_name}: проверка не удалась · ${e.error || 'технический сбой'}` : `${e.filter_name}: найдено ${e.found || 0} из ${e.expected || 0}${e.links_rejected ? ' · ссылок пропущено: ' + e.links_rejected : ''}`; break;
       case 'filter_skipped': message = `${e.filter_name}: пропущен`; break;
       case 'cycle_finished': message = 'Проверка завершена'; break;
@@ -33,11 +37,12 @@
       const response = await fetch('/api/v1/status/scans/progress',{cache:'no-store'});
       if(!response.ok) throw new Error('HTTP ' + response.status);
       const d = await response.json(), c = d.current || {};
-      const stale = ['running','preparing','reconciling','link_sync'].includes(d.status) && Date.now() - Date.parse(d.updated_at) > 180000;
+      const staleAfter = d.status === 'waiting_captcha' ? (Number(c.wait_seconds || 180) + 30) * 1000 : 180000;
+      const stale = ['running','preparing','reconciling','link_sync','waiting_captcha'].includes(d.status) && Date.now() - Date.parse(d.updated_at) > staleAfter;
       const total = Number(d.total_filters || 0), done = Number(d.completed_filters || 0);
       const percent = total ? Math.min(100,Math.round(done / total * 100)) : 0;
       document.querySelector('#scan-progress-status').textContent = stale ? 'Нет свежего сигнала' : (label[d.status] || d.status);
-      const warning = stale || ['partial','failed','unavailable'].includes(d.status);
+      const warning = stale || ['partial','failed','unavailable','waiting_captcha'].includes(d.status);
       document.querySelector('#scan-progress-status').className = 'badge ' + (warning ? 'technical_error' : d.status === 'completed' ? 'found' : '');
       document.querySelector('#scan-progress-bar').style.width = percent + '%';
       document.querySelector('#scan-progress-bar').style.backgroundColor = warning ? '#b58b38' : '#168a7c';
@@ -50,6 +55,7 @@
       if(['completed','partial'].includes(d.status)) current = `Последняя проверка: ${new Date(d.updated_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК`;
       if(d.status === 'reconciling') current = `${source(c.source)} · сверяем каталог продавца${c.page ? ' · страница ' + c.page : ''}`;
       if(d.status === 'link_sync') current = 'Сверяем ID в карточках и фиде перед поиском';
+      if(d.status === 'waiting_captcha') current = 'Пройдите CAPTCHA в открытом приватном окне Chrome; цикл ждёт и не пропускает проверку';
       if(d.error) current = d.error;
       if(stale) current = 'Сигнал не обновлялся более 3 минут. Проверьте терминал и окно Chrome.';
       document.querySelector('#scan-progress-current').textContent = current;

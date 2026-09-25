@@ -69,6 +69,11 @@ class ScanProgressTracker:
             direct_cards['checked'] = int(event.get('card_index') or 0)
             direct_cards['total'] = int(event.get('card_total') or direct_cards.get('total') or 0)
             self.state['direct_cards'] = direct_cards
+        elif name == 'captcha_operator_required':
+            self.state['before_captcha_status'] = self.state.get('status', 'running')
+            self.state['status'] = 'waiting_captcha'
+        elif name in {'captcha_operator_resolved', 'captcha_operator_unresolved'}:
+            self.state['status'] = self.state.pop('before_captcha_status', 'running')
         elif name in {'filter_finished', 'filter_skipped'}:
             self.state['completed_filters'] = int(event.get('overall_index') or 0)
         elif name == 'cycle_finished':
@@ -98,6 +103,10 @@ class ScanProgressTracker:
             'page_started',
             'page_finished',
             'page_failed',
+            'captcha_refresh',
+            'captcha_operator_required',
+            'captcha_operator_resolved',
+            'captcha_operator_unresolved',
             'filter_finished',
             'filter_skipped',
             'source_finished',
@@ -226,6 +235,15 @@ def _terminal_line(event: dict[str, Any]) -> str:
         )
     if name == 'page_failed':
         return f'[{stamp}] {source} · страница {event.get("page")} · ОШИБКА: {event.get("error")}'
+    if name == 'captcha_refresh':
+        return f'[{stamp}] {source} · CAPTCHA · одно обычное обновление страницы'
+    if name == 'captcha_operator_required':
+        return (f'[{stamp}] {source} · CAPTCHA осталась · пройдите проверку в открытом Chrome '
+                f'в течение {event.get("wait_seconds")} с')
+    if name == 'captcha_operator_resolved':
+        return f'[{stamp}] {source} · CAPTCHA пройдена · продолжаем текущую страницу'
+    if name == 'captcha_operator_unresolved':
+        return f'[{stamp}] {source} · CAPTCHA не снята · проверка остаётся незавершённой'
     if name == 'filter_finished':
         return (
             f'[{stamp}] {source} · {event.get("filter_name")} · {event.get("status")} · '

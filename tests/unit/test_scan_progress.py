@@ -134,5 +134,20 @@ def test_progress_tracker_marks_direct_card_failures_as_partial(tmp_path):
     assert payload['summary']['direct_cards_technical_errors'] == 2
 
 
+def test_captcha_wait_is_visible_and_returns_to_prior_stage(tmp_path, capsys):
+    tracker = ScanProgressTracker(str(tmp_path))
+    tracker({'event': 'dealer_preflight_started'})
+    tracker({'event': 'captcha_operator_required', 'source': 'auto_ru',
+             'url': 'https://auto.ru/cars/', 'wait_seconds': 180})
+    waiting = read_scan_progress(str(tmp_path))
+    assert waiting['status'] == 'waiting_captcha'
+    assert waiting['current']['event'] == 'captcha_operator_required'
+    assert 'пройдите проверку в открытом Chrome' in capsys.readouterr().out
+
+    tracker({'event': 'captcha_operator_resolved', 'source': 'auto_ru',
+             'url': 'https://auto.ru/cars/'})
+    assert read_scan_progress(str(tmp_path))['status'] == 'reconciling'
+
+
 def test_missing_progress_file_is_idle(tmp_path):
     assert read_scan_progress(str(tmp_path)) == {'status': 'idle', 'events': []}

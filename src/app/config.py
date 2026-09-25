@@ -112,6 +112,9 @@ class Settings(BaseSettings):
     target_closed_retry_seconds: float = Field(
         default=5, alias='TARGET_CLOSED_RETRY_SECONDS', ge=0, le=30
     )
+    captcha_operator_wait_seconds: int = Field(
+        default=0, alias='CAPTCHA_OPERATOR_WAIT_SECONDS', ge=0, le=600
+    )
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')
     run_every_minutes: int = Field(default=30, alias='RUN_EVERY_MINUTES', ge=1)
     report_retention_days: int = Field(default=90, alias='REPORT_RETENTION_DAYS', ge=1)
