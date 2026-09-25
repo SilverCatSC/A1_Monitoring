@@ -43,6 +43,7 @@
   {% if item.current_url %}<p class="helper">Ссылка в реестре: {{ item.current_url }}</p>{% endif %}
   {% for url in row.urls %}<p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">Открыть найденное объявление →</a></p>{% endfor %}
   {% if row.evidence_index is not none %}<p><a href="/api/v1/status/cycles/{{ data.cycle.id }}/placement-evidence/{{ row.evidence_index }}" target="_blank">Снимок карточки →</a></p>{% endif %}
+  {% if item.operator_review_check_id %}<p><a href="/api/v1/dashboard/reconciliation#check-{{ item.operator_review_check_id }}">Проверить и подтвердить ссылку вручную →</a></p>{% endif %}
 </div><span class="badge {{ 'technical_error' if item.code in ['identity_conflict','duplicate_feed_id','duplicate_platform_id'] else 'absent_uncertain' }}">{{ 'Конфликт' if item.code in ['identity_conflict','duplicate_feed_id','duplicate_platform_id'] else 'Проверить' }}</span></div>
 {% else %}<p class="empty">Явных расхождений в отчёте нет. Проверьте полноту каталога и количество неподтверждённых ID выше.</p>{% endfor %}
 </section>

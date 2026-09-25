@@ -16,6 +16,7 @@ from app.config import settings
 from app.models import DealerDiscoveryRun, DealerListingCandidate, EngineType, Listing, ListingReconciliation
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
 from app.scraper.seller import inspect_direct_link
+from app.service.analytics import money
 from app.service.marketplace_placement_reconciliation import (
     OpenedMarketplaceCard,
     reconcile_autoru_placements,
@@ -170,6 +171,9 @@ class PlacementCycleService:
             catalogue_complete=coverage[EngineType.AVITO],
         ) if EngineType.AVITO in selected_sources else ()
         findings = [asdict(item) for item in (*auto, *avito)]
+        candidate_updates = self._operator_candidate_updates(
+            findings, snapshot, opened, candidates, listings, previous,
+        )
         report = {
             'schema_version': 1,
             'cycle_id': self.cycle_id,
@@ -195,6 +199,10 @@ class PlacementCycleService:
             'findings': findings,
         }
         report_path = self._write_report(report)
+        for record, updated in candidate_updates:
+            record.candidates = updated
+        if candidate_updates:
+            self.db.commit()
         self.progress({'event': 'placement_reconciliation_finished', 'findings': len(findings)})
         return {
             'status': 'complete' if all(coverage.values()) else 'partial',
@@ -202,6 +210,108 @@ class PlacementCycleService:
             'codes': dict(Counter(item['code'] for item in findings)),
             'report_path': report_path,
         }
+
+    def _operator_candidate_updates(self, findings, snapshot, opened, candidates, listings, records):
+        """Queue unambiguous ID findings for a human; never update registry links."""
+        source_for_sheet = {
+            'autoru-feed-all': EngineType.AUTO_RU,
+            'avito-feed-new': EngineType.AVITO,
+            'avito-feed-used': EngineType.AVITO,
+        }
+        feed_vin_counts = Counter()
+        for sheet, rows in snapshot.rows_by_sheet.items():
+            source = source_for_sheet.get(sheet)
+            if source is not None:
+                feed_vin_counts.update(
+                    (source, str(row.get('vin') or row.get('VIN') or row.get('Vin') or '').strip().upper())
+                    for row in rows if str(row.get('vin') or row.get('VIN') or row.get('Vin') or '').strip()
+                )
+        listings_by_vin = {}
+        for listing in listings:
+            vin = str(listing.vin or '').strip().upper()
+            if vin:
+                listings_by_vin.setdefault(vin, []).append(listing)
+        records_by_key = {}
+        for record in records:
+            records_by_key.setdefault((record.source, record.listing_id), []).append(record)
+        candidates_by_key = {}
+        for candidate in candidates:
+            key = (candidate.source, canonical_listing_key(candidate.source, candidate.listing_url))
+            candidates_by_key.setdefault(key, []).append(candidate)
+        opened_by_key = {}
+        for source, cards in opened.items():
+            for card in cards:
+                key = (source, canonical_listing_key(source, card.url))
+                opened_by_key.setdefault(key, []).append(card)
+        updates = {}
+        for finding in findings:
+            if (finding['code'] != 'republication_candidate'
+                    or finding['id_match_basis'] not in {'exact', 'visual_alias'}
+                    or len(finding['observed_urls']) != 1):
+                continue
+            sheet = finding['feed_sheet']
+            if sheet not in source_for_sheet or not isinstance(finding['feed_row'], int):
+                continue
+            source = source_for_sheet.get(sheet)
+            row_index = finding['feed_row'] - snapshot.first_data_rows[sheet]
+            rows = snapshot.rows_by_sheet[sheet]
+            if row_index < 0 or row_index >= len(rows):
+                continue
+            row = rows[row_index]
+            vin = str(row.get('vin') or row.get('VIN') or row.get('Vin') or '').strip().upper()
+            if (not vin or feed_vin_counts[(source, vin)] != 1
+                    or len(listings_by_vin.get(vin, [])) != 1):
+                continue
+            listing = listings_by_vin[vin][0]
+            matching_records = records_by_key.get((source, listing.id), [])
+            if len(matching_records) != 1:
+                continue
+            record = matching_records[0]
+            if (record.state not in {'review_required', 'removed', 'missing_link'}
+                    or canonical_listing_key(source, record.url) != canonical_listing_key(source, finding['current_url'])):
+                continue
+            new_url = finding['observed_urls'][0]
+            new_key = canonical_listing_key(source, new_url)
+            matching_candidates = candidates_by_key.get((source, new_key), [])
+            matching_cards = opened_by_key.get((source, new_key), [])
+            if len(matching_candidates) != 1 or len(matching_cards) != 1:
+                continue
+            candidate, card = matching_candidates[0], matching_cards[0]
+            if card.inspection.get('state') != 'active':
+                continue
+            evidence = card.inspection.get('evidence')
+            if (not isinstance(evidence, str)
+                    or card.inspection.get('evidence_manifest') != evidence_manifest_name(evidence)):
+                continue
+            if any(
+                other.id != listing.id and canonical_listing_key(
+                    source, other.source_auto_ru if source == EngineType.AUTO_RU else other.source_avito
+                ) == new_key
+                for other in listings
+            ):
+                continue
+            basis = (
+                'ID в карточке и фиде совпал; VIN связывает фид с записью. '
+                'Проверьте, что это тот же автомобиль перед подтверждением.'
+                if finding['id_match_basis'] == 'exact' else
+                'ID в карточке сопоставлен по известному кириллическому двойнику; '
+                'VIN связывает фид с записью. Нужна ручная проверка автомобиля и ошибки ID.'
+            )
+            entry = {
+                'id': candidate.id, 'url': new_url,
+                'title': candidate.title or 'Карточка с ID из фида',
+                'price': money(candidate.price_hint), 'basis': basis,
+                'placement_id': finding['placement_id'],
+                'id_match_basis': finding['id_match_basis'],
+                'feed_sheet': sheet, 'feed_row': finding['feed_row'],
+                'evidence': evidence,
+            }
+            current = updates.get(record.id, (record, list(record.candidates or [])))[1]
+            current = [item for item in current if canonical_listing_key(source, item.get('url')) != new_key]
+            current.append(entry)
+            updates[record.id] = (record, current)
+            finding['operator_review_check_id'] = record.id
+        return list(updates.values())
 
     def _write_report(self, report: dict) -> str:
         if not re.fullmatch(r'[A-Za-z0-9-]{1,64}', self.cycle_id):

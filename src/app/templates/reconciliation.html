@@ -68,7 +68,7 @@
 
 {% for item in data.rows %}
 {% set r = item.record %}
-<section class="panel">
+<section class="panel" id="check-{{ r.id }}">
   <div class="section-head">
     <div><a class="table-link" href="/api/v1/dashboard/listings/{{ r.listing_id }}">{{ item.name }}</a><span class="subline">{{ item.vin }} · {{ 'Auto.ru' if r.source.value == 'auto_ru' else 'Avito' }} · {{ item.time }} МСК</span></div>
     <span class="badge {{ 'found' if r.state == 'verified' and not item.changed else 'technical_error' }}">{{ item.label }}</span>

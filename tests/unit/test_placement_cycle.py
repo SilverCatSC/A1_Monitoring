@@ -1,10 +1,18 @@
 import json
 
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from app.config import settings
-from app.models import Base, DealerDiscoveryRun, DealerListingCandidate, EngineType, Listing
+from app.models import (
+    Base,
+    DealerDiscoveryRun,
+    DealerListingCandidate,
+    EngineType,
+    Listing,
+    ListingReconciliation,
+)
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
 from app.service.placement_cycle import PlacementCycleService, _card_has_usable_id_claim
 from app.service.placement_feed_snapshot import PlacementFeedError, PlacementFeedSnapshot
@@ -52,7 +60,14 @@ def _snapshot():
     )
 
 
-def test_cycle_opens_new_catalogue_card_and_reports_republication_without_url_write(tmp_path, monkeypatch):
+@pytest.mark.parametrize('record_state,assigned_elsewhere,queued', [
+    ('removed', False, True),
+    ('verified', False, False),
+    ('removed', True, False),
+])
+def test_cycle_queues_id_candidate_only_for_reviewable_check_without_url_write(
+    tmp_path, monkeypatch, record_state, assigned_elsewhere, queued,
+):
     monkeypatch.setattr(settings, 'network_profile', 'local_browser')
     monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path / 'evidence'))
     monkeypatch.setattr(settings, 'seller_identity_checks_limit', 10)
@@ -75,6 +90,15 @@ def test_cycle_opens_new_catalogue_card_and_reports_republication_without_url_wr
         db.add(Listing(
             id='car', vehicle_signature='car', vin=VIN,
             brand='Mercedes-Benz', model='V-Class', source_avito=OLD,
+        ))
+        if assigned_elsewhere:
+            db.add(Listing(
+                id='other-car', vehicle_signature='other-car', vin='OTHER-VIN',
+                brand='Mercedes-Benz', model='V-Class', source_avito=NEW,
+            ))
+        db.add(ListingReconciliation(
+            id='check-1', batch_id='batch-1', listing_id='car', source=EngineType.AVITO,
+            state=record_state, url=OLD, reason='Earlier link needs review', candidates=[], details={},
         ))
         auto_run = DealerDiscoveryRun(
             source=EngineType.AUTO_RU, dealer_url='https://auto.ru/diler/cars/all/a1/',
@@ -112,6 +136,17 @@ def test_cycle_opens_new_catalogue_card_and_reports_republication_without_url_wr
         assert candidate['current_url'] == OLD
         assert candidate['id_match_basis'] == 'visual_alias'
         assert not candidate['platform_id_confirmed']
+        check = db.get(ListingReconciliation, 'check-1')
+        if queued:
+            assert candidate['operator_review_check_id'] == 'check-1'
+            assert len(check.candidates) == 1
+            assert check.candidates[0]['url'] == NEW
+            assert check.candidates[0]['placement_id'] == PLACEMENT_ID
+            assert check.candidates[0]['id_match_basis'] == 'visual_alias'
+            assert check.candidates[0]['evidence'] == EVIDENCE
+        else:
+            assert 'operator_review_check_id' not in candidate
+            assert check.candidates == []
     engine.dispose()
 
 
