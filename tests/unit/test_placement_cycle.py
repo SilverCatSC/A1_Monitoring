@@ -46,7 +46,7 @@ def test_missing_feed_stops_before_any_catalogue_card_inspection(monkeypatch):
 
 
 @pytest.mark.parametrize('known_identity', [False, True])
-def test_current_bound_id_is_deferred_until_after_search(tmp_path, monkeypatch, known_identity):
+def test_current_bound_id_is_still_checked_before_search(tmp_path, monkeypatch, known_identity):
     monkeypatch.setattr(settings, 'network_profile', 'local_browser')
     monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path / 'evidence'))
     monkeypatch.setattr(settings, 'seller_identity_checks_limit', 80)
@@ -101,21 +101,18 @@ def test_current_bound_id_is_deferred_until_after_search(tmp_path, monkeypatch, 
              'blocked_sources': []}, 'https://docs.google.com/spreadsheets/d/abc/export',
         )
 
-        assert result['status'] == ('partial' if known_identity else 'complete')
-        assert calls == ([] if known_identity else [(EngineType.AVITO, NEW)])
+        assert result['status'] == 'complete'
+        assert calls == [(EngineType.AVITO, NEW)]
         record = db.get(ListingReconciliation, 'current-check')
-        if known_identity:
-            assert 'direct_inspection' not in record.details
-        else:
-            assert record.details['direct_inspection']['evidence'] == EVIDENCE
+        assert record.details['direct_inspection']['evidence'] == EVIDENCE
         identity = db.query(ListingPlacementIdentity).one()
         assert (identity.source, identity.listing_id, identity.placement_id) == (
             EngineType.AVITO, 'car', PLACEMENT_ID,
         )
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
-        assert report['reused_direct_cards'] == (0 if known_identity else 1)
+        assert report['reused_direct_cards'] == 1
         assert report['new_verified_identities'] == (0 if known_identity else 1)
-        assert report['deferred_current_id_cards_by_source'].get('avito', 0) == int(known_identity)
+        assert 'deferred_current_id_cards_by_source' not in report
     engine.dispose()
 
 

@@ -107,62 +107,8 @@ class PlacementCycleService:
             if key and isinstance(inspection, dict):
                 cached[(record.source, key)] = inspection
 
-        feed_counts = Counter()
-        active_exact_feed_ids = set()
-        avito_platform_ids = {}
-        avito_platform_counts = Counter()
-        for sheet, rows in snapshot.rows_by_sheet.items():
-            source = EngineType.AUTO_RU if sheet == 'autoru-feed-all' else EngineType.AVITO
-            for row in rows:
-                raw = row.get('unique_id') if source == EngineType.AUTO_RU else row.get('Id')
-                try:
-                    placement_id = parse_placement_id(str(raw or '')).value
-                except PlacementIdError:
-                    placement_id = visual_ascii_placement_candidate(str(raw or ''))
-                else:
-                    if source == EngineType.AVITO or str(row.get('action') or '').strip().lower() == 'show':
-                        active_exact_feed_ids.add((source, placement_id))
-                if placement_id:
-                    feed_counts[source, placement_id] += 1
-                    if source == EngineType.AVITO:
-                        platform_id = str(row.get('AvitoId') or '').strip()
-                        if re.fullmatch(r'[0-9]{5,}', platform_id):
-                            avito_platform_counts[platform_id] += 1
-                            avito_platform_ids[platform_id] = placement_id
-        listings = self.db.query(Listing).filter(Listing.is_active.is_(True)).all()
-        listing_by_id = {item.id: item for item in listings}
-        url_counts = Counter(
-            (source, canonical_listing_key(source, (
-                item.source_auto_ru if source == EngineType.AUTO_RU else item.source_avito
-            )))
-            for item in listings
-            for source in (EngineType.AUTO_RU, EngineType.AVITO)
-        )
-        current_identity_keys = set()
-        for identity in self.db.query(ListingPlacementIdentity).all():
-            if ((identity.source, identity.placement_id) not in active_exact_feed_ids
-                    or feed_counts[identity.source, identity.placement_id] != 1):
-                continue
-            listing = listing_by_id.get(identity.listing_id)
-            if listing is None:
-                continue
-            current_url = (
-                listing.source_auto_ru if identity.source == EngineType.AUTO_RU
-                else listing.source_avito
-            )
-            current_key = canonical_listing_key(identity.source, current_url)
-            if current_key and identity.source == EngineType.AVITO:
-                platform_id = current_key.removeprefix('avito:')
-                if (avito_platform_counts[platform_id] > 1
-                        or (platform_id in avito_platform_ids
-                            and avito_platform_ids[platform_id] != identity.placement_id)):
-                    continue
-            if current_key and url_counts[identity.source, current_key] == 1:
-                current_identity_keys.add((identity.source, current_key))
-
         opened = {EngineType.AUTO_RU: [], EngineType.AVITO: []}
         skipped = Counter()
-        deferred_current_id = Counter()
         unverified = Counter()
         blocked = set(preflight.get('blocked_sources', []))
         new_checks = 0
@@ -174,12 +120,6 @@ class PlacementCycleService:
             key = canonical_listing_key(source, candidate.listing_url)
             inspection = cached.get((source, key))
             if inspection is None:
-                # This URL is already in today's dealer catalogue and has a
-                # persisted exact-ID binding. It cannot be a changed link.
-                # Defer its content/price check to the post-search direct stage.
-                if (source, key) in current_identity_keys:
-                    deferred_current_id[source.value] += 1
-                    continue
                 if new_checks >= settings.seller_identity_checks_limit:
                     skipped[source.value] += 1
                     continue
@@ -194,13 +134,13 @@ class PlacementCycleService:
                 unverified[source.value] += 1
             opened[source].append(OpenedMarketplaceCard(candidate.listing_url, inspection))
 
+        listings = self.db.query(Listing).filter(Listing.is_active.is_(True)).all()
         urls_by_source, new_identities = self._identity_urls(snapshot, opened, listings)
         coverage = {
             source: (
                 any(run.source == source for run in discovery_runs)
                 and all(run.complete for run in discovery_runs if run.source == source)
                 and not skipped[source.value]
-                and not deferred_current_id[source.value]
                 and not unverified[source.value]
                 and source.value not in blocked
             )
@@ -256,7 +196,6 @@ class PlacementCycleService:
             'catalogue_complete': {source.value: complete for source, complete in coverage.items()},
             'new_card_checks': new_checks,
             'skipped_cards_by_source': dict(skipped),
-            'deferred_current_id_cards_by_source': dict(deferred_current_id),
             'unverified_cards_by_source': dict(unverified),
             'reused_direct_cards': reused_direct_cards,
             'new_verified_identities': new_identities,
