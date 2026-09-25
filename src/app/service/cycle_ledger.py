@@ -12,6 +12,12 @@ from sqlalchemy.orm import Session, selectinload
 from app.config import settings
 from app.models import EngineType, Listing, MonitoringCycle, VehicleFilterExpectation
 from app.scraper.base import canonical_listing_key
+from app.service.pending_checks import (
+    build_pending_checks,
+    load_cycle_roster,
+    load_placement_report,
+    pending_summary,
+)
 
 
 class CycleLedgerError(RuntimeError):
@@ -87,6 +93,35 @@ class CycleLedgerService:
 
     def complete(self, cycle_id: str, summary: dict) -> dict:
         cycle = self._cycle(cycle_id)
+        if not cycle.manifest_path or not cycle.roster_sha256:
+            raise CycleLedgerError('cannot complete a cycle without a sealed roster and hash')
+        roster = load_cycle_roster(self.evidence_dir, cycle.manifest_path, cycle_id,
+                                   cycle.roster_sha256)
+        placement = summary.get('placement_reconciliation')
+        items = build_pending_checks(
+            self.db,
+            cycle_id=cycle_id,
+            roster=roster,
+            selected_sources=set(settings.scan_engines),
+            placement=placement,
+            placement_report=load_placement_report(self.evidence_dir, placement),
+        )
+        relative_path = Path('cycles') / cycle_id / 'pending_checks.json'
+        self._write_once(relative_path, {
+            'schema_version': 1,
+            'cycle_id': cycle_id,
+            'roster_sha256': cycle.roster_sha256,
+            'created_at_utc': _utcnow().isoformat(),
+            'count': len(items),
+            'items': items,
+        })
+        summary['pending_checks'] = pending_summary(items, relative_path.as_posix())
+        if items:
+            summary['status'] = 'partial'
+            reasons = list(summary.get('partial_reasons') or [])
+            if 'pending_checks' not in reasons:
+                reasons.append('pending_checks')
+            summary['partial_reasons'] = reasons
         cycle.status = str(summary.get('status') or 'partial')
         cycle.summary = summary
         cycle.error = None

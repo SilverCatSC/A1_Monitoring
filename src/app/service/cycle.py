@@ -124,11 +124,12 @@ class MonitoringCycleService:
             self.progress({'event': 'cycle_registered', 'cycle_id': cycle.id})
             try:
                 result = self._run(cycle.id, ledger)
+                cycle_summary = ledger.complete(cycle.id, result['completion'])
             except (Exception, KeyboardInterrupt) as exc:
                 ledger.fail(cycle.id, f'{type(exc).__name__}: {exc}')
                 self.progress({'event': 'cycle_failed', 'error': f'{type(exc).__name__}: {exc}'})
                 raise
-            cycle_summary = ledger.complete(cycle.id, result['completion'])
+            self.progress({'event': 'cycle_completed', 'summary': result['completion']})
             return {**result, 'cycle': cycle_summary}
 
     def recover_open_cycles(self, *, actor: str = 'local_cli') -> dict:
@@ -233,7 +234,6 @@ class MonitoringCycleService:
             if link_sync['status'] != 'complete':
                 completion['status'] = 'partial'
                 completion['partial_reasons'].append('automatic_link_sync_incomplete')
-        self.progress({'event': 'cycle_completed', 'summary': completion})
         result = {
             **refreshed,
             'dealer_discovery': preflight['discovery'],
