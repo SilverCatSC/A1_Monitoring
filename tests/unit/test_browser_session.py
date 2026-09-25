@@ -23,18 +23,26 @@ class FakeContext:
     def __init__(self):
         self.page = FakePage()
         self.pages = [self.page]
+        self.closed = False
 
     async def new_page(self):
         return self.page
+
+    async def close(self):
+        self.closed = True
+        await self.page.close()
 
 
 class FakeBrowser:
     def __init__(self, context):
         self.contexts = [context]
+        self.private_contexts = []
         self.closed = False
 
     async def new_context(self):
-        return self.contexts[0]
+        context = FakeContext()
+        self.private_contexts.append(context)
+        return context
 
     async def close(self):
         self.closed = True
@@ -62,7 +70,7 @@ class FakePlaywright:
         self.chromium = FakeChromium(self.browser)
 
 
-def test_attached_local_browser_is_reused_not_closed(monkeypatch):
+def test_attached_local_browser_uses_fresh_private_context_and_closes_it(monkeypatch):
     monkeypatch.setattr(
         'app.scraper.browser_session.settings.browser_cdp_url', 'http://127.0.0.1:19222'
     )
@@ -76,11 +84,12 @@ def test_attached_local_browser_is_reused_not_closed(monkeypatch):
 
     assert playwright.chromium.connected_to == 'http://127.0.0.1:19222'
     assert playwright.browser.contexts[0].page.closed is False
-    assert playwright.browser.contexts[0].page.brought_to_front is True
+    assert playwright.browser.private_contexts[0].page.brought_to_front is True
+    assert playwright.browser.private_contexts[0].closed is True
     assert playwright.browser.closed is False
 
 
-def test_attached_browser_without_page_fails_with_actionable_error(monkeypatch):
+def test_attached_browser_does_not_reuse_existing_page(monkeypatch):
     monkeypatch.setattr(
         'app.scraper.browser_session.settings.browser_cdp_url', 'http://127.0.0.1:19222'
     )
@@ -91,12 +100,9 @@ def test_attached_browser_without_page_fails_with_actionable_error(monkeypatch):
         async with browser_page(playwright):
             pass
 
-    try:
-        asyncio.run(exercise())
-    except RuntimeError as exc:
-        assert 'no controllable page' in str(exc)
-    else:
-        raise AssertionError('missing Chrome page must fail explicitly')
+    asyncio.run(exercise())
+    assert playwright.browser.private_contexts[0].closed is True
+    assert playwright.browser.contexts[0].page.closed is False
 
 
 def test_managed_browser_is_closed(monkeypatch):
@@ -111,4 +117,5 @@ def test_managed_browser_is_closed(monkeypatch):
     asyncio.run(exercise())
 
     assert playwright.chromium.launched_headless is True
+    assert playwright.browser.private_contexts[0].closed is True
     assert playwright.browser.closed is True

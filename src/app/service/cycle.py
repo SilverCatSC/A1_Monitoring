@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import SCAN_ALLOWED_NETWORK_PROFILES, settings
 from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
+from app.service.automatic_link_sync import AutomaticLinkSyncService
 from app.service.completion import summarize_cycle_completion
 from app.service.cycle_ledger import CycleLedgerService
 from app.service.evidence import cleanup_evidence
@@ -164,40 +165,63 @@ class MonitoringCycleService:
             self.progress({'event': 'source_refresh_failed', 'error': f'{type(exc).__name__}: {exc}'})
             raise
         self.progress({'event': 'source_refresh_finished', **refreshed['import']})
-        manifest = ledger.seal_roster(cycle_id, refreshed['import'].get('snapshot_id'))
-        self.progress({
-            'event': 'cycle_roster_sealed',
-            'cycle_id': cycle_id,
-            'roster_count': manifest['roster_count'],
-        })
         if self.before_browser:
             self.before_browser()
         reconciliation = SellerReconciliationService(
             self.db, progress_callback=self.progress, cycle_id=cycle_id
         )
         preflight = reconciliation.run()
-        scanned = MonitorService(
-            self.db,
-            progress_callback=self.progress,
-            preflight=preflight,
-            cycle_id=cycle_id,
-        ).run_full_cycle()
-        preflight['blocked_sources'] = sorted(
-            set(preflight.get('blocked_sources', []))
-            | set(scanned.get('blocked_sources', []))
-        )
-        direct_cards = reconciliation.inspect_current_cards(preflight)
-        completion = summarize_cycle_completion(scanned, direct_cards)
         placement = None
+        link_sync = None
         if settings.placement_reconciliation_enabled:
+            self.progress({'event': 'link_preflight_started'})
             placement = PlacementCycleService(
                 self.db, progress_callback=self.progress, cycle_id=cycle_id
             ).run(preflight, settings.placement_feed_workbook_url
                   or settings.head_table_google_sheet_export_url)
+            link_sync = AutomaticLinkSyncService(self.db, cycle_id=cycle_id).run(preflight, placement)
+            self.progress({'event': 'link_sync_finished', 'status': link_sync['status'],
+                           'updated': len(link_sync['updated']), 'blocked': len(link_sync['blocked'])})
+            preflight['blocked_sources'] = sorted(
+                set(preflight.get('blocked_sources', []))
+                | set(placement.get('blocked_sources', []))
+            )
+        # The immutable monitoring roster is sealed after URL synchronization,
+        # and before the first search observation. The import snapshot and the
+        # old-link checks remain separate, auditable preparation evidence.
+        manifest = ledger.seal_roster(cycle_id, refreshed['import'].get('snapshot_id'))
+        self.progress({
+            'event': 'cycle_roster_sealed',
+            'cycle_id': cycle_id,
+            'roster_count': manifest['roster_count'],
+        })
+        links_ready = placement is None or (
+            placement['status'] == 'complete' and link_sync['status'] == 'complete'
+        )
+        if links_ready:
+            scanned = MonitorService(
+                self.db,
+                progress_callback=self.progress,
+                preflight=preflight,
+                cycle_id=cycle_id,
+            ).run_full_cycle()
+            preflight['blocked_sources'] = sorted(
+                set(preflight.get('blocked_sources', []))
+                | set(scanned.get('blocked_sources', []))
+            )
+            direct_cards = reconciliation.inspect_current_cards(preflight)
+            completion = summarize_cycle_completion(scanned, direct_cards)
+        else:
+            scanned = {'status': 'skipped', 'reason': 'link_reconciliation_incomplete'}
+            direct_cards = {'status': 'skipped', 'reason': 'link_reconciliation_incomplete'}
+            completion = {
+                'status': 'partial', 'technical_errors': 0,
+                'partial_reasons': ['link_reconciliation_incomplete'],
+                'search_skipped': True,
+            }
+        if placement is not None:
             completion['placement_reconciliation'] = placement
-            if placement['status'] != 'complete':
-                completion['status'] = 'partial'
-                completion['partial_reasons'].append('placement_reconciliation_incomplete')
+            completion['automatic_link_sync'] = link_sync
         self.progress({'event': 'cycle_completed', 'summary': completion})
         result = {
             **refreshed,

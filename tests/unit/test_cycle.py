@@ -93,6 +93,7 @@ def test_cycle_imports_before_scan(monkeypatch):
     monkeypatch.setattr(cycle_module, 'require_verified_macos_host_runner_context', lambda: None)
     monkeypatch.setattr(cycle_module, 'require_operational_vpn_admission', lambda _path: None)
     monkeypatch.setattr(cycle_module.settings, 'dealer_discovery_enabled', True)
+    monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', False)
     monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_: 3)
 
     result = cycle_module.MonitoringCycleService('db', before_browser=lambda: events.append(('chrome', None))).run()
@@ -172,10 +173,10 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
 
     class Monitor:
         def __init__(self, *_args, **_kwargs):
-            pass
+            raise AssertionError('search must not run before complete link reconciliation')
 
         def run_full_cycle(self):
-            return {'technical_errors': 0, 'links_need_review': 0, 'blocked_sources': []}
+            raise AssertionError('search must not run')
 
     class Placement:
         def __init__(self, _db, *, progress_callback, cycle_id):
@@ -185,6 +186,13 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
             assert preflight['batch_id'] == 'batch'
             assert source_url == 'https://docs.google.com/spreadsheets/d/abc/export'
             return {'status': 'partial', 'findings': 1, 'report_path': 'cycles/cycle-1/report.json'}
+
+    class LinkSync:
+        def __init__(self, _db, *, cycle_id):
+            assert cycle_id == 'cycle-1'
+
+        def run(self, _preflight, _placement):
+            return {'status': 'complete', 'updated': [], 'blocked': []}
 
     monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', True)
     monkeypatch.setattr(cycle_module.settings, 'placement_feed_workbook_url',
@@ -196,13 +204,80 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
     monkeypatch.setattr(cycle_module, 'SellerReconciliationService', Reconciliation)
     monkeypatch.setattr(cycle_module, 'MonitorService', Monitor)
     monkeypatch.setattr(cycle_module, 'PlacementCycleService', Placement)
+    monkeypatch.setattr(cycle_module, 'AutomaticLinkSyncService', LinkSync)
 
     result = cycle_module.MonitoringCycleService('db')._run('cycle-1', Ledger())
 
     assert result['placement_reconciliation']['status'] == 'partial'
     assert result['completion']['placement_reconciliation']['findings'] == 1
     assert result['completion']['status'] == 'partial'
-    assert 'placement_reconciliation_incomplete' in result['completion']['partial_reasons']
+    assert 'link_reconciliation_incomplete' in result['completion']['partial_reasons']
+    assert result['completion']['search_skipped'] is True
+
+
+def test_exact_id_link_stage_precedes_roster_search_and_direct_cards(monkeypatch):
+    import app.service.cycle as cycle_module
+
+    events = []
+
+    class Ledger:
+        def seal_roster(self, *_args):
+            events.append('seal_roster')
+            return {'roster_count': 1}
+
+    class Reconciliation:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self):
+            events.append('seller_catalogue')
+            return {'batch_id': 'batch', 'summary': {}, 'discovery': {},
+                    'blocked_sources': [], 'checks': {}}
+
+        def inspect_current_cards(self, _preflight):
+            events.append('direct_cards')
+            return {'incomplete': 0, 'technical_errors': 0}
+
+    class Placement:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self, *_args):
+            events.append('placement_ids')
+            return {'status': 'complete', 'findings': 1}
+
+    class LinkSync:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run(self, *_args):
+            events.append('link_sync')
+            return {'status': 'complete', 'updated': [{'listing_id': 'car'}], 'blocked': []}
+
+    class Monitor:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def run_full_cycle(self):
+            events.append('search')
+            return {'technical_errors': 0, 'links_need_review': 0, 'blocked_sources': []}
+
+    monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', True)
+    monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_args: 0)
+    monkeypatch.setattr(cycle_module, 'refresh_monitoring_source', lambda *_args, **_kwargs: {
+        'import': {'snapshot_id': 'snapshot'}, 'filter_assignments': {}, 'canonical_filters': {},
+    })
+    monkeypatch.setattr(cycle_module, 'SellerReconciliationService', Reconciliation)
+    monkeypatch.setattr(cycle_module, 'PlacementCycleService', Placement)
+    monkeypatch.setattr(cycle_module, 'AutomaticLinkSyncService', LinkSync)
+    monkeypatch.setattr(cycle_module, 'MonitorService', Monitor)
+
+    result = cycle_module.MonitoringCycleService('db')._run('cycle-1', Ledger())
+
+    assert events == [
+        'seller_catalogue', 'placement_ids', 'link_sync', 'seal_roster', 'search', 'direct_cards',
+    ]
+    assert result['completion']['status'] == 'completed'
 
 
 def test_cycle_rejects_invalid_source_configuration_before_import(monkeypatch):

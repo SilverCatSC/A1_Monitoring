@@ -149,11 +149,9 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     os.environ['BROWSER_CDP_URL'] = cdp_url
     os.environ['PLAYWRIGHT_HEADLESS'] = 'false'
     os.environ['SCAN_ENABLED_ENGINES'] = args.engines
-    # One controlled host invocation opts in; a stale .env value cannot turn
-    # later ordinary cycles into repeated identity-card visits.
-    os.environ['PLACEMENT_RECONCILIATION_ENABLED'] = (
-        'true' if getattr(args, 'placement_identity', False) else 'false'
-    )
+    # Every full host cycle must synchronize exact-ID links before search.
+    # Probe mode never writes a cycle or registry link.
+    os.environ['PLACEMENT_RECONCILIATION_ENABLED'] = 'false' if args.probe_url else 'true'
     os.environ['SCAN_PAGES_LIMIT'] = str(args.pages)
     os.environ['EVIDENCE_DIR'] = str(evidence_dir)
     # The host runner owns this file outside the writable evidence directory.
@@ -242,14 +240,14 @@ async def _probe(url: str, pages: int) -> dict:
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description='Run A1 monitoring through a persistent visible Chrome profile on this computer.'
+        description='Run A1 monitoring through visible Chrome with ephemeral private contexts.'
     )
     parser.add_argument('--engines', default='auto_ru,avito')
     parser.add_argument('--pages', type=int, default=3, choices=range(1, 11), metavar='1..10')
     parser.add_argument('--probe-url', help='Check one search URL without writing observations to the DB')
     parser.add_argument(
         '--placement-identity', action='store_true',
-        help='Enable one bounded feed-to-card ID reconciliation in this controlled cycle',
+        help='Compatibility flag; exact-ID link reconciliation now runs before every full cycle',
     )
     parser.add_argument(
         '--retry-cycle',

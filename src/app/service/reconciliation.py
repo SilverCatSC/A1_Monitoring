@@ -123,9 +123,17 @@ class SellerReconciliationService:
                 ListingReconciliation.batch_id == preflight['batch_id'],
                 Listing.is_active.is_(True),
             )
-            .order_by(ListingReconciliation.source, Listing.brand, Listing.model, Listing.id)
+            .order_by(ListingReconciliation.checked_at.desc(), ListingReconciliation.id.desc())
             .all()
         )
+        # Automatic ID link synchronization adds a fresh check for the new URL.
+        # Keep the old check as history, but inspect only the current one.
+        latest = {}
+        for record in records:
+            latest.setdefault((record.listing_id, record.source), record)
+        records = sorted(latest.values(), key=lambda record: (
+            record.source.value, record.listing.brand or '', record.listing.model or '', record.listing_id,
+        ))
         blocked = set(preflight.get('blocked_sources', []))
         counters = Counter()
         checked_by_source = Counter()

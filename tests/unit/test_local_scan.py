@@ -70,12 +70,15 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['SCAN_FILTER_PAUSE_MIN_SECONDS'] == '12'
     assert local_scan.os.environ['SCAN_PAGE_PAUSE_MAX_SECONDS'] == '12'
     assert local_scan.os.environ['AUTO_RU_PAGE_DELAY_SECONDS'] == '5'
-    assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
+    assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'true'
     args.placement_identity = True
     local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'})
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'true'
     args.placement_identity = False
     local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'})
+    assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'true'
+    args.probe_url = 'https://auto.ru/cars/'
+    local_scan._configure_runtime(args, {})
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
 
 

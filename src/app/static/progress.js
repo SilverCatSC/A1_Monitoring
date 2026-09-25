@@ -1,6 +1,6 @@
 // Read-only progress view. Starting a live scan remains an explicit local action.
 (() => {
-  const label = {idle:'Не запущена',starting:'Запуск',preparing:'Обновление реестра',reconciling:'Сверка ссылок продавца',running:'Выполняется',completed:'Завершена',partial:'Частично',failed:'Сбой',unavailable:'Нет связи'};
+  const label = {idle:'Не запущена',starting:'Запуск',preparing:'Обновление реестра',reconciling:'Сверка каталога',link_sync:'Актуализация ссылок',running:'Выполняется',completed:'Завершена',partial:'Частично',failed:'Сбой',unavailable:'Нет связи'};
   const source = s => ({auto_ru:'Auto.ru',avito:'Avito'})[s] || '';
   const eventLine = e => {
     const stamp = e.at ? new Date(e.at).toLocaleTimeString('ru-RU',{timeZone:'Europe/Moscow'}) : '';
@@ -11,6 +11,8 @@
       case 'dealer_catalogue_finished': message = `${source(e.source)} · кандидатов ${e.candidates} · ${e.complete ? 'каталог пройден' : 'каталог просмотрен не полностью'}`; break;
       case 'dealer_link_check': message = `${source(e.source)} · проверка старой ссылки · пауза ${e.wait_seconds} с`; break;
       case 'dealer_preflight_finished': message = 'Сверка ссылок завершена. Неоднозначные связи переданы на подтверждение.'; break;
+      case 'link_preflight_started': message = 'Сопоставляем unique_id и актуализируем однозначные ссылки до поиска'; break;
+      case 'link_sync_finished': message = `Ссылок обновлено: ${e.updated || 0}; требуют разбора: ${e.blocked || 0}`; break;
       case 'source_refresh_started': message = 'Обновление реестра из таблицы'; break;
       case 'source_refresh_finished': message = `Реестр обновлён: ${e.rows_valid} из ${e.rows_total} строк`; break;
       case 'source_refresh_failed': case 'cycle_failed': message = `Сбой: ${e.error || ''}`; break;
@@ -31,7 +33,7 @@
       const response = await fetch('/api/v1/status/scans/progress',{cache:'no-store'});
       if(!response.ok) throw new Error('HTTP ' + response.status);
       const d = await response.json(), c = d.current || {};
-      const stale = ['running','preparing','reconciling'].includes(d.status) && Date.now() - Date.parse(d.updated_at) > 180000;
+      const stale = ['running','preparing','reconciling','link_sync'].includes(d.status) && Date.now() - Date.parse(d.updated_at) > 180000;
       const total = Number(d.total_filters || 0), done = Number(d.completed_filters || 0);
       const percent = total ? Math.min(100,Math.round(done / total * 100)) : 0;
       document.querySelector('#scan-progress-status').textContent = stale ? 'Нет свежего сигнала' : (label[d.status] || d.status);
@@ -41,12 +43,13 @@
       document.querySelector('#scan-progress-bar').style.backgroundColor = warning ? '#b58b38' : '#168a7c';
       document.querySelector('[role=progressbar]').setAttribute('aria-valuenow', String(percent));
       document.querySelector('#scan-progress-counts').textContent = `${done} из ${total} фильтров обработано · ${percent}%`;
-      if(d.status === 'reconciling') document.querySelector('#scan-progress-counts').textContent = 'Предварительный этап: поисковые фильтры ещё не проверяются';
+      if(['reconciling','link_sync'].includes(d.status)) document.querySelector('#scan-progress-counts').textContent = 'Предварительный этап: поисковые фильтры ещё не проверяются';
       const summary = d.summary;
-      document.querySelector('#scan-progress-result').textContent = summary ? `Обнаружений: ${summary.found || 0} · непоказов: ${(summary.missed_confirmed || 0) + (summary.missed_uncertain || 0)} · сбоев фильтров: ${summary.technical_errors || 0} · ссылок на подтверждение: ${summary.links_need_review || 0}` : '';
+      document.querySelector('#scan-progress-result').textContent = summary ? (summary.search_skipped ? 'Поиск не запущен: актуализация ссылок не завершена' : `Обнаружений: ${summary.found || 0} · непоказов: ${(summary.missed_confirmed || 0) + (summary.missed_uncertain || 0)} · сбоев фильтров: ${summary.technical_errors || 0} · ссылок на подтверждение: ${summary.links_need_review || 0}`) : '';
       let current = d.status === 'preparing' ? 'Получаем актуальные ссылки и состав реестра' : d.status === 'running' ? `${source(c.source)} · ${c.filter_name || 'Подготовка'}${c.page ? ' · страница ' + c.page : ''}` : 'Запустите проверку с локального компьютера';
       if(['completed','partial'].includes(d.status)) current = `Последняя проверка: ${new Date(d.updated_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК`;
       if(d.status === 'reconciling') current = `${source(c.source)} · сверяем каталог продавца${c.page ? ' · страница ' + c.page : ''}`;
+      if(d.status === 'link_sync') current = 'Сверяем ID в карточках и фиде перед поиском';
       if(d.error) current = d.error;
       if(stale) current = 'Сигнал не обновлялся более 3 минут. Проверьте терминал и окно Chrome.';
       document.querySelector('#scan-progress-current').textContent = current;

@@ -51,6 +51,13 @@ class ScanProgressTracker:
             self.state.update(status='reconciling', current={}, preflight=None)
         elif name == 'dealer_preflight_finished':
             self.state['preflight'] = event.get('summary')
+        elif name == 'link_preflight_started':
+            self.state.update(status='link_sync', current={})
+        elif name == 'link_sync_finished':
+            self.state['link_sync'] = {
+                'status': event.get('status'), 'updated': event.get('updated'),
+                'blocked': event.get('blocked'),
+            }
         elif name == 'direct_cards_started':
             self.state['status'] = 'checking_cards'
             self.state['direct_cards'] = {'total': event.get('total'), 'checked': 0}

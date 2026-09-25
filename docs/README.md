@@ -33,7 +33,9 @@ records имеют приоритет над старым аудитом и об
 - [Operations](production/OPERATIONS.md) — M6 controlled retry, status и границы scheduler.
 - [M7 acceptance](production/ACCEPTANCE_M7.md) — живые MacBook stop-gates, shadow-run и rollback.
 - [Сверка ID в полном цикле](production/PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md) —
-  фиды, ограниченный обход новых карточек, evidence и границы включения.
+  исторический read-only этап от 24.09.2026.
+- [Автоактуализация ссылок до поиска](production/TASK_AUTOMATIC_LINK_SYNC_2026-09-25.md) —
+  действующий контракт exact-ID и приватного браузера.
 - [Готовность ID-цикла](production/M7_ID_CONTROLLED_RUN_READINESS_2026-09-24.md) —
   подтверждённые шаги и текущие stop-factors живой приёмки.
 - [VPN gate](production/VPN_GATE_2026-09-14.md) — read-only VPSUS evidence и открытые route limits.

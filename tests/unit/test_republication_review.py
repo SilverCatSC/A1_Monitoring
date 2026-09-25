@@ -16,6 +16,7 @@ from app.models import Base, EngineType, Listing, ListingLinkEvent, ListingRecon
 from app.schemas import ReconciliationConfirm
 from app.scraper.base import EVIDENCE_SCHEMA_VERSION, evidence_manifest_name
 from app.security import AuthenticatedActor
+from app.service.automatic_link_sync import AutomaticLinkSyncService
 from app.service.offer_reconciliation import offer_review_queue
 from app.service.report import listing_catalog_context, listing_detail_context
 from app.service.republication_review import exact_republication_candidate, republication_review
@@ -198,6 +199,69 @@ def test_multiple_exact_id_candidates_are_not_auto_selected(tmp_path, monkeypatc
         db.commit()
         assert exact_republication_candidate(record) is None
         assert listing_catalog_context(db)['cards'][0]['platforms']['auto_ru']['republication_review'] is None
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_exact_id_link_is_synchronized_before_search_and_old_url_is_retained(tmp_path, monkeypatch):
+    db, engine, _ = _fixture(tmp_path, monkeypatch)
+    try:
+        preflight = {'batch_id': 'batch-review', 'checks': {}}
+        result = AutomaticLinkSyncService(db, cycle_id='cycle-review').run(
+            preflight, {'status': 'complete', 'report_path': 'cycles/cycle-review/placement_reconciliation.json'},
+        )
+        assert result['status'] == 'complete'
+        assert len(result['updated']) == 1
+        assert db.get(Listing, 'car').source_auto_ru == NEW
+        event = db.query(ListingLinkEvent).one()
+        assert (event.old_url, event.new_url, event.actor) == (OLD, NEW, 'system:exact_unique_id')
+        assert preflight['checks']['car:auto_ru']['url'] == NEW
+        latest = db.query(ListingReconciliation).order_by(ListingReconciliation.checked_at.desc()).first()
+        assert latest.url == NEW
+        assert latest.details['automatic_link_sync_check_id'] == 'check-review'
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_automatic_link_sync_refuses_broken_evidence(tmp_path, monkeypatch):
+    db, engine, root = _fixture(tmp_path, monkeypatch)
+    try:
+        (root / EVIDENCE).write_bytes(b'tampered')
+        result = AutomaticLinkSyncService(db, cycle_id='cycle-review').run(
+            {'batch_id': 'batch-review', 'checks': {}},
+            {'status': 'complete', 'report_path': 'cycles/cycle-review/placement_reconciliation.json'},
+        )
+        assert result['status'] == 'partial'
+        assert result['blocked'][0]['reason'] == 'evidence_not_verified'
+        assert db.get(Listing, 'car').source_auto_ru == OLD
+        assert db.query(ListingLinkEvent).count() == 0
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_visual_alias_republication_does_not_auto_update_or_allow_search(tmp_path, monkeypatch):
+    db, engine, root = _fixture(tmp_path, monkeypatch)
+    try:
+        record = db.get(ListingReconciliation, 'check-review')
+        candidates = list(record.candidates)
+        candidates[1] = {**candidates[1], 'id_match_basis': 'visual_alias'}
+        record.candidates = candidates
+        db.commit()
+        report_path = root / 'cycles' / 'cycle-review' / 'placement_reconciliation.json'
+        report = json.loads(report_path.read_text())
+        report['findings'][0]['id_match_basis'] = 'visual_alias'
+        report_path.write_text(json.dumps(report))
+
+        result = AutomaticLinkSyncService(db, cycle_id='cycle-review').run(
+            {'batch_id': 'batch-review', 'checks': {}},
+            {'status': 'complete', 'report_path': 'cycles/cycle-review/placement_reconciliation.json'},
+        )
+        assert result['status'] == 'partial'
+        assert result['blocked'][0]['reason'] == 'non_exact_or_unresolved_republication'
+        assert db.get(Listing, 'car').source_auto_ru == OLD
     finally:
         db.close()
         engine.dispose()

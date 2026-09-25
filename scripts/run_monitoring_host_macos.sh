@@ -53,7 +53,8 @@ session, holds the same host lock, starts app/db/backup, and waits for HTTP
 readiness. It does not open Chrome, recover cycles, or contact marketplaces.
 It cannot be combined with scan parameters.
 
---placement-identity enables one bounded feed-to-card ID check in this run only.
+--placement-identity is a compatibility flag; ID link synchronization now runs
+before search in every full cycle.
 EOF
 }
 
