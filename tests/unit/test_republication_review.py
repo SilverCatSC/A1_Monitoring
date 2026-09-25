@@ -167,6 +167,25 @@ def test_exact_id_republication_is_visible_and_confirmation_preserves_history(tm
         engine.dispose()
 
 
+def test_operator_confirmation_creates_id_binding_when_missing(tmp_path, monkeypatch):
+    db, engine, _ = _fixture(tmp_path, monkeypatch)
+    try:
+        db.query(ListingPlacementIdentity).delete()
+        db.commit()
+        confirm_reconciliation(
+            'check-review',
+            ReconciliationConfirm(url=NEW, actor='Оператор', reason='Сверены ID и снимок'),
+            _operator_request(), db,
+        )
+        identity = db.query(ListingPlacementIdentity).one()
+        assert (identity.listing_id, identity.source, identity.placement_id) == (
+            'car', EngineType.AUTO_RU, PLACEMENT_ID,
+        )
+    finally:
+        db.close()
+        engine.dispose()
+
+
 def test_republication_confirmation_needs_fresh_intact_evidence(tmp_path, monkeypatch):
     db, engine, root = _fixture(tmp_path, monkeypatch)
     try:
