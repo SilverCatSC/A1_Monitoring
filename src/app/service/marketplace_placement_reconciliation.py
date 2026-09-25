@@ -54,7 +54,7 @@ class _FeedPlacement:
     row_number: int
     raw_id: str
     action: str | None
-    vin: str | None
+    vin: str | None  # informational only; never an identity anchor
     platform_id: str | None = None
 
 
@@ -69,7 +69,7 @@ def reconcile_autoru_placements(
     feed_rows: Iterable[Mapping[str, Any]],
     opened_cards: Iterable[OpenedMarketplaceCard],
     *,
-    current_urls_by_vin: Mapping[str, str] | None = None,
+    current_urls_by_placement_id: Mapping[str, str] | None = None,
     first_data_row: int = 3,
     catalogue_complete: bool = False,
 ) -> tuple[PlacementFinding, ...]:
@@ -92,7 +92,7 @@ def reconcile_autoru_placements(
     ]
     return _reconcile(
         normalized, opened_cards, source=EngineType.AUTO_RU,
-        current_urls_by_vin=current_urls_by_vin, catalogue_complete=catalogue_complete,
+        current_urls_by_placement_id=current_urls_by_placement_id, catalogue_complete=catalogue_complete,
     )
 
 
@@ -101,7 +101,7 @@ def reconcile_avito_placements(
     opened_cards: Iterable[OpenedMarketplaceCard],
     *,
     first_data_rows: Mapping[str, int],
-    current_urls_by_vin: Mapping[str, str] | None = None,
+    current_urls_by_placement_id: Mapping[str, str] | None = None,
     catalogue_complete: bool = False,
 ) -> tuple[PlacementFinding, ...]:
     """Compare Avito ``Id`` across both feed tabs with opened seller cards.
@@ -130,7 +130,7 @@ def reconcile_avito_placements(
         )
     return _reconcile(
         normalized, opened_cards, source=EngineType.AVITO,
-        current_urls_by_vin=current_urls_by_vin, catalogue_complete=catalogue_complete,
+        current_urls_by_placement_id=current_urls_by_placement_id, catalogue_complete=catalogue_complete,
     )
 
 
@@ -139,7 +139,7 @@ def _reconcile(
     opened_cards: Iterable[OpenedMarketplaceCard],
     *,
     source: EngineType,
-    current_urls_by_vin: Mapping[str, str] | None,
+    current_urls_by_placement_id: Mapping[str, str] | None,
     catalogue_complete: bool,
 ) -> tuple[PlacementFinding, ...]:
     """Compare feed identities with active, evidenced cards and explicit anchors.
@@ -148,12 +148,12 @@ def _reconcile(
     Even a complete catalogue cannot prove a sale or a time interval of absence.
     A card is accepted only when its direct-card evidence was saved. Avito may
     additionally use a unique numeric AvitoId from the feed to anchor its URL.
-    VIN is used solely to look up the current URL already in the local marketing
-    registry; a missing or duplicated VIN never triggers a guess.
+    Only a previously verified (source, unique_id) binding can identify the
+    registry URL. VIN and AvitoId never bind a card to a registry listing.
     """
     rows = list(rows)
     cards = list(opened_cards)
-    current_urls = {str(key).strip().upper(): value for key, value in (current_urls_by_vin or {}).items()}
+    current_urls = {str(key).strip().upper(): value for key, value in (current_urls_by_placement_id or {}).items()}
     findings: list[PlacementFinding] = []
     feed_by_id: dict[str, _FeedPlacement] = {}
     declared_feed_ids: set[str] = set()
@@ -169,7 +169,6 @@ def _reconcile(
         row.platform_id for row in rows
         if row.platform_id and re.fullmatch(r'[0-9]{5,}', row.platform_id)
     )
-    vin_counts = Counter(row.vin for row in rows if row.vin)
     normalized_feed_ids: set[str] = set()
 
     for row, placement_id, normalized_feed in canonical_rows:
@@ -279,7 +278,7 @@ def _reconcile(
             continue
         if claimed_id is None and platform_id:
             row = feed_by_id[platform_id]
-            current_url = current_urls.get(row.vin) if row.vin and vin_counts[row.vin] == 1 else None
+            current_url = current_urls.get(platform_id)
             findings.append(PlacementFinding(
                 'platform_id_candidate', str(claim) if claim else None,
                 row.row_number, current_url, (opened.url,),
@@ -296,7 +295,7 @@ def _reconcile(
             continue
         placement_id = claimed_id
         row = feed_by_id[placement_id]
-        current_url = current_urls.get(row.vin) if row.vin and vin_counts[row.vin] == 1 else None
+        current_url = current_urls.get(placement_id)
         if not exact_id:
             findings.append(PlacementFinding(
                 'mixed_script_id',
@@ -319,10 +318,8 @@ def _reconcile(
             else 'visual_alias' if observations and placement_id in normalized_feed_ids
             else 'exact' if observations else None
         )
-        current_url = current_urls.get(row.vin) if row.vin and vin_counts[row.vin] == 1 else None
-        if row.vin and vin_counts[row.vin] > 1:
-            code, reason = 'ambiguous_feed_vin', 'Several feed rows use this VIN; vehicle link needs review'
-        elif len(observed_urls) > 1:
+        current_url = current_urls.get(placement_id)
+        if len(observed_urls) > 1:
             code, reason = 'duplicate_public_id', 'Several active cards declare the same placement ID'
         elif row.action == 'hide' and observed_urls:
             code, reason = 'hidden_but_public', 'Feed says hide, but an active seller card declares this ID'
@@ -333,10 +330,8 @@ def _reconcile(
                 if catalogue_complete else
                 'ID not observed in the inspected catalogue; coverage is incomplete'
             )
-        elif not row.vin:
-            code, reason = 'vehicle_anchor_missing', 'Card found, but feed VIN is absent; registry row needs review'
         elif not current_url:
-            code, reason = 'current_link_missing', 'Card found, but the marketing registry has no valid current URL'
+            code, reason = 'vehicle_anchor_missing', 'Card found, but this unique_id is not bound to one registry listing'
         elif not is_marketplace_listing_url(source, current_url):
             code, reason = 'current_link_invalid', 'Card found, but the marketing registry URL is invalid'
         elif canonical_listing_key(source, current_url) == canonical_listing_key(

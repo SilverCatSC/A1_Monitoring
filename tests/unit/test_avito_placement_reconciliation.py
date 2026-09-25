@@ -13,6 +13,7 @@ NEW = 'https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_8176281881'
 OTHER = 'https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_8176281882'
 EVIDENCE = 'artifacts/evidence/avito-card.png'
 FIRST_ROWS = {'avito-feed-new': 3, 'avito-feed-used': 4}
+IDS_TO_OLD = {PLACEMENT_ID: OLD, 'MBVC011220262508260009': OLD}
 
 
 def _feeds(*, new=None, used=None):
@@ -29,7 +30,7 @@ def _card(url=NEW, placement_id=PLACEMENT_ID, *, evidence=True, state='active'):
 def test_same_id_at_new_avito_url_is_reviewable_republication_candidate():
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8047929828'}]),
-        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert len(findings) == 1
@@ -42,20 +43,20 @@ def test_same_id_at_new_avito_url_is_reviewable_republication_candidate():
 def test_duplicate_id_across_new_and_used_feeds_cannot_choose_link():
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN}], used=[{'Id': PLACEMENT_ID, 'VIN': VIN}]),
-        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['duplicate_feed_id', 'duplicate_feed_id']
     assert {item.feed_sheet for item in findings} == {'avito-feed-new', 'avito-feed-used'}
 
 
-def test_missing_vin_stays_review_only_even_with_exact_id():
+def test_missing_vin_does_not_block_a_verified_id_link():
     findings = reconcile_avito_placements(
         _feeds(used=[{'Id': PLACEMENT_ID}]), [_card()],
-        first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
-    assert findings[0].code == 'vehicle_anchor_missing'
+    assert findings[0].code == 'republication_candidate'
     assert findings[0].feed_sheet == 'avito-feed-used'
 
 
@@ -100,7 +101,7 @@ def test_mixed_cyrillic_latin_card_id_can_identify_republication_with_warning():
     )
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': 'MBVC011220262508260009', 'VIN': VIN}]),
-        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['mixed_script_id', 'republication_candidate']
@@ -127,7 +128,7 @@ def test_owner_sample_avito_id_confirms_mixed_script_card_match():
             'Id': 'MBVC011220262508260009', 'VIN': VIN, 'AvitoId': '8176281881',
         }]),
         [card], first_data_rows={'avito-feed-new': 9, 'avito-feed-used': 4},
-        current_urls_by_vin={VIN: OLD},
+        current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['mixed_script_id', 'republication_candidate']
@@ -141,7 +142,7 @@ def test_missing_card_id_cannot_use_stale_prone_platform_id_as_sole_identity():
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'}]),
         [_card(placement_id=None)], first_data_rows=FIRST_ROWS,
-        current_urls_by_vin={VIN: OLD},
+        current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['platform_id_candidate', 'not_verified']
@@ -162,7 +163,7 @@ def test_unrepairable_card_id_is_only_a_platform_id_candidate():
     )
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': PLACEMENT_ID, 'VIN': VIN, 'AvitoId': '8176281881'}]),
-        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['platform_id_candidate', 'not_verified']
@@ -185,7 +186,7 @@ def test_republication_with_new_avito_id_still_matches_visual_alias():
         _feeds(new=[{
             'Id': 'MBVC011220262508260009', 'VIN': VIN, 'AvitoId': '8047929828',
         }]),
-        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['mixed_script_id', 'republication_candidate']
@@ -200,7 +201,7 @@ def test_description_id_conflicting_with_platform_id_fails_closed():
             {'Id': 'MBVC011220262508260009', 'VIN': 'W1VVNLTZ4T4788708'},
         ]),
         [_card(placement_id='MBVC011220262508260009')],
-        first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == [
@@ -247,7 +248,7 @@ def test_mixed_script_id_at_current_link_does_not_create_false_republication():
     )
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': 'MBVC011220262508260009', 'VIN': VIN}]),
-        [card], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [card], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['mixed_script_id', 'link_current']
@@ -275,7 +276,7 @@ def test_visual_alias_without_exact_feed_id_stays_invalid():
 def test_mixed_script_feed_id_can_match_an_exact_card_without_marketing_fix():
     findings = reconcile_avito_placements(
         _feeds(new=[{'Id': 'МBVC011220262508260027', 'VIN': VIN}]),
-        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == ['mixed_script_feed_id', 'republication_candidate']
@@ -289,7 +290,7 @@ def test_duplicate_after_visual_normalization_blocks_link_decision():
             new=[{'Id': 'МBVC011220262508260027', 'VIN': VIN}],
             used=[{'Id': PLACEMENT_ID, 'VIN': VIN}],
         ),
-        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_vin={VIN: OLD},
+        [_card()], first_data_rows=FIRST_ROWS, current_urls_by_placement_id=IDS_TO_OLD,
     )
 
     assert [item.code for item in findings] == [

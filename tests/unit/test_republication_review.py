@@ -12,7 +12,15 @@ from sqlalchemy.orm import sessionmaker
 
 from app.api import confirm_reconciliation
 from app.config import settings
-from app.models import Base, EngineType, Listing, ListingLinkEvent, ListingReconciliation, MonitoringCycle
+from app.models import (
+    Base,
+    EngineType,
+    Listing,
+    ListingLinkEvent,
+    ListingPlacementIdentity,
+    ListingReconciliation,
+    MonitoringCycle,
+)
 from app.schemas import ReconciliationConfirm
 from app.scraper.base import EVIDENCE_SCHEMA_VERSION, evidence_manifest_name
 from app.security import AuthenticatedActor
@@ -77,6 +85,10 @@ def _fixture(tmp_path, monkeypatch):
     db.add(Listing(
         id='car', vehicle_signature='car', brand='Mercedes-Benz', model='V-Class',
         generation='V-VIP', source_auto_ru=OLD, is_active=True,
+    ))
+    db.add(ListingPlacementIdentity(
+        listing_id='car', source=EngineType.AUTO_RU,
+        placement_id=PLACEMENT_ID, evidence=EVIDENCE,
     ))
     db.add(ListingReconciliation(
         id='check-review', cycle_id='cycle-review', batch_id='batch-review',
@@ -237,6 +249,23 @@ def test_automatic_link_sync_refuses_broken_evidence(tmp_path, monkeypatch):
         assert result['blocked'][0]['reason'] == 'evidence_not_verified'
         assert db.get(Listing, 'car').source_auto_ru == OLD
         assert db.query(ListingLinkEvent).count() == 0
+    finally:
+        db.close()
+        engine.dispose()
+
+
+def test_automatic_link_sync_refuses_id_without_prior_listing_binding(tmp_path, monkeypatch):
+    db, engine, _ = _fixture(tmp_path, monkeypatch)
+    try:
+        db.query(ListingPlacementIdentity).delete()
+        db.commit()
+        result = AutomaticLinkSyncService(db, cycle_id='cycle-review').run(
+            {'batch_id': 'batch-review', 'checks': {}},
+            {'status': 'complete', 'report_path': 'cycles/cycle-review/placement_reconciliation.json'},
+        )
+        assert result['status'] == 'partial'
+        assert result['blocked'][0]['reason'] == 'unique_id_not_bound_to_listing'
+        assert db.get(Listing, 'car').source_auto_ru == OLD
     finally:
         db.close()
         engine.dispose()

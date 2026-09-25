@@ -15,6 +15,7 @@ from app.scraper.base import (
     evidence_manifest_name,
 )
 from app.scraper.browser_session import browser_page
+from app.scraper.challenge_retry import refresh_explicit_captcha
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import SUPPLEMENT_HEADING
 from app.service.placement_identity import placement_id_claim_from_description, placement_id_from_description
@@ -196,6 +197,9 @@ async def inspect_direct_link(source, url, progress=None):
                 response = await page.goto(url, timeout=settings.request_timeout_seconds * 1000, wait_until='domcontentloaded')
                 await asyncio.sleep(settings.auto_ru_page_delay_seconds if source.value == 'auto_ru' else settings.avito_page_delay_seconds)
                 html = await page.content()
+                response, html, _refreshes = await refresh_explicit_captcha(
+                    page, response, html, progress=progress, source=source.value, url=url,
+                )
                 result = direct_page_status(html, source, url, page.url, response.status if response else None)
                 evidence = await capture_page_evidence(
                     page,

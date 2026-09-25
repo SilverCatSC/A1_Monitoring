@@ -11,6 +11,7 @@ from app.models import (
     DealerListingCandidate,
     EngineType,
     Listing,
+    ListingPlacementIdentity,
     ListingReconciliation,
 )
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
@@ -64,7 +65,7 @@ def test_active_card_opened_for_id_is_reused_for_current_direct_check(tmp_path, 
         }
 
     with sessionmaker(bind=engine)() as db:
-        db.add(Listing(id='car', vehicle_signature='car', vin=VIN,
+        db.add(Listing(id='car', vehicle_signature='car', vin=None,
                        source_avito=NEW, is_active=True))
         db.add(ListingReconciliation(
             id='current-check', cycle_id='cycle-reuse', batch_id='batch-reuse',
@@ -98,8 +99,13 @@ def test_active_card_opened_for_id_is_reused_for_current_direct_check(tmp_path, 
         assert calls == [(EngineType.AVITO, NEW)]
         record = db.get(ListingReconciliation, 'current-check')
         assert record.details['direct_inspection']['evidence'] == EVIDENCE
+        identity = db.query(ListingPlacementIdentity).one()
+        assert (identity.source, identity.listing_id, identity.placement_id) == (
+            EngineType.AVITO, 'car', PLACEMENT_ID,
+        )
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
         assert report['reused_direct_cards'] == 1
+        assert report['new_verified_identities'] == 1
     engine.dispose()
 
 
@@ -149,6 +155,10 @@ def test_cycle_queues_id_candidate_only_for_reviewable_check_without_url_write(
         db.add(Listing(
             id='car', vehicle_signature='car', vin=VIN,
             brand='Mercedes-Benz', model='V-Class', source_avito=OLD,
+        ))
+        db.add(ListingPlacementIdentity(
+            listing_id='car', source=EngineType.AVITO,
+            placement_id=PLACEMENT_ID, evidence=EVIDENCE,
         ))
         if assigned_elsewhere:
             db.add(Listing(

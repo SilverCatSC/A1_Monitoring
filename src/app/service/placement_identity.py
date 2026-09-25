@@ -1,8 +1,8 @@
 """Strict contract for the owner-defined 22-character placement identifier.
 
 The identifier describes one publication/sale placement, not the physical
-vehicle.  A new sale may legitimately receive a new placement ID for the same
-VIN or inventory vehicle.  Never use it alone to infer a republication.
+vehicle. A new sale may legitimately receive a new placement ID for the same
+physical car. Republication requires a prior verified ID-to-listing binding.
 """
 
 from __future__ import annotations

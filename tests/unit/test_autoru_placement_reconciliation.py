@@ -7,6 +7,7 @@ OLD = 'https://auto.ru/cars/used/sale/mercedes/v_class/1132857121-old/'
 NEW = 'https://auto.ru/cars/used/sale/mercedes/v_class/1132857122-new/'
 OTHER = 'https://auto.ru/cars/used/sale/mercedes/v_class/1132857123-other/'
 EVIDENCE = 'artifacts/evidence/auto_ru-card.png'
+IDS_TO_OLD = {PLACEMENT_ID: OLD, 'MBVC011220262508260009': OLD}
 
 
 def _feed(*, action='show', vin=VIN):
@@ -21,7 +22,7 @@ def _card(url=NEW, placement_id=PLACEMENT_ID, *, evidence=True, state='active'):
 
 
 def test_exact_active_id_at_new_url_is_a_reviewable_republication_candidate():
-    findings = reconcile_autoru_placements(_feed(), [_card()], current_urls_by_vin={VIN: OLD})
+    findings = reconcile_autoru_placements(_feed(), [_card()], current_urls_by_placement_id=IDS_TO_OLD)
 
     assert len(findings) == 1
     assert findings[0].code == 'republication_candidate'
@@ -30,7 +31,7 @@ def test_exact_active_id_at_new_url_is_a_reviewable_republication_candidate():
 
 
 def test_duplicate_public_ids_cannot_choose_a_new_link():
-    findings = reconcile_autoru_placements(_feed(), [_card(NEW), _card(OTHER)], current_urls_by_vin={VIN: OLD})
+    findings = reconcile_autoru_placements(_feed(), [_card(NEW), _card(OTHER)], current_urls_by_placement_id=IDS_TO_OLD)
 
     assert findings[0].code == 'duplicate_public_id'
     assert set(findings[0].observed_urls) == {NEW, OTHER}
@@ -50,14 +51,14 @@ def test_no_card_or_missing_evidence_never_proves_absence():
     assert [item.code for item in unproven] == ['card_evidence_missing', 'not_verified']
 
 
-def test_missing_vin_does_not_assign_a_registry_link():
-    findings = reconcile_autoru_placements(_feed(vin=None), [_card()], current_urls_by_vin={VIN: OLD})
+def test_missing_vin_does_not_block_a_verified_id_link():
+    findings = reconcile_autoru_placements(_feed(vin=None), [_card()], current_urls_by_placement_id=IDS_TO_OLD)
 
-    assert findings[0].code == 'vehicle_anchor_missing'
+    assert findings[0].code == 'republication_candidate'
 
 
 def test_duplicate_feed_id_is_not_used_for_a_link_decision():
-    findings = reconcile_autoru_placements(_feed() * 2, [_card()], current_urls_by_vin={VIN: OLD})
+    findings = reconcile_autoru_placements(_feed() * 2, [_card()], current_urls_by_placement_id=IDS_TO_OLD)
 
     assert [item.code for item in findings] == ['duplicate_feed_id', 'duplicate_feed_id']
 

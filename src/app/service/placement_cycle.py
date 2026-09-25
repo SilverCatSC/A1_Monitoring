@@ -13,7 +13,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from app.config import settings
-from app.models import DealerDiscoveryRun, DealerListingCandidate, EngineType, Listing, ListingReconciliation
+from app.models import (
+    DealerDiscoveryRun,
+    DealerListingCandidate,
+    EngineType,
+    Listing,
+    ListingPlacementIdentity,
+    ListingReconciliation,
+)
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
 from app.scraper.seller import inspect_direct_link
 from app.service.analytics import money
@@ -128,24 +135,7 @@ class PlacementCycleService:
             opened[source].append(OpenedMarketplaceCard(candidate.listing_url, inspection))
 
         listings = self.db.query(Listing).filter(Listing.is_active.is_(True)).all()
-        vin_counts = Counter(str(item.vin or '').strip().upper() for item in listings if item.vin)
-        urls_by_source = {}
-        for source in (EngineType.AUTO_RU, EngineType.AVITO):
-            url_counts = Counter(
-                canonical_listing_key(
-                    source, item.source_auto_ru if source == EngineType.AUTO_RU else item.source_avito
-                ) for item in listings
-            )
-            urls_by_source[source] = {
-                str(item.vin).strip().upper(): (
-                    item.source_auto_ru if source == EngineType.AUTO_RU else item.source_avito
-                )
-                for item in listings
-                if item.vin and vin_counts[str(item.vin).strip().upper()] == 1
-                and url_counts[canonical_listing_key(
-                    source, item.source_auto_ru if source == EngineType.AUTO_RU else item.source_avito
-                )] == 1
-            }
+        urls_by_source, new_identities = self._identity_urls(snapshot, opened, listings)
         coverage = {
             source: (
                 any(run.source == source for run in discovery_runs)
@@ -159,7 +149,7 @@ class PlacementCycleService:
         auto = reconcile_autoru_placements(
             snapshot.rows_by_sheet['autoru-feed-all'], opened[EngineType.AUTO_RU],
             first_data_row=snapshot.first_data_rows['autoru-feed-all'],
-            current_urls_by_vin=urls_by_source[EngineType.AUTO_RU],
+            current_urls_by_placement_id=urls_by_source[EngineType.AUTO_RU],
             catalogue_complete=coverage[EngineType.AUTO_RU],
         ) if EngineType.AUTO_RU in selected_sources else ()
         avito = reconcile_avito_placements(
@@ -167,7 +157,7 @@ class PlacementCycleService:
             opened[EngineType.AVITO],
             first_data_rows={sheet: snapshot.first_data_rows[sheet]
                              for sheet in ('avito-feed-new', 'avito-feed-used')},
-            current_urls_by_vin=urls_by_source[EngineType.AVITO],
+            current_urls_by_placement_id=urls_by_source[EngineType.AVITO],
             catalogue_complete=coverage[EngineType.AVITO],
         ) if EngineType.AVITO in selected_sources else ()
         findings = [asdict(item) for item in (*auto, *avito)]
@@ -208,6 +198,7 @@ class PlacementCycleService:
             'skipped_cards_by_source': dict(skipped),
             'unverified_cards_by_source': dict(unverified),
             'reused_direct_cards': reused_direct_cards,
+            'new_verified_identities': new_identities,
             'blocked_sources': sorted(blocked),
             'observed_cards': [
                 {
@@ -225,7 +216,7 @@ class PlacementCycleService:
         report_path = self._write_report(report)
         for record, updated in candidate_updates:
             record.candidates = updated
-        if candidate_updates or reused_direct_cards:
+        if candidate_updates or reused_direct_cards or new_identities:
             self.db.commit()
         self.progress({'event': 'placement_reconciliation_finished', 'findings': len(findings)})
         return {
@@ -235,6 +226,110 @@ class PlacementCycleService:
             'report_path': report_path,
         }
 
+    def _identity_urls(self, snapshot, opened, listings):
+        """Bootstrap only from an exact current URL/card/feed triple, never VIN."""
+        rows_by_source = {
+            EngineType.AUTO_RU: snapshot.rows_by_sheet['autoru-feed-all'],
+            EngineType.AVITO: (
+                *snapshot.rows_by_sheet['avito-feed-new'],
+                *snapshot.rows_by_sheet['avito-feed-used'],
+            ),
+        }
+        feed_counts = Counter()
+        exact_feed_ids = set()
+        active_feed_ids = set()
+        avito_platform_ids = {}
+        avito_platform_counts = Counter()
+        for source, rows in rows_by_source.items():
+            for row in rows:
+                raw = row.get('unique_id') if source == EngineType.AUTO_RU else row.get('Id')
+                try:
+                    normalized_id = parse_placement_id(str(raw or '')).value
+                except PlacementIdError:
+                    normalized_id = visual_ascii_placement_candidate(str(raw or ''))
+                    if normalized_id is None:
+                        continue
+                else:
+                    exact_feed_ids.add((source, normalized_id))
+                    if source == EngineType.AVITO or str(row.get('action') or '').strip().lower() == 'show':
+                        active_feed_ids.add((source, normalized_id))
+                feed_counts[source, normalized_id] += 1
+                if source == EngineType.AVITO:
+                    platform_id = str(row.get('AvitoId') or '').strip()
+                    if re.fullmatch(r'[0-9]{5,}', platform_id):
+                        avito_platform_counts[platform_id] += 1
+                        avito_platform_ids[platform_id] = normalized_id
+        listing_by_id = {item.id: item for item in listings}
+        listing_urls = {}
+        url_counts = Counter()
+        for source in (EngineType.AUTO_RU, EngineType.AVITO):
+            for item in listings:
+                url = item.source_auto_ru if source == EngineType.AUTO_RU else item.source_avito
+                key = canonical_listing_key(source, url)
+                if key:
+                    listing_urls[source, key] = item
+                    url_counts[source, key] += 1
+        identities = self.db.query(ListingPlacementIdentity).all()
+        bound_by_id = {(item.source, item.placement_id): item for item in identities}
+        bound_by_listing = {(item.source, item.listing_id): item for item in identities}
+        card_counts = Counter()
+        for source, cards in opened.items():
+            for card in cards:
+                value = (card.inspection.get('card') or {}).get('placement_id')
+                if card.inspection.get('state') == 'active' and isinstance(value, str):
+                    try:
+                        card_counts[source, parse_placement_id(value).value] += 1
+                    except PlacementIdError:
+                        pass
+        added = 0
+        for source, cards in opened.items():
+            for card in cards:
+                inspection = card.inspection
+                value = (inspection.get('card') or {}).get('placement_id')
+                if not isinstance(value, str):
+                    continue
+                try:
+                    placement_id = parse_placement_id(value).value
+                except PlacementIdError:
+                    continue
+                evidence = inspection.get('evidence')
+                key = canonical_listing_key(source, card.url)
+                listing = listing_urls.get((source, key))
+                if (inspection.get('state') != 'active' or not isinstance(evidence, str)
+                        or inspection.get('evidence_manifest') != evidence_manifest_name(evidence)
+                        or not key or url_counts[source, key] != 1 or listing is None
+                        or card_counts[source, placement_id] != 1
+                        or feed_counts[source, placement_id] != 1
+                        or (source, placement_id) not in exact_feed_ids
+                        or (source, placement_id) not in active_feed_ids
+                        or (source, placement_id) in bound_by_id
+                        or (source, listing.id) in bound_by_listing):
+                    continue
+                if source == EngineType.AVITO:
+                    platform_id = key.removeprefix('avito:')
+                    if (avito_platform_counts[platform_id] > 1
+                            or (platform_id in avito_platform_ids
+                                and avito_platform_ids[platform_id] != placement_id)):
+                        continue
+                identity = ListingPlacementIdentity(
+                    source=source, listing_id=listing.id, placement_id=placement_id,
+                    evidence=evidence,
+                )
+                self.db.add(identity)
+                bound_by_id[source, placement_id] = identity
+                bound_by_listing[source, listing.id] = identity
+                added += 1
+        urls = {EngineType.AUTO_RU: {}, EngineType.AVITO: {}}
+        for identity in bound_by_id.values():
+            listing = listing_by_id.get(identity.listing_id)
+            if listing is None:
+                continue
+            url = listing.source_auto_ru if identity.source == EngineType.AUTO_RU else listing.source_avito
+            key = canonical_listing_key(identity.source, url)
+            if key and url_counts[identity.source, key] == 1:
+                urls[identity.source][identity.placement_id] = url
+        return urls, added
+
     def _operator_candidate_updates(self, findings, snapshot, opened, candidates, listings, records):
         """Queue unambiguous ID findings for a human; never update registry links."""
         source_for_sheet = {
@@ -242,19 +337,11 @@ class PlacementCycleService:
             'avito-feed-new': EngineType.AVITO,
             'avito-feed-used': EngineType.AVITO,
         }
-        feed_vin_counts = Counter()
-        for sheet, rows in snapshot.rows_by_sheet.items():
-            source = source_for_sheet.get(sheet)
-            if source is not None:
-                feed_vin_counts.update(
-                    (source, str(row.get('vin') or row.get('VIN') or row.get('Vin') or '').strip().upper())
-                    for row in rows if str(row.get('vin') or row.get('VIN') or row.get('Vin') or '').strip()
-                )
-        listings_by_vin = {}
-        for listing in listings:
-            vin = str(listing.vin or '').strip().upper()
-            if vin:
-                listings_by_vin.setdefault(vin, []).append(listing)
+        identities = {
+            (item.source, item.placement_id): item.listing_id
+            for item in self.db.query(ListingPlacementIdentity).all()
+        }
+        listings_by_id = {item.id: item for item in listings}
         records_by_key = {}
         for record in records:
             records_by_key.setdefault((record.source, record.listing_id), []).append(record)
@@ -281,12 +368,11 @@ class PlacementCycleService:
             rows = snapshot.rows_by_sheet[sheet]
             if row_index < 0 or row_index >= len(rows):
                 continue
-            row = rows[row_index]
-            vin = str(row.get('vin') or row.get('VIN') or row.get('Vin') or '').strip().upper()
-            if (not vin or feed_vin_counts[(source, vin)] != 1
-                    or len(listings_by_vin.get(vin, [])) != 1):
+            placement_id = finding['placement_id']
+            listing_id = identities.get((source, placement_id))
+            listing = listings_by_id.get(listing_id)
+            if listing is None:
                 continue
-            listing = listings_by_vin[vin][0]
             matching_records = records_by_key.get((source, listing.id), [])
             if len(matching_records) != 1:
                 continue
@@ -315,11 +401,10 @@ class PlacementCycleService:
             ):
                 continue
             basis = (
-                'ID в карточке и фиде совпал; VIN связывает фид с записью. '
-                'Проверьте, что это тот же автомобиль перед подтверждением.'
+                'ID в карточке и фиде совпал с ранее подтверждённой связью unique_id и автомобиля.'
                 if finding['id_match_basis'] == 'exact' else
                 'ID в карточке сопоставлен по известному кириллическому двойнику; '
-                'VIN связывает фид с записью. Нужна ручная проверка автомобиля и ошибки ID.'
+                'связь unique_id и автомобиля подтверждена ранее. Нужна ручная проверка ошибки ID.'
             )
             entry = {
                 'id': candidate.id, 'url': new_url,

@@ -27,6 +27,7 @@ from app.models import (
     FeedbackStatus,
     Listing,
     ListingObservation,
+    ListingPlacementIdentity,
     ListingReconciliation,
     ManagerFeedback,
     MonitoringCycle,
@@ -113,7 +114,7 @@ PLACEMENT_REVIEW_LABELS = {
     'card_evidence_missing': ('Нет подтверждённого снимка', 'Повторите контролируемое открытие карточки.'),
     'current_link_missing': ('Нет ссылки в реестре', 'Проверьте строку реестра и найденную карточку.'),
     'current_link_invalid': ('Некорректная ссылка в реестре', 'Проверьте ссылку и найденную карточку.'),
-    'vehicle_anchor_missing': ('Нет связи с автомобилем', 'Нужен VIN или другой подтверждённый внутренний идентификатор.'),
+    'vehicle_anchor_missing': ('Нет связи с автомобилем', 'Нужна подтверждённая связь unique_id с записью автомобиля; VIN не используется.'),
     'public_id_without_feed_row': ('Карточка без строки фида', 'Проверьте публикацию и актуальность выгрузки.'),
 }
 
@@ -451,6 +452,16 @@ def confirm_reconciliation(
                     raise HTTPException(status_code=422, detail='Для этой машины выберите подтверждённого ID-кандидата')
                 if exact_candidate_proof_url(db, record, exact_candidate) is None:
                     raise HTTPException(status_code=409, detail='Снимок новой карточки недоступен или не прошёл проверку целостности')
+                bound = db.query(ListingPlacementIdentity).filter_by(
+                    source=record.source, placement_id=exact_candidate['placement_id'],
+                ).one_or_none()
+                if bound is not None and bound.listing_id != listing.id:
+                    raise HTTPException(status_code=409, detail='Этот unique_id уже связан с другим автомобилем')
+                other_id = db.query(ListingPlacementIdentity).filter_by(
+                    source=record.source, listing_id=listing.id,
+                ).one_or_none()
+                if other_id is not None and other_id.placement_id != exact_candidate['placement_id']:
+                    raise HTTPException(status_code=409, detail='У автомобиля уже подтверждён другой unique_id')
             for other in db.query(Listing).filter(Listing.is_active.is_(True), Listing.id != listing.id):
                 other_url = other.source_auto_ru if record.source == EngineType.AUTO_RU else other.source_avito
                 if canonical_listing_key(record.source, other_url) == canonical_listing_key(record.source, payload.url):
@@ -462,6 +473,12 @@ def confirm_reconciliation(
                 actor=actor.username if settings.auth_enabled else payload.actor.strip(),
                 reason=f'Сверка {record.id}: {payload.reason}',
             )
+            if exact_candidate is not None and bound is None:
+                db.add(ListingPlacementIdentity(
+                    source=record.source, listing_id=listing.id,
+                    placement_id=exact_candidate['placement_id'],
+                    evidence=exact_candidate['evidence'],
+                ))
             db.commit()
             return {'status': 'saved', 'listing_id': listing.id}
     except ScanAlreadyRunning as exc:

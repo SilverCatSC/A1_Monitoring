@@ -22,6 +22,7 @@ from app.scraper.base import (
     is_marketplace_listing_url,
 )
 from app.scraper.browser_session import browser_page
+from app.scraper.challenge_retry import refresh_explicit_captcha
 from app.scraper.pacing import choose_pause
 from app.scraper.result_scope import pagination_state, primary_cards
 from app.scraper.seller import catalogue_html, seller_page_matches
@@ -112,6 +113,14 @@ class AvitoAdapter:
                                 except PlaywrightTimeoutError:
                                     pass
                         html = await page.content()
+                        response, html, captcha_refreshes = await refresh_explicit_captcha(
+                            page, response, html, progress=self.progress_callback,
+                            source=self.source.value, url=url,
+                        )
+                        if captcha_refreshes:
+                            http_status = response.status if response is not None else None
+                            diagnostics[f'page_{page_number}_captcha_refreshes'] = captcha_refreshes
+                            diagnostics[f'page_{page_number}_http_status'] = http_status or 0
                         diagnostics[f'page_{page_number}_requested_url'] = url
                         diagnostics[f'page_{page_number}_final_url'] = page.url
                         evidence_path = await capture_page_evidence(

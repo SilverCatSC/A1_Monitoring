@@ -25,7 +25,8 @@ def test_migration_builds_clean_database(tmp_path):
             'vehicles',
             'offers',
             'source_records',
-            'offer_vehicle_links',
+                'offer_vehicle_links',
+                'listing_placement_identities',
         } <= tables
         with engine.connect() as connection:
             feedback_columns = {
@@ -37,7 +38,7 @@ def test_migration_builds_clean_database(tmp_path):
             }
             assert 'retry_of_cycle_id' in cycle_columns
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                    '20260914_0011'
+                    '20260925_0012'
             )
     finally:
         engine.dispose()
@@ -74,7 +75,7 @@ def test_migration_adopts_pre_alembic_schema_without_data_loss(tmp_path):
                 text("SELECT state FROM offer_vehicle_links WHERE method = 'legacy_backfill'")
             ).scalar_one() == 'candidate'
             assert connection.execute(text('SELECT version_num FROM alembic_version')).scalar_one() == (
-                    '20260914_0011'
+                    '20260925_0012'
             )
     finally:
         engine.dispose()

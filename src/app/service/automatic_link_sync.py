@@ -8,7 +8,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.config import settings
-from app.models import EngineType, Listing, ListingReconciliation, MonitoringCycle
+from app.models import EngineType, Listing, ListingPlacementIdentity, ListingReconciliation, MonitoringCycle
 from app.scraper.base import canonical_listing_key
 from app.service.listings import ListingRegistryService
 from app.service.placement_report import PlacementReportError, read_cycle_placement_report
@@ -61,7 +61,12 @@ class AutomaticLinkSyncService:
             new_key = canonical_listing_key(record.source, candidate['url'])
             checked_at = record.checked_at.replace(tzinfo=UTC) if record.checked_at.tzinfo is None else record.checked_at
             reason = None
-            if not listing.is_active or canonical_listing_key(record.source, current) != canonical_listing_key(record.source, record.url):
+            identity = self.db.query(ListingPlacementIdentity).filter_by(
+                source=record.source, placement_id=candidate['placement_id'],
+            ).one_or_none()
+            if identity is None or identity.listing_id != listing.id:
+                reason = 'unique_id_not_bound_to_listing'
+            elif not listing.is_active or canonical_listing_key(record.source, current) != canonical_listing_key(record.source, record.url):
                 reason = 'source_link_changed'
             elif (id_counts[(record.source, candidate['placement_id'])] != 1
                   or url_counts[(record.source, new_key)] != 1):
