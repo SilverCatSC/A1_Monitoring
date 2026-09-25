@@ -3,56 +3,95 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Отчёт по автомобилям · A1 Search Monitor</title>
+  <title>Автомобили · A1 Monitoring</title>
   <link rel="stylesheet" href="/static/app.css">
-  <style>
-    .sales-intro{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;margin-bottom:20px}.sales-intro p{max-width:760px}.sales-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:16px}.sales-card{display:grid;grid-template-rows:220px auto;background:#fff;border:1px solid var(--line);border-radius:12px;overflow:hidden}.vehicle-visual{position:relative;background:#e8eff0;display:flex;align-items:center;justify-content:center;color:var(--muted);overflow:hidden}.vehicle-visual img{width:100%;height:100%;object-fit:contain}.evidence-kind{position:absolute;left:10px;bottom:10px;padding:4px 7px;background:#102e3ae6;color:#fff;border-radius:5px}.vehicle-body{padding:17px}.vehicle-title{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.vehicle-title h2{font-size:19px!important;margin:0!important}.vehicle-price{font-size:21px;font-weight:750;white-space:nowrap}.identity-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}.identity-item{background:#f3f7f7;border-radius:7px;padding:9px}.identity-item span{display:block;font-size:9px;letter-spacing:.7px;text-transform:uppercase;color:var(--muted)}.identity-item strong{display:block;margin-top:3px;overflow-wrap:anywhere}.identity-item-wide{grid-column:1/-1}.identity-item small{display:block;margin-top:2px}.marketplaces{display:grid;grid-template-columns:1fr 1fr;gap:9px}.marketplace{border:1px solid var(--line);border-radius:9px;padding:11px;min-width:0}.marketplace-head{display:flex;justify-content:space-between;gap:7px;align-items:center;margin-bottom:8px}.marketplace-head a{font-weight:700}.marketplace p{font-size:11px;margin:6px 0}.marketplace .badge{display:flex;width:fit-content}.marketplace-proof{display:inline-block;margin-top:7px;font-size:11px}.details-link{display:block;text-align:center;margin-top:13px}.vat-alert{color:var(--danger);font-weight:650}.vat-ok{color:var(--green);font-weight:650}@media(max-width:900px){.sales-cards{grid-template-columns:1fr}.marketplaces{grid-template-columns:1fr}}@media(max-width:520px){.sales-intro{display:block}.vehicle-title{display:block}.vehicle-price{margin-top:6px}.identity-grid{grid-template-columns:1fr}}
-    .evidence-kind{font-size:10px}
-  </style>
+  <link rel="stylesheet" href="/static/listing_catalog.css">
 </head>
 <body class="workbench">
 {% set active_page = 'listings' %}{% include 'navigation.html' %}
-<main id="main-content">
-  <header class="page-heading sales-intro"><div><span class="eyebrow">ОТЧЁТ ДЛЯ ОТДЕЛА ПРОДАЖ</span><h1>Все проверяемые автомобили</h1><p class="muted">Поиск и состояние прямой карточки показаны отдельно. «Не найдено» на первых трёх страницах не означает, что объявление снято. Unique ID показан только после проверки описания карточки или однозначной ID-сверки.</p></div><strong>{{ context.expected_total }} автомобилей · одна страница</strong></header>
-  <form class="filters" method="get"><input name="q" value="{{ context.query }}" placeholder="VIN, марка или модель"><select name="brand"><option value="">Все марки</option>{% for value in context.brand_options %}<option value="{{ value }}" {{ 'selected' if context.brand == value else '' }}>{{ value }}</option>{% endfor %}</select><select name="platform"><option value="">Все площадки</option><option value="auto_ru" {{ 'selected' if context.platform == 'auto_ru' else '' }}>Есть ссылка Auto.ru</option><option value="avito" {{ 'selected' if context.platform == 'avito' else '' }}>Есть ссылка Avito</option></select><button>Найти</button></form>
-  {% if context.unmatched_marketing %}
-  <section class="panel" style="margin-bottom:16px"><h2>Не подключены к мониторингу · {{ context.unmatched_total }}</h2><p class="muted">Эти активные строки есть в таблице отдела маркетинга, но система пока не смогла однозначно связать их с локальным реестром. Они показаны здесь, чтобы автомобиль не исчезал из поля зрения отдела продаж.</p><div class="identity-grid">{% for row in context.unmatched_marketing %}<div class="identity-item"><span>Строка {{ row.row_number }}</span><strong>{{ row.brand_model or 'Модель не указана' }} {{ row.configuration or '' }}</strong><small class="subline">{{ row.vin or 'VIN не указан' }} · {{ row.year or 'год не указан' }} · {% if row.price %}{{ '{:,.0f}'.format(row.price).replace(',', ' ') }} ₽{% else %}цена не указана{% endif %} · {{ row.vat or 'НДС не указан' }}</small>{% if row.auto_ru_url %}<a href="{{ row.auto_ru_url }}" target="_blank" rel="noopener noreferrer">Auto.ru</a>{% endif %}{% if row.avito_url %} · <a href="{{ row.avito_url }}" target="_blank" rel="noopener noreferrer">Avito</a>{% endif %}</div>{% endfor %}</div></section>
-  {% endif %}
-  <section class="sales-cards">
+<main id="main-content" class="vehicle-catalog">
+  <header class="page-heading catalog-heading">
+    <div>
+      <span class="eyebrow">ПАРК АВТОМОБИЛЕЙ</span>
+      <h1>Автомобили</h1>
+      <p class="muted">Машины из реестра маркетинга и последние известные проверки объявлений.</p>
+    </div>
+    <span class="catalog-count">{{ context.expected_total }} автомобилей</span>
+  </header>
+
+  <form class="filters catalog-filters" method="get" role="search">
+    <label class="catalog-search"><span class="sr-only">Поиск по марке, модели или VIN</span><input name="q" value="{{ context.query }}" placeholder="Марка, модель или VIN"></label>
+    <label><span class="sr-only">Марка</span><select name="brand"><option value="">Все марки</option>{% for value in context.brand_options %}<option value="{{ value }}" {{ 'selected' if context.brand == value else '' }}>{{ value }}</option>{% endfor %}</select></label>
+    <label><span class="sr-only">Площадка</span><select name="platform"><option value="">Все площадки</option><option value="auto_ru" {{ 'selected' if context.platform == 'auto_ru' else '' }}>Есть ссылка Auto.ru</option><option value="avito" {{ 'selected' if context.platform == 'avito' else '' }}>Есть ссылка Avito</option></select></label>
+    <button type="submit">Найти</button>
+  </form>
+
+  {% if context.unmatched_total %}<p class="catalog-caveat">Пока не связаны с мониторингом: {{ context.unmatched_total }}. Эти автомобили показаны в конце списка.</p>{% endif %}
+
+  <section class="vehicle-list" aria-label="Список автомобилей">
   {% for card in context.cards %}
     {% set item = card.listing %}{% set auto = card.platforms.auto_ru %}{% set avito = card.platforms.avito %}{% set marketing = card.marketing %}
-    <article class="sales-card">
-      <div class="vehicle-visual">
-        {% if card.preview_url %}<a href="{{ card.preview_url }}" target="_blank"><img loading="lazy" src="{{ card.preview_url }}" alt="{{ card.preview_kind }} {{ item.brand or '' }} {{ item.model or '' }}"></a><span class="evidence-kind">{{ card.preview_kind }}</span>{% else %}<span>Карточка объявления появится после успешной проверки</span>{% endif %}
+    <article class="vehicle-row">
+      <div class="vehicle-thumbnail">
+        {% if card.preview_url %}
+        <img loading="lazy" src="{{ card.preview_url }}" alt="Снимок проверенной карточки {{ item.brand or '' }} {{ item.model or '' }}">
+        <span>Снимок объявления</span>
+        {% else %}<span class="no-preview">Снимка пока нет</span>{% endif %}
       </div>
-      <div class="vehicle-body">
-        <div class="vehicle-title"><h2>{{ item.brand or 'Марка не указана' }} {{ item.model or '' }}{% if item.generation %}<span class="subline">{{ item.generation }}</span>{% endif %}</h2><div class="vehicle-price">{% if marketing.price or item.price_hint %}{{ '{:,.0f}'.format(marketing.price or item.price_hint).replace(',', ' ') }} ₽{% else %}<span class="muted">Цена не указана</span>{% endif %}</div></div>
-        <div class="identity-grid">
-          <div class="identity-item"><span>VIN</span><strong class="mono">{{ item.vin or 'VIN не указан' }}</strong></div>
-          <div class="identity-item"><span>Год</span><strong>{{ marketing.year or item.year or 'Не указан' }}</strong></div>
-          <div class="identity-item identity-item-wide"><span>unique_id</span>{% if auto.placement_id or avito.placement_id %}{% if auto.placement_id %}<strong class="mono">Auto.ru · {{ auto.placement_id.value }}</strong><small class="subline">{{ 'Кандидат перевыкладки — подтвердить ссылку' if auto.placement_id.basis == 'review' else 'Из описания проверенной карточки' }}</small>{% endif %}{% if avito.placement_id %}<strong class="mono">Avito · {{ avito.placement_id.value }}</strong><small class="subline">{{ 'Кандидат перевыкладки — подтвердить ссылку' if avito.placement_id.basis == 'review' else 'Из описания проверенной карточки' }}</small>{% endif %}{% else %}<strong class="muted">Не подтверждён</strong>{% endif %}</div>
-          <div class="identity-item"><span>Статус / наличие</span><strong>{{ marketing.availability or marketing.status or ('Активно' if item.is_active else 'Архив') }}</strong>{% if marketing.status and marketing.availability %}<small class="subline">{{ marketing.status }}</small>{% endif %}</div>
-          <div class="identity-item"><span>НДС по таблице</span><strong class="{{ 'vat-alert' if not marketing.vat else 'vat-ok' }}">{{ marketing.vat or 'Не указано — проверить' }}</strong>{% if marketing.duplicate_rows and marketing.duplicate_rows > 1 %}<small class="subline vat-alert">Несколько строк в таблице: {{ marketing.duplicate_rows }}</small>{% endif %}</div>
-        </div>
-        <div class="marketplaces">
-          {% for platform, data, title in [('auto_ru', auto, 'Auto.ru'), ('avito', avito, 'Avito')] %}
-          {% set direct_card = data.direct.get('card', {}) %}
-          <div class="marketplace">
-            <div class="marketplace-head">{% if data.url %}<a href="{{ data.url }}" target="_blank" rel="noopener noreferrer">{{ title }}{% if data.observation %} · стр. {{ data.observation.page_number }}{% endif %}</a>{% else %}<strong>{{ title }} — нет ссылки</strong>{% endif %}</div>
-            <span class="badge {{ data.search_state }}">{{ data.search_label }}</span>
-            <p><span class="badge {{ data.direct_class }}">{{ data.direct_label }}</span></p>
-            {% if data.direct.reason %}<p class="muted">{{ data.direct.reason }}</p>{% endif %}
-            {% if data.reconciliation %}<p class="muted">Проверено: {{ data.reconciliation.checked_at.strftime('%d.%m.%Y %H:%M') }}</p>{% endif %}
-            {% if platform == 'avito' %}<p>НДС в описании: <strong class="{{ 'vat-ok' if direct_card.vat_status else 'vat-alert' }}">{{ direct_card.vat_status or 'не найдено' }}</strong></p>{% endif %}
-            {% if direct_card.availability %}<p>В карточке: <strong>{{ direct_card.availability }}</strong></p>{% endif %}
-            {% if data.proof %}<a class="marketplace-proof" href="{{ data.proof }}" target="_blank">Скриншот прямой карточки →</a>{% endif %}
+      <div class="vehicle-summary">
+        <h2><a href="/api/v1/dashboard/listings/{{ item.id }}">{{ item.brand or 'Марка не указана' }} {{ item.model or '' }}{% if item.generation and item.generation|lower != item.model|lower %} {{ item.generation }}{% endif %}</a></h2>
+        <p class="vehicle-attributes">
+          <span>{{ marketing.year or item.year or 'Год не указан' }}</span>
+          <span>{{ marketing.availability or marketing.status or ('Активно' if item.is_active else 'Архив') }}</span>
+          {% if marketing.vat %}<span>{{ marketing.vat }}</span>{% endif %}
+        </p>
+        {% if auto.placement_id or avito.placement_id %}
+        <p class="vehicle-id">
+          {% if auto.placement_id %}<span>Auto.ru ID <strong class="mono">{{ auto.placement_id.value }}</strong></span>{% endif %}
+          {% if avito.placement_id %}<span>Avito ID <strong class="mono">{{ avito.placement_id.value }}</strong></span>{% endif %}
+        </p>
+        {% endif %}
+        <div class="vehicle-platforms" aria-label="Состояние объявлений">
+          {% for data, title in [(auto, 'Auto.ru'), (avito, 'Avito')] %}
+          {% set code = data.direct.get('status_code') or data.direct.get('state') %}
+          <div class="vehicle-platform">
+            {% if data.url %}<a href="{{ data.url }}" target="_blank" rel="noopener noreferrer">{{ title }} ↗</a>{% else %}<strong>{{ title }}</strong>{% endif %}
+            <span class="platform-status{% if data.placement_id and data.placement_id.basis == 'review' %} needs-review{% elif code in ['sold', 'unpublished', 'closed', 'removed'] %} needs-review{% endif %}">
+              {% if data.placement_id and data.placement_id.basis == 'review' %}Новая карточка найдена · старая ссылка
+              {% elif not data.url %}Нет ссылки
+              {% elif code == 'active' %}Ссылка открывается
+              {% elif code in ['sold', 'unpublished', 'closed', 'removed'] %}Ссылка закрыта
+              {% else %}{{ data.direct_label }}{% endif %}
+            </span>
+            {% if data.observation %}<small>стр. {{ data.observation.page_number }}</small>
+            {% elif data.search_state not in ['not_checked', 'review_required'] %}<small>{{ data.search_label }}</small>{% endif %}
           </div>
           {% endfor %}
         </div>
-        <a class="details-link" href="/api/v1/dashboard/listings/{{ item.id }}">История и замечания →</a>
+      </div>
+      <div class="vehicle-actions">
+        <strong class="vehicle-price">{% if marketing.price or item.price_hint %}{{ '{:,.0f}'.format(marketing.price or item.price_hint).replace(',', ' ') }} ₽{% else %}Цена не указана{% endif %}</strong>
+        <a href="/api/v1/dashboard/listings/{{ item.id }}">Открыть автомобиль →</a>
       </div>
     </article>
-  {% else %}<div class="panel empty">Автомобили не найдены.</div>{% endfor %}
+  {% endfor %}
+  {% for row in context.unmatched_marketing %}
+    <article class="vehicle-row unmatched-row">
+      <div class="vehicle-thumbnail"><span class="no-preview">Снимка пока нет</span></div>
+      <div class="vehicle-summary">
+        <h2>{{ row.brand_model or 'Модель не указана' }} {{ row.configuration or '' }}</h2>
+        <p class="vehicle-attributes"><span>{{ row.year or 'Год не указан' }}</span>{% if row.availability %}<span>{{ row.availability }}</span>{% endif %}{% if row.vat %}<span>{{ row.vat }}</span>{% endif %}</p>
+        <p class="unmatched-note">Не связана с мониторингом · строка {{ row.row_number }} таблицы маркетинга</p>
+        <div class="vehicle-platforms">
+          {% if row.auto_ru_url %}<a href="{{ row.auto_ru_url }}" target="_blank" rel="noopener noreferrer">Auto.ru ↗</a>{% endif %}
+          {% if row.avito_url %}<a href="{{ row.avito_url }}" target="_blank" rel="noopener noreferrer">Avito ↗</a>{% endif %}
+          {% if not row.auto_ru_url and not row.avito_url %}<span class="muted">Ссылок пока нет</span>{% endif %}
+        </div>
+      </div>
+      <div class="vehicle-actions"><strong class="vehicle-price">{% if row.price %}{{ '{:,.0f}'.format(row.price).replace(',', ' ') }} ₽{% else %}Цена не указана{% endif %}</strong></div>
+    </article>
+  {% endfor %}
+  {% if not context.cards and not context.unmatched_marketing %}<div class="panel empty">По этому запросу автомобили не найдены.</div>{% endif %}
   </section>
 </main>
 </body>

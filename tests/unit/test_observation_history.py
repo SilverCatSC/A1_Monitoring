@@ -147,12 +147,13 @@ def test_history_and_listing_templates_escape_imported_content(tmp_path):
         assert '<img src=x onerror=alert(1)>' not in history_html
         assert '&lt;script&gt;Unsafe Brand&lt;/script&gt;' in detail_html
         assert '&lt;script&gt;Unsafe Brand&lt;/script&gt;' in catalog_html
-        assert 'Auto.ru · стр. 2' in catalog_html
-        assert 'Avito — нет' in catalog_html
+        assert 'Auto.ru ↗' in catalog_html
+        assert 'стр. 2' in catalog_html
+        assert 'Нет ссылки' in catalog_html
         assert '44 990 000 ₽' in catalog_html
         assert 'V-VIP' in catalog_html
-        assert 'стр. 2' in catalog_html
-        assert 'Карточка объявления появится после успешной проверки' in catalog_html
+        assert 'Снимка пока нет' in catalog_html
+        assert 'Скриншот прямой карточки' not in catalog_html
         assert listing_catalog_context(session)['cards'][0]['observation'] is None
         assert detail['previews'] == []
         assert detail['page_statistics']['overall']['found_total'] == 1
@@ -292,10 +293,12 @@ def test_sales_catalog_uses_head_table_and_direct_card_proof(tmp_path, monkeypat
         assert context['cards'][0]['preview_kind'] == 'Прямая карточка'
         assert '46 990 000 ₽' in html
         assert 'с НДС' in html
-        assert 'Объявление закрыто' in html
-        assert 'Скриншот прямой карточки' in html
+        assert 'Ссылка закрыта' in html
+        assert 'Снимок объявления' in html
         assert 'Maestra V800' in html
-        assert 'Не подключены к мониторингу · 1' in html
+        assert 'Пока не связаны с мониторингом: 1' in html
+        assert 'Не связана с мониторингом · строка 3' in html
+        assert html.count('class="vehicle-row') == 2
     finally:
         session.close()
         engine.dispose()
@@ -337,7 +340,8 @@ def test_catalog_shows_reviewable_unique_id_without_replacing_old_link(tmp_path)
             'value': placement_id, 'basis': 'review',
         }
         assert placement_id in catalog_html
-        assert 'Кандидат перевыкладки — подтвердить ссылку' in catalog_html
+        assert 'Новая карточка найдена · старая ссылка' in catalog_html
+        assert 'Автомобиль продан' not in catalog_html
         assert placement_id in detail_html
         assert listing.source_auto_ru == 'https://auto.ru/cars/used/sale/brand/model/1234567890-test/'
     finally:
@@ -412,10 +416,10 @@ def test_catalog_buttons_show_latest_page_for_each_marketplace(tmp_path):
         html = environment.get_template('listing_catalog.html').render(
             context=listing_catalog_context(session), auth_enabled=False
         )
-        assert 'Auto.ru · стр. 2' in html
-        assert 'Avito · стр. 3' in html
-        assert 'Auto.ru ↗' not in html
-        assert 'Avito ↗' not in html
+        assert 'Auto.ru ↗' in html
+        assert 'Avito ↗' in html
+        assert 'стр. 2' in html
+        assert 'стр. 3' in html
         context = listing_catalog_context(session)
         assert context['cards'][0]['observation'].source == EngineType.AVITO
         assert listing_detail_context(session, listing.id)['previews'][0][

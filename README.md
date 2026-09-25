@@ -32,6 +32,7 @@
 | Повседневный VPN-допуск MacBook и его ограничения | [VPN operational policy](docs/production/VPN_OPERATIONAL_POLICY_2026-09-25.md) |
 | ID в фидах и новых карточках | [Сверка в цикле](docs/production/PLACEMENT_CYCLE_INTEGRATION_2026-09-24.md) |
 | Откуда берётся unique_id во вкладке «Автомобили» | [Контракт отображения ID](docs/production/TASK_LISTINGS_UNIQUE_ID_2026-09-25.md) |
+| Упрощение списка автомобилей и оставшиеся UX-задачи | [Задача по интерфейсу](docs/production/TASK_VEHICLE_LIST_UX_2026-09-25.md) |
 | Решение о primary host и будущий LaunchAgent | [MacBook primary-host decision](docs/production/MACBOOK_PRIMARY_HOST_2026-09-14.md) |
 | Все документы и архив | [Оглавление](docs/README.md) |
 
