@@ -93,6 +93,7 @@ from app.service.report import (
     recent_monitoring_cycles,
     weekend_summary,
 )
+from app.service.republication_review import exact_candidate_proof_url, exact_republication_candidate
 from app.service.scan_progress import read_scan_progress
 
 router = APIRouter()
@@ -438,8 +439,18 @@ def confirm_reconciliation(
             checked_at = record.checked_at.replace(tzinfo=datetime.UTC) if record.checked_at.tzinfo is None else record.checked_at
             if datetime.datetime.now(datetime.UTC) - checked_at > datetime.timedelta(hours=24):
                 raise HTTPException(status_code=409, detail='Сверка старше суток. Повторите мониторинг перед подтверждением.')
-            if not listing.is_active or payload.url not in {c['url'] for c in record.candidates}:
+            if not listing.is_active or payload.url not in {
+                c.get('url') for c in record.candidates or [] if isinstance(c, dict)
+            }:
                 raise HTTPException(status_code=422, detail='Выберите кандидата из этой сверки для активного автомобиля')
+            exact_candidate = exact_republication_candidate(record)
+            if exact_candidate is not None:
+                if canonical_listing_key(record.source, payload.url) != canonical_listing_key(
+                    record.source, exact_candidate['url']
+                ):
+                    raise HTTPException(status_code=422, detail='Для этой машины выберите подтверждённого ID-кандидата')
+                if exact_candidate_proof_url(db, record, exact_candidate) is None:
+                    raise HTTPException(status_code=409, detail='Снимок новой карточки недоступен или не прошёл проверку целостности')
             for other in db.query(Listing).filter(Listing.is_active.is_(True), Listing.id != listing.id):
                 other_url = other.source_auto_ru if record.source == EngineType.AUTO_RU else other.source_avito
                 if canonical_listing_key(record.source, other_url) == canonical_listing_key(record.source, payload.url):
@@ -585,10 +596,16 @@ def listing_detail_html(request: Request, listing_id: str, db: Session = Depends
     context = listing_detail_context(db, listing_id)
     if context is None:
         raise HTTPException(status_code=404, detail='listing not found')
+    actor = current_actor(request)
     return templates.TemplateResponse(
         request=request,
         name='listing_detail.html',
-        context={'context': context, 'auth_enabled': settings.auth_enabled},
+        context={
+            'context': context,
+            'auth_enabled': settings.auth_enabled,
+            'actor_name': actor.username,
+            'actor_role': actor.role,
+        },
     )
 
 

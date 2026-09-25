@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models import DealerListingCandidate, EngineType, Listing, ListingReconciliation
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
+from app.service.republication_review import exact_republication_candidate
 
 SEVERITY_ORDER = {'high': 0, 'medium': 1, 'low': 2}
 
@@ -127,6 +128,19 @@ def _record_findings(record: ListingReconciliation) -> list[dict[str, Any]]:
     listing = record.listing
     direct = (record.details or {}).get('direct_inspection') or {}
     findings: list[dict[str, Any]] = []
+    exact_candidate = exact_republication_candidate(record)
+    if exact_candidate is not None:
+        return [_finding(
+            code='republication_candidate_exact_id', severity='high',
+            source=record.source, listing=listing, reconciliation=record,
+            summary='Найдена новая карточка с тем же ID; ссылка в Monitoring требует подтверждения',
+            action='Сравнить старую и новую карточки, затем подтвердить новую ссылку в карточке автомобиля.',
+            values={
+                'placement_id': exact_candidate['placement_id'],
+                'old_url': record.url,
+                'new_url': exact_candidate['url'],
+            },
+        )]
 
     if record.state == 'missing_link':
         findings.append(

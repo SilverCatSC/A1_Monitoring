@@ -48,6 +48,7 @@
       <strong>{% if item.listing_id %}<a href="/api/v1/dashboard/listings/{{ item.listing_id }}">{{ item.listing_name }}</a>{% else %}Новая публикация из каталога{% endif %} · {{ 'Auto.ru' if item.source == 'auto_ru' else 'Avito' }}</strong>
       <p>{{ item.summary }}</p>
       <p class="helper"><strong>Действие:</strong> {{ item.action }}</p>
+      {% if item.code == 'republication_candidate_exact_id' %}<p><a href="/api/v1/dashboard/listings/{{ item.listing_id }}#republication-{{ item.source }}">Сравнить две ссылки и проверить ID →</a></p>{% endif %}
       {% if values.registry_price is defined or values.card_price is defined %}<p class="helper">Цена реестра: {{ values.registry_price or '—' }} · карточка: {{ values.card_price or '—' }}</p>{% endif %}
       {% if values.candidate_title %}<p class="helper">Кандидат: {{ values.candidate_title }}{% if values.candidate_price %} · {{ '{:,.0f}'.format(values.candidate_price).replace(',', ' ') }} ₽{% endif %}</p>{% endif %}
       {% if item.proof %}<a href="{{ item.proof }}" target="_blank">Открыть доказательство →</a>{% endif %}
@@ -81,7 +82,9 @@
     {% if item.direct_proof %}<a href="{{ item.direct_proof }}" target="_blank">Открыть скриншот карточки →</a>{% endif %}
   </div></div>{% endif %}
   {% if item.override %}<p class="helper">Локальная связь подтверждена: {{ item.override.actor }}. {{ 'В таблице другая ссылка — подтверждённая связь сохранена.' if item.conflict else 'Подтверждённая ссылка защищена от импорта.' }}</p>{% endif %}
-  {% if r.state != 'verified' and not item.changed %}
+  {% if item.id_candidate and not item.changed %}
+  <p class="notice">Найдена одна новая карточка с точным совпадением ID <strong>{{ item.id_candidate.placement_id }}</strong>. Похожие машины по модели здесь не предлагаются для подтверждения. <a href="/api/v1/dashboard/listings/{{ r.listing_id }}#republication-{{ r.source.value }}">Сравнить старую и новую ссылки →</a></p>
+  {% elif r.state != 'verified' and not item.changed %}
   <details><summary>Кандидаты на замену · {{ r.candidates|length }}</summary>
     {% for candidate in r.candidates %}<div class="insight"><div><a href="{{ candidate.url }}" target="_blank" rel="noopener noreferrer">{{ candidate.title or 'Открыть объявление' }}</a><p>{{ candidate.price }} · {{ candidate.basis }}</p></div></div>{% else %}<p>Надёжных кандидатов не найдено. После ручной проверки можно указать ссылку в <a href="/api/v1/dashboard/settings">настройках</a>.</p>{% endfor %}
     {% if r.candidates %}

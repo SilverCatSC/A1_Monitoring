@@ -33,6 +33,7 @@ from app.service.evidence import evidence_pages, has_card_evidence
 from app.service.feedback import ALLOWED_CATEGORIES, ALLOWED_SEVERITIES, ALLOWED_TRANSITIONS
 from app.service.filters import FilterRegistryService
 from app.service.placement_identity import PlacementIdError, parse_placement_id
+from app.service.republication_review import republication_review
 
 
 def _safe_listing_url(source: EngineType, value: str | None) -> str | None:
@@ -994,6 +995,7 @@ def listing_catalog_context(
         'brand_options': brand_options,
         'cards': [
             _listing_catalog_card(
+                session,
                 listing,
                 latest_any,
                 latest_found,
@@ -1007,6 +1009,7 @@ def listing_catalog_context(
 
 
 def _listing_catalog_card(
+    session,
     listing: Listing,
     latest_any: dict[tuple[str, EngineType], ListingObservation],
     latest_found: dict[tuple[str, EngineType], ListingObservation],
@@ -1105,6 +1108,7 @@ def _listing_catalog_card(
             'proof': f'/api/v1/reconciliations/{reconciliation.id}/evidence'
             if reconciliation and direct.get('evidence') else None,
             'placement_id': _placement_id_from_reconciliation(reconciliation),
+            'republication_review': republication_review(session, reconciliation, url),
         }
     return {
         'listing': listing,
@@ -1168,18 +1172,31 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         .all()
     )
     link_events = sorted(listing.link_events, key=lambda item: item.created_at, reverse=True)
+    link_history = [
+        {
+            'created_at': item.created_at,
+            'source': item.source,
+            'old_url': _safe_listing_url(item.source, item.old_url),
+            'new_url': _safe_listing_url(item.source, item.new_url),
+            'actor': item.actor,
+            'reason': item.reason,
+        }
+        for item in link_events
+    ]
     placement_ids = {}
+    republication_reviews = {'auto_ru': None, 'avito': None}
     for record in (
         session.query(ListingReconciliation)
         .filter(ListingReconciliation.listing_id == listing.id)
         .order_by(ListingReconciliation.checked_at.desc(), ListingReconciliation.id.desc())
     ):
         source = record.source
-        if source in placement_ids:
+        if source.value in placement_ids:
             continue
         current_url = listing.source_auto_ru if source == EngineType.AUTO_RU else listing.source_avito
         if canonical_listing_key(source, record.url) == canonical_listing_key(source, current_url):
             placement_ids[source.value] = _placement_id_from_reconciliation(record)
+            republication_reviews[source.value] = republication_review(session, record, current_url)
     return {
         'listing': listing,
         'links': {
@@ -1187,6 +1204,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
             'avito': _safe_listing_url(EngineType.AVITO, listing.source_avito),
         },
         'placement_ids': placement_ids,
+        'republication_reviews': republication_reviews,
         'observations': [
             {
                 'observation': observation,
@@ -1199,6 +1217,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
         'episodes': episodes,
         'feedback': feedback,
         'link_events': link_events,
+        'link_history': link_history,
         'registry_events': session.query(ListingChangeEvent).filter_by(listing_id=listing_id)
         .order_by(ListingChangeEvent.created_at.desc()).limit(200).all(),
         'page_statistics': _page_statistics(found_observations),

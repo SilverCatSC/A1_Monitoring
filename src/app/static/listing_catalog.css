@@ -29,6 +29,8 @@
 .platform-status{color:#536b74}
 .platform-status.needs-review{color:#aa4a32;font-weight:700}
 .vehicle-platform small{color:#5d737c;white-space:nowrap}
+.republication-platform{flex-basis:100%;background:#fff5e6;color:#705019}
+.republication-platform a{color:#7e4c16}
 .vehicle-actions{display:flex;flex-direction:column;align-items:flex-end;justify-content:space-between;gap:10px;text-align:right}
 .vehicle-price{font-size:18px;line-height:1.25;white-space:nowrap}
 .vehicle-actions a{font-size:12px;white-space:nowrap;font-weight:650}

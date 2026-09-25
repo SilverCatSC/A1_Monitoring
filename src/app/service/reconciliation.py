@@ -15,6 +15,7 @@ from app.service.analytics import local_time, money
 from app.service.dealer_discovery import DealerDiscoveryService
 from app.service.filters import _listing_family
 from app.service.offer_reconciliation import offer_review_queue
+from app.service.republication_review import exact_republication_candidate
 
 LABELS = {'verified': 'Есть в каталоге продавца', 'review_required': 'Нужно проверить ссылку',
           'removed': 'Есть отметка о снятии / продаже', 'unavailable': 'Сверка недоступна',
@@ -245,6 +246,7 @@ def reconciliation_context(db):
                      'label': 'Ссылка изменена; ожидается сверка' if changed else LABELS[record.state],
                      'current_url': current, 'changed': changed, 'override': override,
                      'direct': direct,
+                     'id_candidate': exact_republication_candidate(record),
                      'direct_proof': f'/api/v1/reconciliations/{record.id}/evidence' if direct.get('evidence') else None,
                      'conflict': bool(override and canonical_listing_key(record.source, override.last_source_url)
                                       != canonical_listing_key(record.source, override.url))})

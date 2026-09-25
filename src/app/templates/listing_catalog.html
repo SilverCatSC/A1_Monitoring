@@ -54,7 +54,14 @@
         <div class="vehicle-platforms" aria-label="Состояние объявлений">
           {% for data, title in [(auto, 'Auto.ru'), (avito, 'Avito')] %}
           {% set code = data.direct.get('status_code') or data.direct.get('state') %}
-          <div class="vehicle-platform">
+          <div class="vehicle-platform{% if data.republication_review %} republication-platform{% endif %}">
+            {% if data.republication_review %}
+            <strong>{{ title }}</strong>
+            <a href="{{ data.republication_review.old_url }}" target="_blank" rel="noopener noreferrer">Старая ссылка ↗</a>
+            <span aria-hidden="true">→</span>
+            <a href="{{ data.republication_review.url }}" target="_blank" rel="noopener noreferrer">Новая карточка ↗</a>
+            <a href="/api/v1/dashboard/listings/{{ item.id }}#republication-{{ data.republication_review.source }}">Проверить ID →</a>
+            {% else %}
             {% if data.url %}<a href="{{ data.url }}" target="_blank" rel="noopener noreferrer">{{ title }} ↗</a>{% else %}<strong>{{ title }}</strong>{% endif %}
             <span class="platform-status{% if data.placement_id and data.placement_id.basis == 'review' %} needs-review{% elif code in ['sold', 'unpublished', 'closed', 'removed'] %} needs-review{% endif %}">
               {% if data.placement_id and data.placement_id.basis == 'review' %}Новая карточка найдена · старая ссылка
@@ -67,6 +74,7 @@
             {% elif data.search_state == 'absent_confirmed' %}<small>в первых 3 стр. не найдено{% if data.search_checked_at %} · {{ data.search_checked_at.strftime('%d.%m.%y') }}{% endif %}</small>
             {% elif data.search_state == 'absent_uncertain' %}<small>поиск нужно повторить</small>
             {% elif data.search_state not in ['not_checked', 'review_required'] %}<small>{{ data.search_label }}</small>{% endif %}
+            {% endif %}
           </div>
           {% endfor %}
         </div>
