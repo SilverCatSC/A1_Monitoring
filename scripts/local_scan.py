@@ -17,7 +17,7 @@ from urllib.parse import quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_PROFILE = PROJECT_ROOT / 'artifacts' / 'local_chrome_profile'
+DEFAULT_PROFILE = PROJECT_ROOT / 'artifacts' / 'local_chrome_isolated_profile'
 DEFAULT_EVIDENCE = PROJECT_ROOT / 'artifacts' / 'evidence'
 DEFAULT_VPN_POLICY = PROJECT_ROOT / 'artifacts' / 'vpn_admission' / 'policy.json'
 HOST_RUNNER_CONTEXT_ENV = 'A1_MONITORING_HOST_RUNNER_CONTEXT'
@@ -124,6 +124,7 @@ def _ensure_local_chrome(cdp_url: str, profile: Path) -> bool:
         f'--user-data-dir={profile}',
         '--no-first-run',
         '--no-default-browser-check',
+        '--disable-extensions',
         'about:blank',
     ]
     subprocess.Popen(
@@ -253,7 +254,7 @@ def _parser() -> argparse.ArgumentParser:
         '--retry-cycle',
         help='Start one explicit retry for a completed partial/failed cycle; never combine with --watch.',
     )
-    parser.add_argument('--cdp-port', type=int, default=19222)
+    parser.add_argument('--cdp-port', type=int, default=19223)
     parser.add_argument('--browser-profile', default=str(DEFAULT_PROFILE))
     parser.add_argument('--evidence-dir', default=str(DEFAULT_EVIDENCE))
     parser.add_argument(
@@ -373,8 +374,9 @@ def main() -> int:
             print(
                 'LOCAL_SCAN_PARTIAL '
                 f'technical_errors={completion["technical_errors"]} '
-                f'links_need_review={completion["links_need_review"]} '
-                f'direct_cards_incomplete={completion["direct_cards_incomplete"]}'
+                f'links_need_review={completion.get("links_need_review", 0)} '
+                f'direct_cards_incomplete={completion.get("direct_cards_incomplete", 0)} '
+                f'search_skipped={bool(completion.get("search_skipped"))}'
             )
             exit_code = 2
         else:

@@ -82,13 +82,36 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
 
 
-def test_local_scan_reports_cycle_id_before_its_final_status(monkeypatch, capsys, tmp_path):
+def test_private_chrome_uses_a_separate_extension_free_endpoint():
+    args = local_scan._parser().parse_args([])
+    assert args.cdp_port == 19223
+    assert args.browser_profile == str(local_scan.DEFAULT_PROFILE)
+    assert args.browser_profile.endswith('local_chrome_isolated_profile')
+
+
+def test_new_monitoring_chrome_disables_extensions(monkeypatch, tmp_path):
+    commands = []
+    ready = iter([False, True])
+    monkeypatch.setattr(local_scan, '_cdp_ready', lambda _url: next(ready))
+    monkeypatch.setattr(local_scan, '_ensure_cdp_page', lambda _url: False)
+    monkeypatch.setattr(local_scan, '_chrome_executable', lambda: '/fake/chrome')
+    monkeypatch.setattr(local_scan.subprocess, 'Popen', lambda command, **_kwargs: commands.append(command))
+    assert local_scan._ensure_local_chrome('http://127.0.0.1:19223', tmp_path / 'profile') is True
+    assert '--disable-extensions' in commands[0]
+    assert '--remote-debugging-port=19223' in commands[0]
+
+
+@pytest.mark.parametrize('completion_status, exit_code, marker', [
+    ('completed', 0, 'LOCAL_SCAN_OK'),
+    ('partial', 2, 'LOCAL_SCAN_PARTIAL'),
+])
+def test_local_scan_reports_cycle_id_before_its_final_status(
+    monkeypatch, capsys, tmp_path, completion_status, exit_code, marker,
+):
     cycle_result = {
         'scan': {'filters_scanned': 1, 'found': 0, 'missed_confirmed': 0, 'missed_uncertain': 0},
-        'completion': {
-            'status': 'completed', 'technical_errors': 0, 'links_need_review': 0,
-            'direct_cards_incomplete': 0,
-        },
+        'completion': {'status': completion_status, 'technical_errors': 0,
+                       'search_skipped': completion_status == 'partial'},
         'cycle': {'id': 'cycle-1'},
         'seller_preflight': {},
         'direct_cards': {},
@@ -122,9 +145,9 @@ def test_local_scan_reports_cycle_id_before_its_final_status(monkeypatch, capsys
         ['local_scan.py', '--evidence-dir', str(tmp_path / 'evidence')],
     )
 
-    assert local_scan.main() == 0
+    assert local_scan.main() == exit_code
     output = capsys.readouterr().out
-    assert output.index('LOCAL_CYCLE_ID cycle-1') < output.index('LOCAL_SCAN_OK')
+    assert output.index('LOCAL_CYCLE_ID cycle-1') < output.index(marker)
 
 
 def test_local_scan_routes_an_explicit_retry_through_the_cycle_service(monkeypatch, tmp_path):

@@ -136,7 +136,7 @@ cd /Users/filaret/Desktop/Monitoring
 | --- | --- |
 | `APP_BIND_PORT` | 18000, локальный HTTP |
 | `DB_BIND_PORT` | 15433, PostgreSQL для Python на хосте |
-| CDP Chrome | 19222, только localhost |
+| CDP Chrome | 19223, только localhost; отдельный профиль без расширений |
 | LLM | 18080, только localhost |
 | `COMPOSE_PROJECT_NAME` | `a1_search_monitor_noapi`, сохранить для прежних volumes |
 | `SCHEDULER_ENABLED` | только `false`: `true` отвергается во всех окружениях; container не является host-Chrome scheduler |

@@ -28,7 +28,7 @@ def _sha256_json(value: object) -> str:
 
 
 class CycleLedgerService:
-    """Persist lifecycle state and seal one roster before marketplace requests."""
+    """Persist lifecycle state and seal one effective roster before search."""
 
     def __init__(self, db: Session, evidence_dir: str | None = None):
         self.db = db

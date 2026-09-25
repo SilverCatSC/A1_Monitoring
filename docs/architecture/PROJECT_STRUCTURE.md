@@ -89,7 +89,7 @@ Markdown-ссылки пересчитаны. Корневые README/BIBLE/INST
 | Поисковые и прямые снимки | `artifacts/evidence` | приватный backup |
 | Аудиты таблицы и сайта | `artifacts/head_table_audits`, `company_site_audits` | приватный backup |
 | Пакеты и ответы AI | `artifacts/agent_work_units`, `agent_reviews`, `ouroboros_reviews` | приватный backup |
-| Chrome profile / cookies | `artifacts/local_chrome_profile` | локально, повторный вход на новой ОС |
+| Chrome startup profile | `artifacts/local_chrome_isolated_profile` | локально, без расширений; страницы открываются во временных приватных контекстах |
 | Веса моделей и AI-окружения | `artifacts/models`, `hermes_agent`, профили | отдельно; модель можно перенести, окружение переустановить |
 | Автомобили, наблюдения, замечания | PostgreSQL volume `db_data` в Compose-проекте | `pg_dump`/`pg_restore` |
 | Автоматические дампы | отдельный volume `db_backups` | вынести хотя бы одну копию вне Docker |
