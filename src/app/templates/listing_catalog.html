@@ -39,7 +39,7 @@
         {% else %}<span class="no-preview">Снимка пока нет</span>{% endif %}
       </div>
       <div class="vehicle-summary">
-        <h2><a href="/api/v1/dashboard/listings/{{ item.id }}">{{ item.brand or 'Марка не указана' }} {{ item.model or '' }}{% if item.generation and item.generation|lower != item.model|lower %} {{ item.generation }}{% endif %}</a></h2>
+        <h2><a href="/api/v1/dashboard/listings/{{ item.id }}">{{ card.title }}</a></h2>
         <p class="vehicle-attributes">
           <span>{{ marketing.year or item.year or 'Год не указан' }}</span>
           <span>{{ marketing.availability or marketing.status or ('Активно' if item.is_active else 'Архив') }}</span>
@@ -59,11 +59,13 @@
             <span class="platform-status{% if data.placement_id and data.placement_id.basis == 'review' %} needs-review{% elif code in ['sold', 'unpublished', 'closed', 'removed'] %} needs-review{% endif %}">
               {% if data.placement_id and data.placement_id.basis == 'review' %}Новая карточка найдена · старая ссылка
               {% elif not data.url %}Нет ссылки
-              {% elif code == 'active' %}Ссылка открывается
-              {% elif code in ['sold', 'unpublished', 'closed', 'removed'] %}Ссылка закрыта
+              {% elif code == 'active' %}Ссылка открывалась{% if data.reconciliation %} {{ data.reconciliation.checked_at.strftime('%d.%m.%y') }}{% endif %}
+              {% elif code in ['sold', 'unpublished', 'closed', 'removed'] %}Ссылка закрыта{% if data.reconciliation %} {{ data.reconciliation.checked_at.strftime('%d.%m.%y') }}{% endif %}
               {% else %}{{ data.direct_label }}{% endif %}
             </span>
-            {% if data.observation %}<small>стр. {{ data.observation.page_number }}</small>
+            {% if data.observation %}<small>в поиске: стр. {{ data.observation.page_number }} · {{ data.observation.observed_at.strftime('%d.%m.%y') }}</small>
+            {% elif data.search_state == 'absent_confirmed' %}<small>в первых 3 стр. не найдено{% if data.search_checked_at %} · {{ data.search_checked_at.strftime('%d.%m.%y') }}{% endif %}</small>
+            {% elif data.search_state == 'absent_uncertain' %}<small>поиск нужно повторить</small>
             {% elif data.search_state not in ['not_checked', 'review_required'] %}<small>{{ data.search_label }}</small>{% endif %}
           </div>
           {% endfor %}

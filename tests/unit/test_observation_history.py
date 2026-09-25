@@ -166,6 +166,20 @@ def test_history_and_listing_templates_escape_imported_content(tmp_path):
         engine.dispose()
 
 
+def test_catalog_title_does_not_repeat_model_in_generation(tmp_path):
+    session, engine = _session(tmp_path)
+    try:
+        listing = _seed(session)
+        listing.generation = 'V-Class (база)'
+        session.commit()
+        assert listing_catalog_context(session)['cards'][0]['title'] == (
+            '<script>Unsafe Brand</script> V-Class (база)'
+        )
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_listing_page_statistics_keep_history_per_filter(tmp_path):
     session, engine = _session(tmp_path)
     try:

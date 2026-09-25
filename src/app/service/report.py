@@ -1080,6 +1080,7 @@ def _listing_catalog_card(
             'url': _safe_listing_url(source, url),
             'observation': found,
             'search_state': search_state,
+            'search_checked_at': latest.observed_at if latest else None,
             'search_label': {
                 'found': 'Найдено в поиске',
                 'absent_confirmed': 'Не найдено повторно',
@@ -1107,6 +1108,7 @@ def _listing_catalog_card(
         }
     return {
         'listing': listing,
+        'title': _catalog_vehicle_title(listing),
         'observation': preview,
         'evidence_pages': evidence_pages(preview) if preview else [],
         'preview_url': (
@@ -1119,6 +1121,17 @@ def _listing_catalog_card(
         'marketing': marketing or {},
         'platforms': platforms,
     }
+
+
+def _catalog_vehicle_title(listing: Listing) -> str:
+    brand = (listing.brand or 'Марка не указана').strip()
+    model = (listing.model or '').strip()
+    generation = (listing.generation or '').strip()
+    if model and generation.casefold().startswith(model.casefold()):
+        suffix = generation[len(model):]
+        if not suffix or suffix[0].isspace() or suffix[0] == '(':
+            generation = suffix.strip()
+    return ' '.join(part for part in (brand, model, generation) if part)
 
 
 def listing_detail_context(session, listing_id: str, observation_limit: int = 200) -> dict | None:
