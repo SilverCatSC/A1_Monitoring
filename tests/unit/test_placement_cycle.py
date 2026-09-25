@@ -45,7 +45,8 @@ def test_missing_feed_stops_before_any_catalogue_card_inspection(monkeypatch):
     assert result == {'status': 'unavailable', 'reason': 'feed export unavailable', 'findings': 0}
 
 
-def test_active_card_opened_for_id_is_reused_for_current_direct_check(tmp_path, monkeypatch):
+@pytest.mark.parametrize('known_identity', [False, True])
+def test_current_bound_id_is_deferred_until_after_search(tmp_path, monkeypatch, known_identity):
     monkeypatch.setattr(settings, 'network_profile', 'local_browser')
     monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path / 'evidence'))
     monkeypatch.setattr(settings, 'seller_identity_checks_limit', 80)
@@ -67,6 +68,11 @@ def test_active_card_opened_for_id_is_reused_for_current_direct_check(tmp_path, 
     with sessionmaker(bind=engine)() as db:
         db.add(Listing(id='car', vehicle_signature='car', vin=None,
                        source_avito=NEW, is_active=True))
+        if known_identity:
+            db.add(ListingPlacementIdentity(
+                listing_id='car', source=EngineType.AVITO,
+                placement_id=PLACEMENT_ID, evidence=EVIDENCE,
+            ))
         db.add(ListingReconciliation(
             id='current-check', cycle_id='cycle-reuse', batch_id='batch-reuse',
             listing_id='car', source=EngineType.AVITO, state='verified',
@@ -95,17 +101,21 @@ def test_active_card_opened_for_id_is_reused_for_current_direct_check(tmp_path, 
              'blocked_sources': []}, 'https://docs.google.com/spreadsheets/d/abc/export',
         )
 
-        assert result['status'] == 'complete'
-        assert calls == [(EngineType.AVITO, NEW)]
+        assert result['status'] == ('partial' if known_identity else 'complete')
+        assert calls == ([] if known_identity else [(EngineType.AVITO, NEW)])
         record = db.get(ListingReconciliation, 'current-check')
-        assert record.details['direct_inspection']['evidence'] == EVIDENCE
+        if known_identity:
+            assert 'direct_inspection' not in record.details
+        else:
+            assert record.details['direct_inspection']['evidence'] == EVIDENCE
         identity = db.query(ListingPlacementIdentity).one()
         assert (identity.source, identity.listing_id, identity.placement_id) == (
             EngineType.AVITO, 'car', PLACEMENT_ID,
         )
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
-        assert report['reused_direct_cards'] == 1
-        assert report['new_verified_identities'] == 1
+        assert report['reused_direct_cards'] == (0 if known_identity else 1)
+        assert report['new_verified_identities'] == (0 if known_identity else 1)
+        assert report['deferred_current_id_cards_by_source'].get('avito', 0) == int(known_identity)
     engine.dispose()
 
 
