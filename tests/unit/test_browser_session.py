@@ -1,6 +1,6 @@
 import asyncio
 
-from app.scraper.browser_session import browser_page
+from app.scraper.browser_session import CycleBrowserSession, browser_page, run_browser_task
 
 
 class FakePage:
@@ -119,3 +119,67 @@ def test_managed_browser_is_closed(monkeypatch):
     assert playwright.chromium.launched_headless is True
     assert playwright.browser.private_contexts[0].closed is True
     assert playwright.browser.closed is True
+
+
+def test_cycle_reuses_one_private_context_per_source_then_discards_it(monkeypatch):
+    import app.scraper.browser_session as session_module
+
+    monkeypatch.setattr(session_module.settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
+    contexts = []
+
+    class Context:
+        def __init__(self):
+            self.pages = []
+            self.closed = False
+
+        async def new_page(self):
+            page = FakePage()
+            self.pages.append(page)
+            return page
+
+        async def close(self):
+            self.closed = True
+
+    class Browser:
+        async def new_context(self):
+            context = Context()
+            contexts.append(context)
+            return context
+
+    class Chromium:
+        async def connect_over_cdp(self, _url):
+            return Browser()
+
+    class Playwright:
+        chromium = Chromium()
+
+        async def stop(self):
+            self.stopped = True
+
+    class Manager:
+        async def start(self):
+            return Playwright()
+
+    monkeypatch.setattr(session_module, 'async_playwright', Manager)
+
+    async def visit(source):
+        async with browser_page(object(), source=source) as page:
+            assert not page.closed
+        return page.closed
+
+    with CycleBrowserSession():
+        assert run_browser_task(visit('auto_ru'))
+        assert run_browser_task(visit('auto_ru'))
+        assert run_browser_task(visit('avito'))
+        assert len(contexts) == 2
+        assert len(contexts[0].pages) == 2
+        assert len(contexts[1].pages) == 1
+        assert all(not context.closed for context in contexts)
+
+    assert all(context.closed for context in contexts)
+
+    with CycleBrowserSession():
+        assert run_browser_task(visit('auto_ru'))
+        assert len(contexts) == 3
+        assert not contexts[2].closed
+    assert contexts[2].closed

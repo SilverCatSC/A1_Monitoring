@@ -80,7 +80,7 @@ def test_browser_traversal_stops_at_real_end_or_rejects_duplicate_pages(tmp_path
                 await route.fulfill(content_type='text/html', body=html)
             await page.route('**/*', route_page)
             @asynccontextmanager
-            async def local_page(_playwright):
+            async def local_page(_playwright, source=None):
                 yield page
             monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
             try:
@@ -129,7 +129,7 @@ def test_avito_other_city_page_is_results_not_parser_uncertainty(tmp_path, monke
             await page.route('**/*', route_page)
 
             @asynccontextmanager
-            async def local_page(_playwright):
+            async def local_page(_playwright, source=None):
                 yield page
 
             monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
@@ -172,7 +172,7 @@ def test_avito_waits_for_late_listing_cards(tmp_path, monkeypatch):
             await page.route('**/*', route_page)
 
             @asynccontextmanager
-            async def local_page(_playwright):
+            async def local_page(_playwright, source=None):
                 yield page
 
             monkeypatch.setattr('app.scraper.avito.browser_page', local_page)
@@ -218,7 +218,7 @@ def test_auto_ru_model_filter_requests_list_catalogue(tmp_path, monkeypatch):
             await page.route('**/*', route_page)
 
             @asynccontextmanager
-            async def local_page(_playwright):
+            async def local_page(_playwright, source=None):
                 yield page
 
             monkeypatch.setattr('app.scraper.auto_ru.browser_page', local_page)
@@ -261,7 +261,7 @@ def test_expected_hit_without_exact_card_evidence_fails_closed(tmp_path, monkeyp
             await page.route('**/*', route_page)
 
             @asynccontextmanager
-            async def local_page(_playwright):
+            async def local_page(_playwright, source=None):
                 yield page
 
             monkeypatch.setattr('app.scraper.avito.browser_page', local_page)

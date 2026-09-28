@@ -194,7 +194,7 @@ async def inspect_direct_link(source, url, progress=None):
     await asyncio.sleep(delay)
     try:
         async with async_playwright() as p:
-            async with browser_page(p) as page:
+            async with browser_page(p, source=source.value) as page:
                 response = await page.goto(url, timeout=settings.request_timeout_seconds * 1000, wait_until='domcontentloaded')
                 await asyncio.sleep(settings.auto_ru_page_delay_seconds if source.value == 'auto_ru' else settings.avito_page_delay_seconds)
                 html = await page.content()

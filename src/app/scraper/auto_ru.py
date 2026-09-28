@@ -62,7 +62,7 @@ class AutoRuAdapter:
         seen_pages: set[frozenset[str]] = set()
         catalogue_url = _list_url(search_url) if not seller_catalogue else search_url
         async with async_playwright() as p:
-            async with browser_page(p) as page:
+            async with browser_page(p, source=self.source.value) as page:
                 for page_number in range(1, max_pages + 1):
                     url = _page_url(catalogue_url, page_number)
                     wait_seconds = choose_pause(

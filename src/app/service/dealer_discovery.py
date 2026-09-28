@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import threading
 import time
 from datetime import UTC, datetime
@@ -12,6 +11,7 @@ from app.models import DealerDiscoveryRun, DealerListingCandidate, EngineType
 from app.scraper.auto_ru import AutoRuAdapter
 from app.scraper.avito import AvitoAdapter
 from app.scraper.base import canonical_listing_key, is_marketplace_listing_url
+from app.scraper.browser_session import run_browser_task
 from app.scraper.pacing import choose_pause
 from app.scraper.seller import source_challenged
 from app.service.locks import operation_lock
@@ -75,7 +75,7 @@ class DealerDiscoveryService:
                     self.progress({'event': 'dealer_catalogue_started', 'source': source.value, 'url': dealer_url, 'wait_seconds': round(pause, 1)})
                     time.sleep(pause)
                 try:
-                    result = asyncio.run(
+                    result = run_browser_task(
                         self.adapters[source].scan_filter(
                             dealer_url, settings.seller_preflight_pages if strict else settings.dealer_pages_limit,
                             **({'seller_catalogue': True} if strict else {}),

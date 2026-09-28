@@ -1,5 +1,4 @@
 """Preflight seller membership. Similarity suggests candidates, never changes a VIN binding."""
-import asyncio
 import uuid
 from collections import Counter
 from datetime import UTC, datetime
@@ -10,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from app.config import settings
 from app.models import DealerListingCandidate, EngineType, Listing, ListingLinkOverride, ListingReconciliation
 from app.scraper.base import canonical_listing_key, is_marketplace_listing_url
+from app.scraper.browser_session import run_browser_task
 from app.scraper.seller import SELLER_SOURCES, inspect_direct_link
 from app.service.analytics import local_time, money
 from app.service.dealer_discovery import DealerDiscoveryService
@@ -95,7 +95,7 @@ class SellerReconciliationService:
                     state, reason = 'review_required', 'ID не найден в просмотренной части каталога. Возможны перевыкладка, снятие или неполная загрузка'
                     if direct_checks < settings.seller_direct_checks_limit:
                         direct_checks += 1
-                        inspection = asyncio.run(self.inspector(source, url, self.progress))
+                        inspection = run_browser_task(self.inspector(source, url, self.progress))
                         detail['direct_inspection'] = inspection
                         if inspection['state'] == 'removed':
                             state, reason = 'removed', inspection['reason'] + '; это не подтверждает продажу автомобиля компании'
@@ -179,7 +179,7 @@ class SellerReconciliationService:
                 }
             else:
                 checked_by_source[record.source.value] += 1
-                inspection = asyncio.run(
+                inspection = run_browser_task(
                     self.inspector(
                         record.source,
                         url,

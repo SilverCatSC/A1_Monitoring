@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 import threading
 import time
 from collections.abc import Callable
@@ -24,6 +23,7 @@ from app.models import (
 from app.scraper.auto_ru import AutoRuAdapter
 from app.scraper.avito import AvitoAdapter
 from app.scraper.base import ListingHit, ScanResult, canonical_listing_key
+from app.scraper.browser_session import run_browser_task
 from app.scraper.pacing import choose_pause
 from app.service.locks import operation_lock
 
@@ -378,7 +378,7 @@ class MonitorService:
                     )
                     continue
                 try:
-                    scan_result: ScanResult = asyncio.run(
+                    scan_result: ScanResult = run_browser_task(
                         adapter.scan_filter(
                             filter_entity.raw_url,
                             settings.scan_pages_limit,
@@ -397,7 +397,7 @@ class MonitorService:
                         )
                         if retry_seconds:
                             time.sleep(retry_seconds)
-                        scan_result = asyncio.run(
+                        scan_result = run_browser_task(
                             adapter.scan_filter(
                                 filter_entity.raw_url,
                                 settings.scan_pages_limit,

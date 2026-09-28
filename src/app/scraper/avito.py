@@ -69,7 +69,7 @@ class AvitoAdapter:
         seen_pages: set[frozenset[str]] = set()
 
         async with async_playwright() as p:
-            async with browser_page(p) as page:
+            async with browser_page(p, source=self.source.value) as page:
                 for page_number in range(1, max_pages + 1):
                     url = _page_url(search_url, page_number)
                     wait_seconds = choose_pause(

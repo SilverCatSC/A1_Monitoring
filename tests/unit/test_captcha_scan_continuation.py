@@ -58,7 +58,7 @@ def _run_adapter(monkeypatch, *, solve: bool, wait_seconds: float):
     page = _Page(solve=solve)
 
     @asynccontextmanager
-    async def page_context(_playwright):
+    async def page_context(_playwright, source=None):
         yield page
 
     async def no_wait(_seconds):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import os
 import re
@@ -22,6 +21,7 @@ from app.models import (
     ListingReconciliation,
 )
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
+from app.scraper.browser_session import run_browser_task
 from app.scraper.seller import inspect_direct_link
 from app.service.analytics import money
 from app.service.marketplace_placement_reconciliation import (
@@ -124,7 +124,7 @@ class PlacementCycleService:
                     skipped[source.value] += 1
                     continue
                 new_checks += 1
-                inspection = asyncio.run(self.inspector(source, candidate.listing_url, self.progress))
+                inspection = run_browser_task(self.inspector(source, candidate.listing_url, self.progress))
             if inspection.get('state') == 'blocked':
                 blocked.add(source.value)
             evidence = inspection.get('evidence')

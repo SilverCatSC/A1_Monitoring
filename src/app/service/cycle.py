@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.config import SCAN_ALLOWED_NETWORK_PROFILES, settings
 from app.importer.service import SourceImporter
 from app.importer.sheet_csv import CsvOrXlsxReader
+from app.scraper.browser_session import CycleBrowserSession
 from app.service.automatic_link_sync import AutomaticLinkSyncService
 from app.service.completion import summarize_cycle_completion
 from app.service.cycle_ledger import CycleLedgerService
@@ -140,7 +141,8 @@ class MonitoringCycleService:
             )
             self.progress({'event': 'cycle_registered', 'cycle_id': cycle.id})
             try:
-                result = self._run(cycle.id, ledger)
+                with CycleBrowserSession():
+                    result = self._run(cycle.id, ledger)
                 cycle_summary = ledger.complete(cycle.id, result['completion'])
             except (Exception, KeyboardInterrupt) as exc:
                 ledger.fail(cycle.id, f'{type(exc).__name__}: {exc}')
