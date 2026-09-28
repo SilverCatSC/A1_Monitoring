@@ -28,6 +28,7 @@ ENGINES_WAS_SET=0
 PAGES_WAS_SET=0
 RETRY_CYCLE_ID=''
 WITH_PLACEMENT_ID=0
+DIAGNOSTIC_NO_VPN=0
 RUNNER_STARTED_AT=''
 RUNNER_PHASE='startup'
 SCAN_EXIT_CODE=-1
@@ -41,6 +42,7 @@ usage() {
     cat <<'EOF'
 Usage: scripts/run_monitoring_host_macos.sh [--preflight]
        scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10] [--captcha-wait-seconds 0..600] [--placement-identity]
+       scripts/run_monitoring_host_macos.sh --diagnostic-no-vpn --engines auto_ru,avito --pages 3
        scripts/run_monitoring_host_macos.sh --retry-cycle <completed-partial-or-failed-cycle-uuid>
 
 Runs one cautious monitoring cycle through the signed-in macOS user's visible
@@ -60,6 +62,9 @@ before search in every full cycle.
 
 --captcha-wait-seconds sets a bounded wait for a person to clear Auto.ru CAPTCHA
 in the visible private Chrome tab. Default: 180; 0 disables the wait.
+
+--diagnostic-no-vpn requires disconnected VPSUS and runs one explicitly labeled
+local test. It is not an accepted production cycle or a CAPTCHA workaround.
 EOF
 }
 
@@ -110,6 +115,14 @@ parse_arguments() {
                 WITH_PLACEMENT_ID=1
                 shift
                 ;;
+            --diagnostic-no-vpn)
+                if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+                    safe_message 'HOST_RUNNER_REFUSED reason=duplicate_diagnostic_no_vpn'
+                    exit 64
+                fi
+                DIAGNOSTIC_NO_VPN=1
+                shift
+                ;;
             --retry-cycle)
                 [[ $# -ge 2 ]] || { usage >&2; exit 64; }
                 [[ -z "$RETRY_CYCLE_ID" ]] || {
@@ -146,6 +159,7 @@ parse_arguments() {
         { [[ "$ENGINES_WAS_SET" -eq 1 ]] || [[ "$PAGES_WAS_SET" -eq 1 ]] || \
           [[ "$CAPTCHA_WAIT_WAS_SET" -eq 1 ]] || \
           [[ "$WITH_PLACEMENT_ID" -eq 1 ]] || \
+          [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] || \
           [[ -n "$RETRY_CYCLE_ID" ]]; }; then
         safe_message 'HOST_RUNNER_REFUSED reason=preflight_does_not_accept_scan_parameters'
         exit 64
@@ -153,6 +167,10 @@ parse_arguments() {
     if [[ -n "$RETRY_CYCLE_ID" ]] && \
         [[ ! "$RETRY_CYCLE_ID" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]; then
         safe_message 'HOST_RUNNER_REFUSED reason=invalid_retry_cycle_id'
+        exit 64
+    fi
+    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] && [[ -n "$RETRY_CYCLE_ID" ]]; then
+        safe_message 'HOST_RUNNER_REFUSED reason=diagnostic_retry_not_supported'
         exit 64
     fi
 }
@@ -236,6 +254,10 @@ require_vpn_operational_policy() {
     "$PYTHON" -m app.service.vpn_admission --operational-policy "$VPN_POLICY_PATH"
 }
 
+require_no_vpn_diagnostic_state() {
+    "$PYTHON" -m app.service.vpn_admission --diagnostic-no-vpn
+}
+
 write_status() {
     local state="$1"
     local phase="$2"
@@ -260,6 +282,9 @@ write_status() {
     if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
         run_kind='preflight'
         execution_model='readiness_only_no_cycle'
+    elif [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+        run_kind='diagnostic_no_vpn'
+        execution_model='one_diagnostic_cycle_per_invocation'
     else
         run_kind='full_scan'
         execution_model='one_cycle_per_invocation'
@@ -282,6 +307,11 @@ write_status() {
             printf '"engines":"%s",' "$ENGINES"
             printf '"pages":%s,' "$PAGES"
             printf '"pace":"%s",' "$PACE"
+            if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+                printf '"network_profile":"local_no_vpn",'
+            else
+                printf '"network_profile":"local_browser",'
+            fi
             if [[ -n "$RETRY_CYCLE_ID" ]]; then
                 printf '"cycle_mode":"controlled_retry",'
             else
@@ -414,8 +444,16 @@ main() {
     # runs after readiness but before recovery, Chrome, or a DB-writing cycle,
     # and does not claim that marketplace egress or M7 acceptance is verified.
     RUNNER_PHASE='vpn_operational_admission'
+    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+        RUNNER_PHASE='no_vpn_diagnostic_admission'
+    fi
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
-    if ! require_vpn_operational_policy; then
+    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+        if ! require_no_vpn_diagnostic_state; then
+            safe_message 'HOST_RUNNER_REFUSED reason=no_vpn_diagnostic_admission_required'
+            return 1
+        fi
+    elif ! require_vpn_operational_policy; then
         safe_message 'HOST_RUNNER_REFUSED reason=vpn_operational_admission_required'
         return 1
     fi
@@ -446,6 +484,9 @@ main() {
     fi
     if [[ -n "$RETRY_CYCLE_ID" ]]; then
         scan_args+=(--retry-cycle "$RETRY_CYCLE_ID")
+    fi
+    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+        scan_args+=(--diagnostic-no-vpn)
     fi
     if A1_MONITORING_HOST_RUNNER_CONTEXT=1 \
         "$ROOT_DIR/scripts/local_scan.sh" "${scan_args[@]}" \

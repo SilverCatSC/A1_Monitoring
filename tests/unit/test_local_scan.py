@@ -92,6 +92,14 @@ def test_private_chrome_uses_a_separate_extension_free_endpoint():
     assert args.browser_profile.endswith('local_chrome_isolated_profile')
 
 
+def test_no_vpn_diagnostic_has_distinct_network_profile(monkeypatch, tmp_path):
+    args = local_scan._parser().parse_args(['--diagnostic-no-vpn'])
+    args.evidence_dir = str(tmp_path / 'evidence')
+    local_scan._configure_runtime(args, {'DB_PASSWORD': 'safe-pass'})
+    assert local_scan.os.environ['NETWORK_PROFILE'] == 'local_no_vpn'
+    assert args.engines == 'auto_ru,avito'
+
+
 def test_new_monitoring_chrome_disables_extensions(monkeypatch, tmp_path):
     commands = []
     ready = iter([False, True])

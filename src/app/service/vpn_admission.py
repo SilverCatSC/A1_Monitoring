@@ -62,6 +62,34 @@ class OperationalVPNAdmission:
     routes: dict[str, str]
 
 
+def require_no_vpn_diagnostic_admission(*, command_runner=None, platform: str | None = None) -> None:
+    """Admit an explicit Mac diagnostic only when no macOS VPN is connected.
+
+    This checks system connection state, not actual IPv4/IPv6 egress. It does
+    not change network settings or claim production route acceptance.
+    """
+    if (platform or sys.platform) != 'darwin':
+        raise VPNAdmissionError('macos_required')
+    run = command_runner or subprocess.run
+    try:
+        listed = run(
+            [SCUTIL_PATH, '--nc', 'list'],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+        status = run(
+            [SCUTIL_PATH, '--nc', 'status', 'VPSUS'],
+            capture_output=True, text=True, timeout=5, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise VPNAdmissionError('vpn_status_unavailable') from exc
+    if listed.returncode != 0 or status.returncode != 0:
+        raise VPNAdmissionError('vpn_status_unavailable')
+    if status.stdout.splitlines()[:1] != ['Disconnected']:
+        raise VPNAdmissionError('vpsus_not_disconnected')
+    if any(line.lstrip().startswith('* (Connected)') for line in listed.stdout.splitlines()):
+        raise VPNAdmissionError('other_vpn_connected')
+
+
 def default_attestation_path(project_root: Path) -> Path:
     """Return the canonical owner-side path for a local host run."""
     return project_root / 'artifacts' / 'vpn_admission' / ATTESTATION_FILENAME
@@ -347,6 +375,10 @@ def _main(argv: list[str] | None = None) -> int:
         help='Check the owner policy and current VPSUS connection without claiming route acceptance.',
     )
     action.add_argument(
+        '--diagnostic-no-vpn', action='store_true',
+        help='Check that VPSUS and other macOS VPN services are disconnected for one diagnostic run.',
+    )
+    action.add_argument(
         '--prepare-directory',
         help='Create or verify one empty owner-only directory before a host run.',
     )
@@ -359,6 +391,10 @@ def _main(argv: list[str] | None = None) -> int:
         if args.operational_policy:
             require_operational_vpn_admission(args.operational_policy)
             print('VPN_OPERATIONAL_ADMISSION_OK vpn=connected routes=declared egress=unverified')
+            return 0
+        if args.diagnostic_no_vpn:
+            require_no_vpn_diagnostic_admission()
+            print('NO_VPN_DIAGNOSTIC_ADMISSION_OK vpn=disconnected egress=unverified')
             return 0
         admission = require_vpn_admission(args.path)
     except VPNAdmissionError as exc:

@@ -9,7 +9,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_browser', 'local_no_vpn', 'cloud_no_vpn'})
-BUSINESS_TRUSTED_NETWORK_PROFILES = SCAN_ALLOWED_NETWORK_PROFILES
+BUSINESS_TRUSTED_NETWORK_PROFILES = frozenset({'local_browser', 'cloud_no_vpn'})
 PRODUCTION_NETWORK_PROFILES = frozenset({'local_browser', 'cloud_no_vpn'})
 
 

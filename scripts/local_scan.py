@@ -146,7 +146,9 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     evidence_dir = Path(args.evidence_dir).expanduser().resolve()
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
-    os.environ['NETWORK_PROFILE'] = 'local_browser'
+    os.environ['NETWORK_PROFILE'] = (
+        'local_no_vpn' if getattr(args, 'diagnostic_no_vpn', False) else 'local_browser'
+    )
     os.environ['BROWSER_CDP_URL'] = cdp_url
     os.environ['PLAYWRIGHT_HEADLESS'] = 'false'
     os.environ['SCAN_ENABLED_ENGINES'] = args.engines
@@ -180,6 +182,13 @@ def _require_vpn_admission() -> None:
 
     require_operational_vpn_admission(DEFAULT_VPN_POLICY)
     print('VPN_OPERATIONAL_ADMISSION_OK vpn=connected routes=declared egress=unverified')
+
+
+def _require_no_vpn_diagnostic_admission() -> None:
+    from app.service.vpn_admission import require_no_vpn_diagnostic_admission
+
+    require_no_vpn_diagnostic_admission()
+    print('NO_VPN_DIAGNOSTIC_ADMISSION_OK vpn=disconnected egress=unverified')
 
 
 def _prepare_vpn_admission_directory() -> None:
@@ -248,6 +257,10 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument('--pages', type=int, default=3, choices=range(1, 11), metavar='1..10')
     parser.add_argument('--probe-url', help='Check one search URL without writing observations to the DB')
     parser.add_argument(
+        '--diagnostic-no-vpn', action='store_true',
+        help='One labeled MacBook diagnostic cycle only while VPN is disconnected',
+    )
+    parser.add_argument(
         '--placement-identity', action='store_true',
         help='Compatibility flag; exact-ID link reconciliation now runs before every full cycle',
     )
@@ -290,6 +303,8 @@ def main() -> int:
         raise RuntimeError('Windows monitoring is not accepted; use the MacBook production host')
     if args.retry_cycle and args.probe_url:
         raise RuntimeError('retry-cycle cannot be combined with probe-url')
+    if args.diagnostic_no_vpn and (args.retry_cycle or args.probe_url or args.watch):
+        raise RuntimeError('diagnostic-no-vpn cannot be combined with retry, probe, or watch')
     if args.retry_cycle and args.watch:
         raise RuntimeError('retry-cycle cannot be combined with watch')
     if args.placement_identity and args.probe_url:
@@ -352,7 +367,10 @@ def main() -> int:
     while True:
         # Recheck immediately before the DB-writing cycle. Probe mode remains
         # deliberately outside this full-cycle admission boundary.
-        _require_vpn_admission()
+        if args.diagnostic_no_vpn:
+            _require_no_vpn_diagnostic_admission()
+        else:
+            _require_vpn_admission()
         with get_db_context() as db:
             try:
                 service = MonitoringCycleService(

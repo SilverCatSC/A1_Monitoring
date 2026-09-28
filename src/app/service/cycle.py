@@ -25,7 +25,11 @@ from app.service.monitor import (
 )
 from app.service.placement_cycle import PlacementCycleService
 from app.service.reconciliation import SellerReconciliationService
-from app.service.vpn_admission import VPNAdmissionError, require_operational_vpn_admission
+from app.service.vpn_admission import (
+    VPNAdmissionError,
+    require_no_vpn_diagnostic_admission,
+    require_operational_vpn_admission,
+)
 
 
 class CycleConfigurationError(RuntimeError):
@@ -60,12 +64,12 @@ def refresh_monitoring_source(db: Session, cycle_id: str | None = None) -> dict:
 
 
 def require_local_browser_vpn_admission() -> None:
-    """Require owner policy plus connected VPSUS before a local Chrome cycle.
+    """Require the selected network state before a Mac host Chrome cycle.
 
     Operational readiness does not claim verified per-domain egress or M7
     acceptance.  The verifier does not change or reconnect VPSUS.
     """
-    if settings.network_profile != 'local_browser':
+    if settings.network_profile not in {'local_browser', 'local_no_vpn'}:
         return
     if not settings.local_browser_host_admission:
         raise ScanConfigurationError(
@@ -77,13 +81,21 @@ def require_local_browser_vpn_admission() -> None:
         raise ScanConfigurationError(
             'local_browser monitoring must be started by the approved interactive host runner'
         ) from exc
-    try:
-        require_operational_vpn_admission(settings.vpn_operational_policy_path)
-    except VPNAdmissionError as exc:
-        raise ScanConfigurationError(
-            'local_browser monitoring requires an approved VPN operational policy '
-            'and connected VPSUS'
-        ) from exc
+    if settings.network_profile == 'local_no_vpn':
+        try:
+            require_no_vpn_diagnostic_admission()
+        except VPNAdmissionError as exc:
+            raise ScanConfigurationError(
+                'local_no_vpn diagnostic requires disconnected VPSUS and no active VPN'
+            ) from exc
+    else:
+        try:
+            require_operational_vpn_admission(settings.vpn_operational_policy_path)
+        except VPNAdmissionError as exc:
+            raise ScanConfigurationError(
+                'local_browser monitoring requires an approved VPN operational policy '
+                'and connected VPSUS'
+            ) from exc
 
 
 def require_macos_primary_monitoring_profile() -> None:
@@ -93,11 +105,16 @@ def require_macos_primary_monitoring_profile() -> None:
     must not silently become a new browser worker after the owner selected the
     MacBook interactive host as the sole accepted production runtime.
     """
-    if settings.network_profile != 'local_browser':
-        raise ScanConfigurationError(
-            'MacBook primary monitoring requires NETWORK_PROFILE=local_browser; '
-            f'current={settings.network_profile}'
-        )
+    if settings.network_profile == 'local_no_vpn':
+        if settings.app_env != 'production' and settings.local_browser_host_admission:
+            return
+    elif settings.network_profile == 'local_browser':
+        return
+    raise ScanConfigurationError(
+        'MacBook primary monitoring requires NETWORK_PROFILE=local_browser '
+        'or an admitted local_no_vpn diagnostic; '
+        f'current={settings.network_profile}'
+    )
 
 
 class MonitoringCycleService:
@@ -180,7 +197,13 @@ class MonitoringCycleService:
                 self.db, progress_callback=self.progress, cycle_id=cycle_id
             ).run(preflight, settings.placement_feed_workbook_url
                   or settings.head_table_google_sheet_export_url)
-            link_sync = AutomaticLinkSyncService(self.db, cycle_id=cycle_id).run(preflight, placement)
+            if settings.network_profile == 'local_no_vpn':
+                # The diagnostic records observations but must not rewrite the
+                # canonical Monitoring link from an unaccepted network run.
+                link_sync = {'status': 'complete', 'updated': [], 'blocked': [],
+                             'diagnostic_write_suppressed': True}
+            else:
+                link_sync = AutomaticLinkSyncService(self.db, cycle_id=cycle_id).run(preflight, placement)
             self.progress({'event': 'link_sync_finished', 'status': link_sync['status'],
                            'updated': len(link_sync['updated']), 'blocked': len(link_sync['blocked'])})
             preflight['blocked_sources'] = sorted(

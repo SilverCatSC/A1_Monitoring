@@ -20,6 +20,7 @@ from app.service.vpn_admission import (
     VPNAdmissionError,
     _macos_extended_acl_present,
     prepare_attestation_directory,
+    require_no_vpn_diagnostic_admission,
     require_operational_vpn_admission,
     require_vpn_admission,
 )
@@ -75,6 +76,38 @@ def _connected_scutil(command, **_kwargs):
     if command == [SCUTIL_PATH, '--nc', 'status', 'VPSUS']:
         return SimpleNamespace(returncode=0, stdout='Connected\nExtended Status ...\n')
     raise AssertionError(f'unexpected command: {command}')
+
+
+def _disconnected_scutil(command, **_kwargs):
+    if command == [SCUTIL_PATH, '--nc', 'list']:
+        return SimpleNamespace(
+            returncode=0,
+            stdout='  (Disconnected) VPN (com.vpsus.vpsus) "VPSUS" [VPN:com.vpsus.vpsus]\n',
+        )
+    if command == [SCUTIL_PATH, '--nc', 'status', 'VPSUS']:
+        return SimpleNamespace(returncode=0, stdout='Disconnected\n')
+    raise AssertionError(f'unexpected command: {command}')
+
+
+def test_no_vpn_diagnostic_requires_disconnected_macos_vpn():
+    require_no_vpn_diagnostic_admission(
+        command_runner=_disconnected_scutil, platform='darwin',
+    )
+    with pytest.raises(VPNAdmissionError, match='vpsus_not_disconnected'):
+        require_no_vpn_diagnostic_admission(
+            command_runner=_connected_scutil, platform='darwin',
+        )
+
+
+def test_no_vpn_diagnostic_rejects_other_connected_vpn():
+    def runner(command, **kwargs):
+        result = _disconnected_scutil(command, **kwargs)
+        if command[-1] == 'list':
+            result.stdout += '* (Connected) VPN (com.other) "Other" [VPN:com.other]\n'
+        return result
+
+    with pytest.raises(VPNAdmissionError, match='other_vpn_connected'):
+        require_no_vpn_diagnostic_admission(command_runner=runner, platform='darwin')
 
 
 def _write_attestation(path: Path, payload: dict, mode: int = 0o600) -> None:
@@ -315,6 +348,32 @@ def test_cycle_rejects_configuration_only_host_claim_before_ledger_or_browser(
         MonitoringCycleService('db', before_browser=lambda: events.append('browser')).run()
 
     assert events == []
+
+
+def test_no_vpn_diagnostic_requires_host_lock_and_disconnected_vpn(monkeypatch):
+    import app.service.cycle as cycle_module
+
+    monkeypatch.setattr(settings, 'network_profile', 'local_no_vpn')
+    monkeypatch.setattr(settings, 'app_env', 'stage')
+    monkeypatch.setattr(settings, 'local_browser_host_admission', True)
+    monkeypatch.setattr(settings, 'browser_cdp_url', 'http://127.0.0.1:19222')
+    monkeypatch.setattr(cycle_module, 'require_verified_macos_host_runner_context', lambda: None)
+    monkeypatch.setattr(
+        cycle_module, 'require_no_vpn_diagnostic_admission',
+        lambda: (_ for _ in ()).throw(VPNAdmissionError('vpsus_not_disconnected')),
+    )
+    with pytest.raises(ScanConfigurationError, match='disconnected VPSUS'):
+        MonitoringCycleService('db').run()
+
+
+def test_no_vpn_diagnostic_not_admitted_as_production(monkeypatch):
+    import app.service.cycle as cycle_module
+
+    monkeypatch.setattr(settings, 'network_profile', 'local_no_vpn')
+    monkeypatch.setattr(settings, 'app_env', 'production')
+    monkeypatch.setattr(settings, 'local_browser_host_admission', True)
+    with pytest.raises(ScanConfigurationError, match='MacBook primary monitoring'):
+        cycle_module.require_macos_primary_monitoring_profile()
 
 
 @pytest.mark.parametrize('profile', ('cloud_no_vpn', 'local_no_vpn', 'local_vpn'))
