@@ -7,6 +7,9 @@ records имеют приоритет над старым аудитом и об
 
 ## Эксплуатация
 
+- [Контрольная версия 26.10.2026](production/CHECKPOINT_2026-10-26.md) — текущее состояние, границы и следующий этап.
+- [Дашборд мониторинга](production/MONITORING_DASHBOARD.md) — карточки, ярлыки и смысл статусов.
+
 - [PROJECT_DOSSIER](PROJECT_DOSSIER.md) — единый справочник проекта с приложением исходного скрипта.
 - [OPERATOR](operations/OPERATOR.md) — запуск, чтение отчёта, замечания, приёмка.
 - [ENVIRONMENT](operations/ENVIRONMENT.md) — основной MacBook, резервный Windows, окружение и команды.
