@@ -67,6 +67,8 @@ def test_invalid_placement_ids_fail_closed(value):
     [
         ('A1 ID: MBVC011220262508260027\nMercedes-Benz V-Class', 'MBVC011220262508260027'),
         ('Идентификатор № HOH6022120241506260206', 'HOH6022120241506260206'),
+        ('unique_id: MBVC011220262508260027', 'MBVC011220262508260027'),
+        ('Unique ID: MBVC011220262508260027', 'MBVC011220262508260027'),
         ('Mercedes-Benz V-Class MBVC011220262508260027', None),
         ('ID: MBVC011220262508260000', None),
         ('ID: МBVC011220262508260009', None),

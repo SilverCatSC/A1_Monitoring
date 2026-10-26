@@ -15,6 +15,9 @@ class FakePage:
     async def close(self):
         self.closed = True
 
+    def is_closed(self):
+        return self.closed
+
     async def bring_to_front(self):
         self.brought_to_front = True
 
@@ -139,6 +142,8 @@ def test_cycle_reuses_one_private_context_per_source_then_discards_it(monkeypatc
 
         async def close(self):
             self.closed = True
+            for page in self.pages:
+                await page.close()
 
     class Browser:
         async def new_context(self):
@@ -168,18 +173,54 @@ def test_cycle_reuses_one_private_context_per_source_then_discards_it(monkeypatc
         return page.closed
 
     with CycleBrowserSession():
-        assert run_browser_task(visit('auto_ru'))
-        assert run_browser_task(visit('auto_ru'))
-        assert run_browser_task(visit('avito'))
+        assert not run_browser_task(visit('auto_ru'))
+        assert not run_browser_task(visit('auto_ru'))
+        assert not run_browser_task(visit('avito'))
         assert len(contexts) == 2
-        assert len(contexts[0].pages) == 2
+        assert len(contexts[0].pages) == 1
         assert len(contexts[1].pages) == 1
         assert all(not context.closed for context in contexts)
 
     assert all(context.closed for context in contexts)
+    assert all(page.closed for context in contexts for page in context.pages)
 
     with CycleBrowserSession():
-        assert run_browser_task(visit('auto_ru'))
+        assert not run_browser_task(visit('auto_ru'))
         assert len(contexts) == 3
         assert not contexts[2].closed
     assert contexts[2].closed
+
+
+def test_cycle_replaces_closed_context_without_discarding_other_source():
+    async def exercise():
+        contexts = []
+
+        class Context(FakeContext):
+            async def new_page(self):
+                if self.closed:
+                    raise RuntimeError('Target page, context or browser has been closed')
+                return await super().new_page()
+
+        class Browser:
+            def is_connected(self):
+                return True
+
+            async def new_context(self):
+                context = Context()
+                contexts.append(context)
+                return context
+
+        session = CycleBrowserSession()
+        session._browser = Browser()
+        session._playwright = object()
+        first = await session.new_page('avito')
+        other = await session.new_page('auto_ru')
+        await contexts[0].close()
+        replacement = await session.new_page('avito')
+        assert replacement is not first and not replacement.closed
+        assert await session.new_page('auto_ru') is other
+        assert len(contexts) == 3
+        for context in contexts:
+            await context.close()
+
+    asyncio.run(exercise())

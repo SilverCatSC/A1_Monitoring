@@ -522,6 +522,10 @@ def _load_local_scan_module():
 
 def test_local_scan_refuses_full_cycle_before_chrome_or_db(monkeypatch, tmp_path):
     local_scan = _load_local_scan_module()
+    monkeypatch.setattr(
+        'app.service.vpn_admission.require_operational_vpn_admission',
+        lambda path: require_operational_vpn_admission(path, platform='darwin'),
+    )
     calls = []
     monkeypatch.setattr(local_scan, 'DEFAULT_VPN_POLICY', tmp_path / 'missing.json')
     monkeypatch.setattr(local_scan, '_env_file_values', lambda _path: {'DB_PASSWORD': 'safe-pass'})

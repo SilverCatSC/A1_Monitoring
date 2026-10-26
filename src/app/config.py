@@ -8,7 +8,7 @@ from urllib.parse import urlparse
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_browser', 'local_no_vpn', 'cloud_no_vpn'})
+SCAN_ALLOWED_NETWORK_PROFILES = frozenset({'local_browser', 'local_no_vpn', 'local_routed_diagnostic', 'cloud_no_vpn'})
 BUSINESS_TRUSTED_NETWORK_PROFILES = frozenset({'local_browser', 'cloud_no_vpn'})
 PRODUCTION_NETWORK_PROFILES = frozenset({'local_browser', 'cloud_no_vpn'})
 
@@ -72,7 +72,7 @@ class Settings(BaseSettings):
     head_table_audit_dir: str = Field(
         default='./artifacts/head_table_audits', alias='HEAD_TABLE_AUDIT_DIR'
     )
-    scan_pages_limit: int = Field(default=3, alias='SCAN_PAGES_LIMIT', ge=1, le=10)
+    scan_pages_limit: int = Field(default=5, alias='SCAN_PAGES_LIMIT', ge=1, le=10)
     scan_interval_minutes: int = Field(default=360, alias='SCAN_INTERVAL_MINUTES', ge=1)
     scan_enabled_engines: str = Field(default='auto_ru,avito', alias='SCAN_ENABLED_ENGINES')
     scheduler_enabled: bool = Field(default=False, alias='SCHEDULER_ENABLED')
@@ -91,6 +91,9 @@ class Settings(BaseSettings):
         default='./artifacts/vpn_admission/policy.json', alias='VPN_OPERATIONAL_POLICY_PATH'
     )
     request_timeout_seconds: int = Field(default=25, alias='REQUEST_TIMEOUT_SECONDS', ge=5)
+    card_content_notice_after_seconds: float = Field(
+        default=6, alias='CARD_CONTENT_NOTICE_AFTER_SECONDS', ge=0.1, le=30
+    )
     auto_ru_page_delay_seconds: float = Field(
         default=2.5, alias='AUTO_RU_PAGE_DELAY_SECONDS', ge=0.5, le=30
     )
@@ -113,8 +116,20 @@ class Settings(BaseSettings):
         default=5, alias='TARGET_CLOSED_RETRY_SECONDS', ge=0, le=30
     )
     captcha_operator_wait_seconds: int = Field(
-        default=0, alias='CAPTCHA_OPERATOR_WAIT_SECONDS', ge=0, le=600
+        default=0, alias='CAPTCHA_OPERATOR_WAIT_SECONDS', ge=-1, le=600
     )
+    captcha_redirect_grace_seconds: float = Field(
+        default=15, alias='CAPTCHA_REDIRECT_GRACE_SECONDS', ge=0, le=120
+    )
+    avito_ip_refresh_attempts: int = Field(
+        default=2, alias='AVITO_IP_REFRESH_ATTEMPTS', ge=0, le=2
+    )
+    avito_ip_refresh_delay_seconds: float = Field(
+        default=3, alias='AVITO_IP_REFRESH_DELAY_SECONDS', ge=3, le=60
+    )
+    catalogue_lazy_load_enabled: bool = Field(default=True, alias='CATALOGUE_LAZY_LOAD_ENABLED')
+    catalogue_lazy_load_max_batches: int = Field(default=3, alias='CATALOGUE_LAZY_LOAD_MAX_BATCHES', ge=0, le=10)
+    catalogue_lazy_load_timeout_seconds: float = Field(default=6, alias='CATALOGUE_LAZY_LOAD_TIMEOUT_SECONDS', ge=0.1, le=30)
     evidence_dir: str = Field(default='./artifacts', alias='EVIDENCE_DIR')
     run_every_minutes: int = Field(default=30, alias='RUN_EVERY_MINUTES', ge=1)
     report_retention_days: int = Field(default=90, alias='REPORT_RETENTION_DAYS', ge=1)
@@ -158,7 +173,7 @@ class Settings(BaseSettings):
     @classmethod
     def _validate_network_profile(cls, value: str) -> str:
         normalized = value.lower().strip()
-        allowed = {'unknown', 'local_vpn', 'local_browser', 'local_no_vpn', 'cloud_no_vpn'}
+        allowed = {'unknown', 'local_vpn', 'local_browser', 'local_no_vpn', 'local_routed_diagnostic', 'cloud_no_vpn'}
         if normalized not in allowed:
             raise ValueError(f'network_profile must be one of: {", ".join(sorted(allowed))}')
         return normalized

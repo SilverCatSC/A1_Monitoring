@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import selectinload
 
-from app.config import BUSINESS_TRUSTED_NETWORK_PROFILES
+from app.config import BUSINESS_TRUSTED_NETWORK_PROFILES, settings
 from app.models import (
     EngineType,
     FeedbackEvent,
@@ -15,12 +15,14 @@ from app.models import (
     ListingChangeEvent,
     ListingLinkEvent,
     ListingObservation,
+    ListingReconciliation,
     ManagerFeedback,
     ScanRun,
     SearchFilter,
     SourceImportSnapshot,
 )
 from app.scraper.base import canonical_listing_key, is_marketplace_listing_url
+from app.service.placement_status import outside_search_label, record_placement_status
 
 SOURCES = {'auto_ru': 'Auto.ru', 'avito': 'Avito'}
 STATES = {
@@ -29,6 +31,8 @@ STATES = {
     'review_required': 'Требуется сверка ссылки',
     'filter_mismatch': 'Условия не совпали', 'not_checked': 'Ещё не проверено',
     'not_configured': 'Нет фильтра',
+    'inactive': 'Объявление неактивно на площадке',
+    'beyond_scope': 'Активно · вне проверенной глубины поиска',
 }
 VALID = {'found', 'absent_confirmed', 'absent_uncertain'}
 
@@ -54,7 +58,8 @@ def summarize(rows):
         'technical': counts['technical_error'], 'review_required': counts['review_required'],
         'mismatch': counts['filter_mismatch'],
         'rate': round(100 * counts['found'] / valid, 1) if valid else None,
-        'pages': [sum(row.state.value == 'found' and row.page_number == p for row in rows) for p in (1, 2, 3)],
+        'pages': [sum(row.state.value == 'found' and row.page_number == p for row in rows)
+                  for p in range(1, max(settings.scan_pages_limit, max((row.page_number for row in rows), default=0)) + 1)],
     }
 
 
@@ -84,6 +89,9 @@ def analytics_context(db, *, days=7, source='', brand='', q='', status='', scope
     by_listing = {}
     for row in rows:
         by_listing.setdefault((row.listing_id, row.source.value), []).append(row)
+    latest_checks = {}
+    for check in db.query(ListingReconciliation).filter(ListingReconciliation.listing_id.in_(ids)).order_by(ListingReconciliation.checked_at.desc(), ListingReconciliation.id.desc()):
+        latest_checks.setdefault((check.listing_id, check.source), check)
     placements = []
     for item in selected:
         for engine in EngineType:
@@ -139,12 +147,20 @@ def analytics_context(db, *, days=7, source='', brand='', q='', status='', scope
             found = [latest[filt.id] for filt in expected if filt.id in latest and latest[filt.id].found]
             page = min((obs.page_number for obs in found), default=None)
             last = current_rows[0] if current_rows else None
+            check = latest_checks.get((item.id, engine))
+            business_status = record_placement_status(check, url) if check else None
+            depth_label = outside_search_label(last, check)
+            if business_status == 'inactive' and not (last and last.found and utc(last.observed_at) > utc(check.checked_at)):
+                state, page, found = 'inactive', None, []
+            elif depth_label and not found:
+                state = 'beyond_scope'
             proof = next((obs for obs in found if (obs.raw_payload or {}).get('card_evidence')), None)
             placements.append({
                 'listing_id': item.id, 'name': f'{item.brand or ""} {item.model or ""}'.strip() or 'Автомобиль',
                 'vin': item.vin or 'VIN не указан', 'year': item.year, 'active': item.is_active,
                 'price': money(item.price_hint), 'source': engine.value, 'source_name': SOURCES[engine.value],
                 'url': url, 'key': key, 'state': state, 'label': STATES[state], 'page': page,
+                'position_label': depth_label if state == 'beyond_scope' else None,
                 'checked': local_time(last.observed_at) if last else '—', 'filters': filter_results,
                 'summary': summarize(current_rows),
                 'proof': f'/api/v1/observations/{proof.id}/evidence/{proof.page_number}' if proof else None,

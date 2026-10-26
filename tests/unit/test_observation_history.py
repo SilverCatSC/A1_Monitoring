@@ -122,7 +122,8 @@ def test_history_filters_and_exposes_absolute_position_and_evidence(tmp_path):
         engine.dispose()
 
 
-def test_history_and_listing_templates_escape_imported_content(tmp_path):
+def test_history_and_listing_templates_escape_imported_content(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.report.settings.scan_pages_limit', 3)
     session, engine = _session(tmp_path)
     try:
         listing = _seed(session)
@@ -149,7 +150,7 @@ def test_history_and_listing_templates_escape_imported_content(tmp_path):
         assert '&lt;script&gt;Unsafe Brand&lt;/script&gt;' in catalog_html
         assert 'Auto.ru ↗' in catalog_html
         assert 'стр. 2' in catalog_html
-        assert 'Нет ссылки' in catalog_html
+        assert 'Размещение не заявлено — нет ссылки' in catalog_html
         assert '44 990 000 ₽' in catalog_html
         assert 'V-VIP' in catalog_html
         assert 'Снимка пока нет' in catalog_html
@@ -180,7 +181,8 @@ def test_catalog_title_does_not_repeat_model_in_generation(tmp_path):
         engine.dispose()
 
 
-def test_listing_page_statistics_keep_history_per_filter(tmp_path):
+def test_listing_page_statistics_keep_history_per_filter(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.report.settings.scan_pages_limit', 3)
     session, engine = _session(tmp_path)
     try:
         listing = _seed(session)

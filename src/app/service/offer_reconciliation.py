@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, selectinload
 from app.models import DealerListingCandidate, EngineType, Listing, ListingReconciliation
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
 from app.service.republication_review import exact_republication_candidate
+from app.service.vehicle_content import vins_conflict
 
 SEVERITY_ORDER = {'high': 0, 'medium': 1, 'low': 2}
 
@@ -270,7 +271,7 @@ def _record_findings(record: ListingReconciliation) -> list[dict[str, Any]]:
                 proof=proof,
             )
         )
-    if listing.vin and card.get('vin') and listing.vin.strip().upper() != card['vin'].strip().upper():
+    if vins_conflict(listing.vin, card.get('vin')):
         findings.append(
             _finding(
                 code='vin_mismatch',

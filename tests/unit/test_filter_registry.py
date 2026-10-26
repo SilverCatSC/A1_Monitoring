@@ -90,6 +90,24 @@ def test_registry_rejects_non_marketplace_and_ambiguous_assignment(session):
         )
 
 
+def test_voyah_filter_assigns_both_dream_cards_with_moscow_zero_radius(session):
+    first = _listing('DREAM_ONE', avito_url='https://www.avito.ru/moskva/avtomobili/voyah_dream_8302635260')
+    second = _listing('DREAM_TWO', avito_url='https://www.avito.ru/moskva/avtomobili/voyah_dream_8479029041')
+    other = _listing('OTHER', avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_1234567890')
+    session.add_all([first, second, other])
+    session.commit()
+    FilterRegistryService(session).sync_canonical_catalog()
+    definition = next(d for d in CANONICAL_FILTERS if d.key == 'avito_voyah_dream_all')
+    assert definition.condition == 'all'
+    assert urlsplit(definition.url).path == '/moskva/avtomobili/voyah/dreamer-ASgBAgICAkTgtg2o8OMC4rYNytbXEA'
+    assert _canonical_url_contract_matches(definition)
+    query = parse_qs(urlsplit(definition.url).query)
+    assert query['radius'] == query['searchRadius'] == ['0']
+    entity = session.query(SearchFilter).filter(SearchFilter.name == definition.name).one()
+    assigned = {e.listing_id for e in session.query(VehicleFilterExpectation).filter_by(filter_id=entity.id)}
+    assert assigned == {first.id, second.id}
+
+
 def test_all_active_assignments_refresh_after_stock_changes(session):
     first = _listing(
         'W1VVNLTZ5S4556796',
@@ -180,17 +198,14 @@ def test_canonical_catalog_assigns_by_marketplace_family_and_condition(session):
     first = service.sync_canonical_catalog()
     second = service.sync_canonical_catalog()
 
-    assert first['definitions'] == 16
-    assert first['created'] == 16
-    assert first['expectations'] == 7
-    assert first['unmatched'] == 1
-    assert first['unmatched_rows'][0]['vin'] == 'AVITOVCLASS000001'
-    assert first['unmatched_rows'][0]['source'] == 'avito'
-    assert first['unmatched_rows'][0]['family'] == 'v_class'
+    assert first['definitions'] == 18
+    assert first['created'] == 18
+    assert first['expectations'] == 8
+    assert first['unmatched'] == 0
     assert second['created'] == 0
     assert second['updated'] == 0
-    assert session.query(SearchFilter).count() == 16
-    assert session.query(VehicleFilterExpectation).count() == 7
+    assert session.query(SearchFilter).count() == 18
+    assert session.query(VehicleFilterExpectation).count() == 8
 
 
 def test_catalog_has_one_semantic_avito_sprinter_filter_and_preserves_operator_disable(
@@ -275,20 +290,20 @@ def test_catalog_filter_without_current_expectations_is_inactive(session):
     service = FilterRegistryService(session)
     service.sync_canonical_catalog()
 
-    assert session.query(SearchFilter).count() == 16
+    assert session.query(SearchFilter).count() == 18
     assert session.query(SearchFilter).filter(SearchFilter.active.is_(True)).count() == 0
 
 
 def test_all_avito_filters_use_moscow_only_and_keep_model_paths(session):
     definitions = [d for d in CANONICAL_FILTERS if d.source == EngineType.AVITO]
-    assert len(definitions) == 6
+    assert len(definitions) == 8
     FilterRegistryService(session).sync_canonical_catalog()
     for definition in definitions:
         parts = urlsplit(definition.url)
         query = parse_qs(parts.query)
         assert parts.path.startswith('/moskva/avtomobili/'), definition.key
         assert query['radius'] == query['searchRadius'] == ['0']
-        assert query['localPriority'] == ['1']
+        assert query['localPriority'] == [str(definition.local_priority)]
         assert definition.geo_radius_km == 0
         assert _canonical_url_contract_matches(definition)
         entity = session.query(SearchFilter).filter(
@@ -361,3 +376,31 @@ def test_avito_geography_sync_preserves_identity_assignments_and_operator_disabl
     assert entity.raw_criteria['operator_active_override'] is False
     assert assignments.one().listing_id == original_listing_id
     assert service.sync_canonical_catalog()['updated'] == 0
+
+
+def test_avito_v_class_combines_conditions_and_preserves_owner_url(session):
+    definition = next(d for d in CANONICAL_FILTERS if d.key == 'avito_v_class_all')
+    listings = [
+        _listing('NEWVCLASS', auto_url='https://auto.ru/cars/new/group/mercedes/v_klasse/1/2/123-a/',
+                 avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2026_1234567890'),
+        _listing('USEDVCLASS', avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2019_57_250_km_2234567890'),
+        _listing('UNKNOWNCONDITION', avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_3234567890'),
+        _listing('OTHER', avito_url='https://www.avito.ru/moskva/avtomobili/hongqi_hq9_2026_4234567890'),
+        _listing('INACTIVE', active=False, avito_url='https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_5234567890'),
+    ]
+    session.add_all(listings)
+    session.commit()
+    service = FilterRegistryService(session)
+    service.sync_canonical_catalog()
+    entity = session.query(SearchFilter).filter_by(name=definition.name, source=EngineType.AVITO).one()
+    assert entity.active
+    assert {x.listing_id for x in entity.expectations} == {x.id for x in listings[:3]}
+    query = parse_qs(urlsplit(entity.raw_url).query)
+    assert query['localPriority'] == ['0']
+    assert query['f'] == ['ASgBAgICA0Tgtg3omCjitg2ItCiwsxSAoo8D']
+    assert query['context'] == ['H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6IlhTQlNia3pubXA0ZnJzZ0kiO31dt5xwJgAAAA']
+    assert query['radius'] == query['searchRadius'] == ['0']
+    assert entity.raw_criteria['condition'] == 'all'
+    assert service.sync_canonical_catalog()['created'] == 0
+    assert _canonical_url_contract_matches(definition)
+    assert not _canonical_url_contract_matches(replace(definition, url=definition.url.replace('localPriority=0', 'localPriority=1')))

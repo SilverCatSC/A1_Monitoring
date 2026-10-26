@@ -3,7 +3,7 @@ param(
     [ValidateSet('auto_ru,avito', 'auto_ru', 'avito')]
     [string]$Engines = 'auto_ru,avito',
     [ValidateRange(1, 10)]
-    [int]$Pages = 3
+    [int]$Pages = 5
 )
 
 # This runner is deliberately host-side: the visible Chrome session must belong

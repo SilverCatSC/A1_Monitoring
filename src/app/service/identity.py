@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from datetime import UTC, datetime
 from typing import Any, Iterable
 
@@ -32,9 +33,15 @@ def _utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+def has_multiple_vins(value: Any) -> bool:
+    text = str(value or '').upper()
+    candidates = re.findall(r'\b[A-HJ-NPR-Z0-9]{17}\b', text)
+    return len(set(candidates)) > 1 or '\n' in text.strip()
+
+
 def vin_fingerprint(value: Any) -> str | None:
     normalized = str(value or '').strip().upper()
-    if not normalized or normalized == 'НЕ УКАЗАН':
+    if not normalized or normalized == 'НЕ УКАЗАН' or has_multiple_vins(normalized):
         return None
     return hashlib.sha256(f'vin|{normalized}'.encode('utf-8')).hexdigest()
 
@@ -106,10 +113,12 @@ class IdentityService:
         self,
         *,
         row: dict[str, Any],
+        ignore_vin: bool = False,
+        source_row_number: int | None = None,
     ) -> tuple[Vehicle, Listing, str]:
         """Return a safe Vehicle/Listing pair and an auditable resolution method."""
         self.bootstrap_legacy_identities()
-        fingerprint = vin_fingerprint(row.get('vin'))
+        fingerprint = None if ignore_vin else vin_fingerprint(row.get('vin'))
         row_urls = marketplace_urls(row)
         vehicle: Vehicle | None = None
         resolution = 'new_unanchored'
@@ -127,11 +136,31 @@ class IdentityService:
                 resolution = 'vin_new'
         elif row_urls:
             candidates = self._vehicles_for_offer_urls(row_urls.items())
+            if ignore_vin or has_multiple_vins(row.get('vin')):
+                # A copied/stale URL may also be attached to a different vehicle
+                # with a single VIN. Do not overwrite that vehicle with an
+                # ambiguous source row merely because their URLs coincide.
+                candidates = [item for item in candidates if item.vin_fingerprint is None]
             if len(candidates) == 1:
                 vehicle = candidates[0]
                 resolution = 'offer_match'
             elif len(candidates) > 1:
                 resolution = 'offer_ambiguous'
+
+        if vehicle is None and ignore_vin:
+            # Preserve unresolved active rows across identical refreshes without
+            # inventing an ad ID or matching another vehicle by VIN.
+            previous_query = self.db.query(SourceRecord).filter(
+                SourceRecord.row_fingerprint == row_fingerprint(row)
+            )
+            if source_row_number is not None:
+                previous_query = previous_query.filter(SourceRecord.row_number == source_row_number)
+            previous = previous_query.order_by(SourceRecord.created_at.desc()).first()
+            if previous is not None:
+                candidate = self.db.get(Vehicle, previous.vehicle_id)
+                if candidate is not None and candidate.vin_fingerprint is None:
+                    vehicle = candidate
+                    resolution = 'source_row_match'
 
         if vehicle is None:
             vehicle = Vehicle(

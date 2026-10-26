@@ -70,7 +70,7 @@ def require_local_browser_vpn_admission() -> None:
     Operational readiness does not claim verified per-domain egress or M7
     acceptance.  The verifier does not change or reconnect VPSUS.
     """
-    if settings.network_profile not in {'local_browser', 'local_no_vpn'}:
+    if settings.network_profile not in {'local_browser', 'local_no_vpn', 'local_routed_diagnostic'}:
         return
     if not settings.local_browser_host_admission:
         raise ScanConfigurationError(
@@ -82,6 +82,9 @@ def require_local_browser_vpn_admission() -> None:
         raise ScanConfigurationError(
             'local_browser monitoring must be started by the approved interactive host runner'
         ) from exc
+    if settings.network_profile == 'local_routed_diagnostic':
+        # Explicit host diagnostic: VPN state and per-domain routing are unverified.
+        return
     if settings.network_profile == 'local_no_vpn':
         try:
             require_no_vpn_diagnostic_admission()
@@ -106,14 +109,14 @@ def require_macos_primary_monitoring_profile() -> None:
     must not silently become a new browser worker after the owner selected the
     MacBook interactive host as the sole accepted production runtime.
     """
-    if settings.network_profile == 'local_no_vpn':
+    if settings.network_profile in {'local_no_vpn', 'local_routed_diagnostic'}:
         if settings.app_env != 'production' and settings.local_browser_host_admission:
             return
     elif settings.network_profile == 'local_browser':
         return
     raise ScanConfigurationError(
         'MacBook primary monitoring requires NETWORK_PROFILE=local_browser '
-        'or an admitted local_no_vpn diagnostic; '
+        'or an admitted local diagnostic; '
         f'current={settings.network_profile}'
     )
 
@@ -187,6 +190,8 @@ class MonitoringCycleService:
         self.progress({'event': 'source_refresh_finished', **refreshed['import']})
         if self.before_browser:
             self.before_browser()
+        monitor = MonitorService(self.db, progress_callback=self.progress, cycle_id=cycle_id)
+        monitor.collect_search_results()
         reconciliation = SellerReconciliationService(
             self.db, progress_callback=self.progress, cycle_id=cycle_id
         )
@@ -199,7 +204,7 @@ class MonitoringCycleService:
                 self.db, progress_callback=self.progress, cycle_id=cycle_id
             ).run(preflight, settings.placement_feed_workbook_url
                   or settings.head_table_google_sheet_export_url)
-            if settings.network_profile == 'local_no_vpn':
+            if settings.network_profile in {'local_no_vpn', 'local_routed_diagnostic'}:
                 # The diagnostic records observations but must not rewrite the
                 # canonical Monitoring link from an unaccepted network run.
                 link_sync = {'status': 'complete', 'updated': [], 'blocked': [],
@@ -213,7 +218,9 @@ class MonitoringCycleService:
                 | set(placement.get('blocked_sources', []))
             )
         # The immutable monitoring roster is sealed after URL synchronization,
-        # and before the first search observation. The import snapshot and the
+        # and before the first matched search observation. Raw search was
+        # collected earlier without binding it to the old vehicle URLs.
+        # The import snapshot and the
         # old-link checks remain separate, auditable preparation evidence.
         manifest = ledger.seal_roster(cycle_id, refreshed['import'].get('snapshot_id'))
         self.progress({
@@ -230,12 +237,8 @@ class MonitoringCycleService:
             and link_sync['status'] in {'complete', 'partial'}
         )
         if link_stage_available:
-            scanned = MonitorService(
-                self.db,
-                progress_callback=self.progress,
-                preflight=preflight,
-                cycle_id=cycle_id,
-            ).run_full_cycle()
+            monitor.preflight = preflight
+            scanned = monitor.run_full_cycle()
             preflight['blocked_sources'] = sorted(
                 set(preflight.get('blocked_sources', []))
                 | set(scanned.get('blocked_sources', []))

@@ -79,14 +79,16 @@ def test_progress_tracker_persists_filter_page_and_completion(tmp_path, capsys):
     summary = {'technical_errors': 0, 'found': 2}
     tracker({'event': 'cycle_finished', 'summary': summary})
     tracker({'event': 'direct_cards_started', 'total': 2})
-    tracker({
-        'event': 'direct_card_finished',
-        'source': 'avito',
-        'card_index': 1,
-        'card_total': 2,
-        'vehicle': 'Mercedes-Benz VLE',
-        'status_code': 'active',
-    })
+    tracker(
+        {
+            'event': 'direct_card_finished',
+            'source': 'avito',
+            'card_index': 1,
+            'card_total': 2,
+            'vehicle': 'Mercedes-Benz VLE',
+            'status_code': 'active',
+        }
+    )
     assert read_scan_progress(str(tmp_path))['direct_cards']['checked'] == 1
     direct_summary = {
         'active': 2,
@@ -137,17 +139,67 @@ def test_progress_tracker_marks_direct_card_failures_as_partial(tmp_path):
 def test_captcha_wait_is_visible_and_returns_to_prior_stage(tmp_path, capsys):
     tracker = ScanProgressTracker(str(tmp_path))
     tracker({'event': 'dealer_preflight_started'})
-    tracker({'event': 'captcha_operator_required', 'source': 'auto_ru',
-             'url': 'https://auto.ru/cars/', 'wait_seconds': 180})
+    tracker(
+        {
+            'event': 'captcha_operator_required',
+            'source': 'auto_ru',
+            'url': 'https://auto.ru/cars/',
+            'wait_seconds': 180,
+        }
+    )
     waiting = read_scan_progress(str(tmp_path))
     assert waiting['status'] == 'waiting_captcha'
     assert waiting['current']['event'] == 'captcha_operator_required'
     assert 'пройдите проверку в открытом Chrome' in capsys.readouterr().out
 
-    tracker({'event': 'captcha_operator_resolved', 'source': 'auto_ru',
-             'url': 'https://auto.ru/cars/'})
+    tracker({'event': 'captcha_operator_resolved', 'source': 'auto_ru', 'url': 'https://auto.ru/cars/'})
     assert read_scan_progress(str(tmp_path))['status'] == 'reconciling'
 
 
 def test_missing_progress_file_is_idle(tmp_path):
     assert read_scan_progress(str(tmp_path)) == {'status': 'idle', 'events': []}
+
+
+def test_captcha_wait_heartbeat_keeps_reason_and_prior_stage(tmp_path, capsys):
+    tracker = ScanProgressTracker(str(tmp_path))
+    tracker({'event': 'dealer_preflight_started'})
+    tracker({'event': 'captcha_operator_required', 'source': 'avito', 'wait_seconds': -1})
+    tracker(
+        {
+            'event': 'captcha_operator_waiting',
+            'source': 'avito',
+            'http_status': 429,
+            'wait_reason': 'awaiting_successful_document',
+        }
+    )
+    waiting = read_scan_progress(str(tmp_path))
+    assert waiting['status'] == 'waiting_captcha'
+    assert waiting['current']['wait_reason'] == 'awaiting_successful_document'
+    assert waiting['current']['http_status'] == 429
+    assert 'обновите его вручную' in capsys.readouterr().out
+    tracker({'event': 'captcha_operator_resolved', 'source': 'avito'})
+    assert read_scan_progress(str(tmp_path))['status'] == 'reconciling'
+
+
+def test_publication_signal_remains_after_routine_events_and_prints_counts(tmp_path, capsys):
+    tracker = ScanProgressTracker(str(tmp_path))
+    tracker(
+        {
+            'event': 'publication_alert',
+            'source': 'auto_ru',
+            'kind': 'inventory_drop',
+            'title': 'Сократилось число публикаций',
+            'previous_count': 28,
+            'observed_count': 7,
+            'certainty': 'coverage_unproven',
+        }
+    )
+    for _ in range(85):
+        tracker({'event': 'heartbeat'})
+    saved = read_scan_progress(str(tmp_path))
+    assert len(saved['publication_alerts']) == 1
+    output = capsys.readouterr().out
+    assert 'СИГНАЛ · Auto.ru' in output and 'было 28, обнаружено 7' in output
+    assert 'не подтверждены' in output
+    tracker({'event': 'source_refresh_started'})
+    assert read_scan_progress(str(tmp_path))['publication_alerts'] == []

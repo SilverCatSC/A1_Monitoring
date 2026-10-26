@@ -170,18 +170,20 @@ def test_challenge_stops_second_catalogue_and_direct_inspection(db, monkeypatch)
     assert preflight['checks']['car:auto_ru']['state'] == 'unavailable'
 
 
-def test_unresolved_link_skips_search_and_does_not_open_absence(db):
+def test_inactive_publication_skips_search_and_does_not_open_search_absence(db):
     preflight, _ = reconcile(db, result([NEW]))
     search = Adapter(result())
     summary = MonitorService(db, auto_adapter=search, preflight=preflight).run_full_cycle()
     assert search.calls == []
     assert summary['technical_errors'] == 0
-    assert summary['review_required'] == 1
+    assert summary['review_required'] == 0
+    assert summary['inactive_placements'] == 1
+    assert summary['links_need_review'] == 0
     assert summary['missed_confirmed'] == summary['missed_uncertain'] == 0
     assert db.query(AbsenceEpisode).count() == 0
     observation = db.query(ListingObservation).one()
     assert observation.state == ObservationState.REVIEW_REQUIRED
-    assert observation.scan_run.status == ScanRunStatus.PARTIAL
+    assert observation.scan_run.status == ScanRunStatus.SUCCESS
     assert observation.raw_payload['seller_preflight']['state'] == 'review_required'
 
 
@@ -192,6 +194,10 @@ def test_verified_link_can_still_be_genuinely_missing_from_search(db):
     assert len(search.calls) == 1
     assert summary['missed_uncertain'] == 1
     assert db.query(ListingObservation).one().raw_payload['seller_preflight_batch'] == preflight['batch_id']
+    again = MonitorService(db, auto_adapter=search, preflight=preflight).run_full_cycle()
+    assert again['missed_confirmed'] == 0
+    assert again['missed_uncertain'] == 1
+    assert db.query(AbsenceEpisode).count() == 0
 
 
 def test_duplicate_link_for_two_cars_requires_review(db):
@@ -201,12 +207,23 @@ def test_duplicate_link_for_two_cars_requires_review(db):
     assert all(row['state'] == 'review_required' for row in preflight['checks'].values())
 
 
-def test_removed_page_gets_separate_state_without_claiming_vehicle_sale(db):
-    async def removed(*_):
-        return {'state': 'removed', 'reason': 'Объявление снято'}
-    preflight, _ = reconcile(db, result([NEW]), removed)
-    assert preflight['checks']['car:auto_ru']['state'] == 'removed'
-    assert 'не подтверждает продажу' in preflight['checks']['car:auto_ru']['reason']
+@pytest.mark.parametrize('complete', [True, False])
+def test_missing_catalogue_card_never_opens_stale_link_or_claims_sale(db, complete):
+    async def forbidden(*_):
+        raise AssertionError('Stale link must not be opened')
+
+    preflight, _ = reconcile(db, result([NEW], complete=complete, exhausted=complete), forbidden)
+    check = preflight['checks']['car:auto_ru']
+    assert check['state'] == 'review_required'
+    assert db.get(Listing, 'car').is_active
+    record = db.query(ListingReconciliation).one()
+    assert record.details['catalogue_complete'] is complete
+    assert record.details['inspection_skip_reason'] == ('not_in_active_catalogue' if complete else 'catalogue_incomplete')
+    summary = SellerReconciliationService(db, inspector=forbidden).inspect_current_cards(preflight)
+    assert summary['checked'] == summary['total'] == 0
+    assert summary['skipped_not_in_catalogue'] == int(complete)
+    assert summary['skipped_catalogue_incomplete'] == int(not complete)
+    assert 'direct_inspection' not in record.details
 
 
 def test_operator_confirmation_is_pinned_and_requires_new_preflight(db):
@@ -276,18 +293,24 @@ def test_confirmation_cannot_take_another_active_cars_link(db):
     assert db.query(ListingLinkOverride).count() == 0
 
 
-def test_direct_inspection_is_bounded(db, monkeypatch):
-    monkeypatch.setattr(settings, 'seller_direct_checks_limit', 1)
+def test_active_direct_inspection_is_bounded(db, monkeypatch):
+    monkeypatch.setattr(settings, 'seller_detail_checks_limit', 1)
     db.add(Listing(id='other', vehicle_signature='other', source_auto_ru=NEW))
     db.commit()
     calls = []
+
     async def inspect(source, url, progress):
         calls.append(url)
-        return {'state': 'unknown', 'reason': 'fixture'}
-    preflight, _ = reconcile(db, result(), inspect)
+        return {'state': 'active', 'status_code': 'active', 'reason': 'fixture'}
+
+    preflight, _ = reconcile(db, result([OLD, NEW]), inspect)
+    assert calls == []
+    summary = SellerReconciliationService(db, inspector=inspect).inspect_current_cards(preflight)
     assert len(calls) == 1
-    assert len(preflight['checks']) == 2
-    assert all(row['state'] == 'review_required' for row in preflight['checks'].values())
+    assert summary['checked'] == 1
+    assert summary['total'] == 2
+    assert summary['limit_reached'] == 1
+    assert summary['incomplete'] == summary['technical_errors'] == 1
 
 
 def test_post_search_direct_card_inspection_is_saved_for_report(db):
@@ -336,7 +359,8 @@ def test_mixed_filter_scans_verified_car_without_false_absence_for_stale_link(db
     observations = {row.listing_id: row for row in db.query(ListingObservation).all()}
     assert len(search.calls) == 1
     assert summary['technical_errors'] == 0
-    assert summary['review_required'] == 1
+    assert summary['review_required'] == 0
+    assert summary['inactive_placements'] == 1
     assert observations['car'].state == ObservationState.FOUND
     assert observations['other'].state == ObservationState.REVIEW_REQUIRED
     assert db.query(AbsenceEpisode).count() == 0
@@ -446,3 +470,38 @@ def test_direct_avito_understands_not_subject_to_vat():
     result = direct_page_status(html, EngineType.AVITO, avito_url, avito_url, 200)
 
     assert result['card']['vat_status'] == 'Без НДС'
+
+
+def test_fresh_catalogue_url_used_without_changing_registry(db):
+    fresh_url = OLD.replace('/25032437/', '/25032431/')
+    calls = []
+
+    async def inspect(_source, url, _progress):
+        calls.append(url)
+        return {'state': 'active', 'status_code': 'active'}
+
+    preflight, _ = reconcile(db, result([fresh_url]))
+    assert preflight['checks']['car:auto_ru']['url'] == fresh_url
+    assert db.get(Listing, 'car').source_auto_ru == OLD
+    SellerReconciliationService(db, inspector=inspect).inspect_current_cards(preflight)
+    assert calls == [fresh_url]
+
+
+@pytest.mark.parametrize('inspection,expected_errors', [
+    ({'state': 'active', 'status_code': 'active'}, 0),
+    ({'state': 'unknown', 'status_code': 'http_error'}, 1),
+    ({'state': 'removed', 'status_code': 'closed'}, 0),
+])
+def test_reused_active_card_result_preserves_errors_without_reopening(db, inspection, expected_errors):
+    preflight, _ = reconcile(db, result([OLD]))
+    preflight['active_card_inspections'][(EngineType.AUTO_RU, canonical_listing_key(EngineType.AUTO_RU, OLD))] = inspection
+
+    async def forbidden(*_):
+        raise AssertionError('One visit per card per cycle')
+
+    summary = SellerReconciliationService(db, inspector=forbidden).inspect_current_cards(preflight)
+    assert summary['checked'] == 0
+    assert summary['reused'] == 1
+    assert summary['technical_errors'] == expected_errors
+    assert summary['processed'] == 1
+    assert db.query(ListingReconciliation).one().details['direct_inspection'] == inspection

@@ -15,7 +15,7 @@ printf 'Журнал запуска: %s\n' "$run_log"
 printf 'Ход проверки: http://127.0.0.1:18000/api/v1/status/scans/progress\n\n'
 
 "$ROOT_DIR/scripts/run_monitoring_host_macos.sh" \
-  --engines auto_ru,avito --pages 3 --captcha-wait-seconds 180 \
+  --engines auto_ru,avito --pages 5 --captcha-wait-seconds 180 \
   2>&1 | /usr/bin/tee "$run_log"
 pipeline_status=("${PIPESTATUS[@]}")
 run_exit=${pipeline_status[0]}

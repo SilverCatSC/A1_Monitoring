@@ -33,6 +33,8 @@ from app.service.evidence import evidence_pages, has_card_evidence
 from app.service.feedback import ALLOWED_CATEGORIES, ALLOWED_SEVERITIES, ALLOWED_TRANSITIONS
 from app.service.filters import FilterRegistryService
 from app.service.placement_identity import PlacementIdError, parse_placement_id
+from app.service.placement_status import LABELS as PLACEMENT_LABELS
+from app.service.placement_status import outside_search_label, record_placement_status
 from app.service.republication_review import republication_review
 
 
@@ -87,14 +89,10 @@ def _head_records_for_listings(
         records = payload.get('records', []) if isinstance(payload, dict) else []
     except (OSError, ValueError, json.JSONDecodeError):
         return {}, []
-    by_vin: dict[str, list[dict]] = {}
     by_url: dict[tuple[EngineType, str], list[dict]] = {}
     for record in records:
         if not isinstance(record, dict):
             continue
-        vin = str(record.get('vin') or '').strip().upper()
-        if vin:
-            by_vin.setdefault(vin, []).append(record)
         for source, field in (
             (EngineType.AUTO_RU, 'auto_ru_url'),
             (EngineType.AVITO, 'avito_url'),
@@ -104,17 +102,24 @@ def _head_records_for_listings(
                 by_url.setdefault((source, key), []).append(record)
     result = {}
     matched_rows: set[int] = set()
+    url_owners: dict[tuple[EngineType, str], set[str]] = {}
     for listing in listings:
-        matches = list(by_vin.get(str(listing.vin or '').strip().upper(), []))
-        if not matches:
-            for source, url in (
-                (EngineType.AUTO_RU, listing.source_auto_ru),
-                (EngineType.AVITO, listing.source_avito),
-            ):
-                key = canonical_listing_key(source, url)
-                matches.extend(by_url.get((source, key), []) if key else [])
+        for source, url in ((EngineType.AUTO_RU, listing.source_auto_ru), (EngineType.AVITO, listing.source_avito)):
+            key = canonical_listing_key(source, url)
+            if key:
+                url_owners.setdefault((source, key), set()).add(listing.id)
+    for listing in listings:
+        # This snapshot has no unique_id. Display marketing attributes only
+        # for one unambiguous current URL row; VIN never binds publications.
+        matches = []
+        for source, url in (
+            (EngineType.AUTO_RU, listing.source_auto_ru),
+            (EngineType.AVITO, listing.source_avito),
+        ):
+            key = canonical_listing_key(source, url)
+            matches.extend(by_url.get((source, key), []) if key and len(url_owners.get((source, key), ())) == 1 else [])
         unique = {int(record.get('row_number') or 0): record for record in matches}
-        if unique:
+        if len(unique) == 1:
             matched_rows.update(unique)
             chosen = sorted(unique.values(), key=lambda record: (not bool(record.get('active')), int(record.get('row_number') or 0)))[0]
             result[listing.id] = {**chosen, 'duplicate_rows': len(unique)}
@@ -161,17 +166,28 @@ def _trusted_observation_clause():
     )
 
 
+def _position_note(observation: ListingObservation) -> str | None:
+    payload = getattr(observation, 'raw_payload', None) or {}
+    provenance = payload.get('position_provenance') if isinstance(payload, dict) else None
+    if isinstance(provenance, dict) and provenance.get('card_identity_verified') is False:
+        return 'Позиция по текущей ссылке; unique_id и активность не проверены'
+    return None
+
+
 def _page_statistics(observations: list[ListingObservation]) -> dict:
+    pages = range(1, max(settings.scan_pages_limit, max((item.page_number for item in observations), default=0)) + 1)
+
     def summarize(rows: list[ListingObservation]) -> dict:
-        page_counts = {page: sum(1 for item in rows if item.page_number == page) for page in (1, 2, 3)}
+        page_counts = {page: sum(1 for item in rows if item.page_number == page) for page in pages}
         total = len(rows)
         absolute_positions = [item.absolute_position for item in rows if item.absolute_position is not None]
         latest = rows[0] if rows else None
         return {
             'found_total': total,
+            'unverified_positions': sum(_position_note(item) is not None for item in rows),
             'page_counts': page_counts,
             'page_shares': {
-                page: round(page_counts[page] * 100 / total, 1) if total else 0 for page in (1, 2, 3)
+                page: round(page_counts[page] * 100 / total, 1) if total else 0 for page in pages
             },
             'average_absolute_position': round(sum(absolute_positions) / len(absolute_positions), 1)
             if absolute_positions
@@ -247,6 +263,12 @@ def kpi_overview(session, days: int = 7) -> dict[str, int | float]:
     )
     return {
         'observed_found': found,
+        'unverified_positions': session.query(ListingObservation).filter(
+            ListingObservation.observed_at >= since,
+            ListingObservation.found.is_(True),
+            _trusted_observation_clause(),
+            ListingObservation.raw_payload['position_provenance']['card_identity_verified'].as_boolean().is_(False),
+        ).count(),
         'observed_missed': missed,
         'scan_runs_success': success_runs,
         'absent_active': session.query(AbsenceEpisode).filter(AbsenceEpisode.open.is_(True)).count(),
@@ -332,6 +354,7 @@ def filter_statistics(session, since: datetime) -> list[dict]:
         .order_by(ListingObservation.observed_at.desc())
         .all()
     )
+    pages = range(1, max(settings.scan_pages_limit, max((item.page_number for item in observations), default=0)) + 1)
     for item in observations:
         row = aggregates.setdefault(
             item.filter_id,
@@ -340,18 +363,21 @@ def filter_statistics(session, since: datetime) -> list[dict]:
                 'name': item.filter.name,
                 'source': item.source.value,
                 'found': 0,
+                'unverified_positions': 0,
                 'absent_confirmed': 0,
                 'absent_uncertain': 0,
                 'review_required': 0,
                 'technical_error': 0,
-                'page_1': 0,
-                'page_2': 0,
-                'page_3': 0,
+                **{f'page_{page}': 0 for page in pages},
+                'page_counts': {page: 0 for page in pages},
             },
         )
         row[item.state.value] = row.get(item.state.value, 0) + 1
-        if item.state == ObservationState.FOUND and 1 <= item.page_number <= 3:
+        if item.state == ObservationState.FOUND and _position_note(item):
+            row['unverified_positions'] += 1
+        if item.state == ObservationState.FOUND and item.page_number in pages:
             row[f'page_{item.page_number}'] += 1
+            row['page_counts'][item.page_number] += 1
     return sorted(aggregates.values(), key=lambda row: (row['source'], row['name']))
 
 
@@ -683,6 +709,13 @@ def dashboard_context(session, days: int = 7) -> dict:
         'active_filters': active_filters,
         'canonical_filter_catalog': FilterRegistryService(session).canonical_catalog_status(),
         'observation_counts': observation_counts,
+        'unverified_positions': session.query(ListingObservation).filter(
+            ListingObservation.observed_at >= since,
+            ListingObservation.state == ObservationState.FOUND,
+            ListingObservation.filter.has(active=True),
+            _trusted_observation_clause(),
+            ListingObservation.raw_payload['position_provenance']['card_identity_verified'].as_boolean().is_(False),
+        ).count(),
         'open_absences': open_absences,
         'feedback': feedback,
         'recent_runs': recent_runs,
@@ -696,6 +729,7 @@ def dashboard_context(session, days: int = 7) -> dict:
             observation.id: _safe_listing_url(observation.source, observation.listing_url)
             for observation in latest_found
         },
+        'latest_found_notes': {observation.id: _position_note(observation) for observation in latest_found},
         'listing_urls': {
             listing.id: {
                 'auto_ru': _safe_listing_url(EngineType.AUTO_RU, listing.source_auto_ru),
@@ -1047,14 +1081,15 @@ def _listing_catalog_card(
 
     direct_labels = {
         'active': 'Карточка работает',
-        'sold': 'Автомобиль продан',
+        'sold': 'Объявление отмечено как проданное',
         'unpublished': 'Объявление снято',
         'closed': 'Объявление закрыто',
         'removed': 'Есть отметка о снятии или продаже',
         'redirected': 'Ссылка ведёт на другую страницу',
         'blocked': 'Площадка запросила проверку',
         'skipped_after_block': 'Не проверено после блокировки',
-        'http_error': 'Ошибка открытия ссылки',
+        'http_error': 'Открытие вернуло HTTP-ошибку; статус не подтверждён',
+        'content_incomplete': 'Карточка открыта, но проверка её содержимого не завершена',
         'ambiguous_status_text': 'Статус страницы неоднозначен',
         'limit_reached': 'Не проверено: защитный лимит',
         'unknown': 'Статус карточки не распознан',
@@ -1079,10 +1114,20 @@ def _listing_catalog_card(
         elif not direct_label:
             direct_label = 'Прямая карточка ещё не проверена'
         search_state = 'found' if found else latest.state.value if latest else 'not_checked'
+        business_status = record_placement_status(reconciliation, url) if reconciliation else ('not_expected' if not url else None)
+        depth_label = outside_search_label(latest, reconciliation)
+        if business_status:
+            direct_label = PLACEMENT_LABELS[business_status]
+            search_state = business_status
+        elif depth_label and not found:
+            search_state = 'beyond_scope'
         platforms[name] = {
             'url': _safe_listing_url(source, url),
             'observation': found,
+            'position_note': _position_note(found) if found else None,
             'search_state': search_state,
+            'position_label': depth_label if search_state == 'beyond_scope' else None,
+            'placement_status': business_status,
             'search_checked_at': latest.observed_at if latest else None,
             'search_label': {
                 'found': 'Найдено в поиске',
@@ -1092,11 +1137,16 @@ def _listing_catalog_card(
                 'filter_mismatch': 'Не соответствует фильтру',
                 'technical_error': 'Поиск проверить не удалось',
                 'not_checked': 'Поиск ещё не проверялся',
+                'inactive': 'Объявление неактивно на площадке',
+                'not_expected': 'Размещение не заявлено — нет ссылки',
+                'beyond_scope': f'{depth_label} — активное объявление не найдено в проверенной глубине',
             }.get(search_state, search_state),
             'reconciliation': reconciliation,
             'direct': direct,
             'direct_label': direct_label,
             'direct_class': (
+                'absent_confirmed' if business_status == 'inactive' else
+                'not_checked' if business_status == 'not_expected' else
                 'found'
                 if code == 'active'
                 else 'absent_confirmed'
@@ -1210,6 +1260,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
                 'observation': observation,
                 'evidence_pages': evidence_pages(observation),
                 'evidence_kind': 'card' if has_card_evidence(observation) else 'page',
+                'position_note': _position_note(observation),
                 'listing_url': _safe_listing_url(observation.source, observation.listing_url),
             }
             for observation in observations
@@ -1226,6 +1277,7 @@ def listing_detail_context(session, listing_id: str, observation_limit: int = 20
                 'observation': observation,
                 'evidence_pages': evidence_pages(observation),
                 'listing_url': _safe_listing_url(observation.source, observation.listing_url),
+                'position_note': _position_note(observation),
             }
             for observation in observations
             if observation.state == ObservationState.FOUND

@@ -21,6 +21,8 @@ from pathlib import Path
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(add_help=False)
     parser.add_argument('--lock-path', required=True)
+    parser.add_argument('--attempt-log', type=Path)
+    parser.add_argument('--active-exit-code', type=int, choices=(0, 75), default=0)
     parser.add_argument(
         '--verify-inherited-fd',
         type=int,
@@ -80,6 +82,15 @@ def verify_inherited_lock(lock_path: Path, fd: int) -> int:
 
 def main() -> int:
     args = parse_args()
+
+    def refuse(message, exit_code):
+        print(message, file=sys.stderr)
+        if args.attempt_log:
+            with args.attempt_log.open('a', encoding='utf-8') as log:
+                log.write(message + '\n')
+            (args.attempt_log.parent / 'exit_code.txt').write_text(str(exit_code) + '\n')
+        return exit_code
+
     lock_path = Path(args.lock_path)
     if args.verify_inherited_fd is not None:
         return verify_inherited_lock(lock_path, args.verify_inherited_fd)
@@ -89,8 +100,7 @@ def main() -> int:
         fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
         os.fchmod(fd, 0o600)
     except OSError:
-        print('HOST_RUNNER_LOCK_FAILED reason=lock_path_unavailable', file=sys.stderr)
-        return 1
+        return refuse('HOST_RUNNER_LOCK_FAILED reason=lock_path_unavailable', 1)
 
     try:
         try:
@@ -98,9 +108,11 @@ def main() -> int:
         except OSError as exc:
             if exc.errno in {errno.EACCES, errno.EAGAIN}:
                 print('HOST_RUNNER_SKIPPED_ACTIVE')
-                return 0
-            print('HOST_RUNNER_LOCK_FAILED reason=kernel_lock_unavailable', file=sys.stderr)
-            return 1
+                if args.attempt_log:
+                    return refuse('HOST_RUNNER_NOT_STARTED reason=another_runner_active no_cycle_created=true',
+                                  args.active_exit_code)
+                return args.active_exit_code
+            return refuse('HOST_RUNNER_LOCK_FAILED reason=kernel_lock_unavailable', 1)
 
         # Python opens descriptors as close-on-exec by default. Clear that bit
         # so the shell runner itself owns the same kernel lock after exec.
@@ -110,8 +122,7 @@ def main() -> int:
         environment['A1_MONITORING_HOST_LOCK_FD'] = str(fd)
         os.execvpe(command[0], command, environment)
     except OSError:
-        print('HOST_RUNNER_LOCK_FAILED reason=runner_exec_failed', file=sys.stderr)
-        return 1
+        return refuse('HOST_RUNNER_LOCK_FAILED reason=runner_exec_failed', 1)
     finally:
         # Reached only when exec fails or a handled error occurs. Successful
         # exec hands the inherited descriptor to the shell runner instead.

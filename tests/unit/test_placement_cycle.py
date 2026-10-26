@@ -17,6 +17,7 @@ from app.models import (
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
 from app.service.placement_cycle import PlacementCycleService, _card_has_usable_id_claim
 from app.service.placement_feed_snapshot import PlacementFeedError, PlacementFeedSnapshot
+from app.service.reconciliation import SellerReconciliationService
 
 OLD = 'https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_8047929828'
 NEW = 'https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_8176281881'
@@ -46,7 +47,8 @@ def test_missing_feed_stops_before_any_catalogue_card_inspection(monkeypatch):
 
 
 @pytest.mark.parametrize('known_identity', [False, True])
-def test_current_bound_id_is_still_checked_before_search(tmp_path, monkeypatch, known_identity):
+@pytest.mark.parametrize('card_state', ['active', 'removed', 'unknown'])
+def test_current_card_opened_once_and_removal_gates_search(tmp_path, monkeypatch, known_identity, card_state):
     monkeypatch.setattr(settings, 'network_profile', 'local_browser')
     monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path / 'evidence'))
     monkeypatch.setattr(settings, 'seller_identity_checks_limit', 80)
@@ -55,12 +57,15 @@ def test_current_bound_id_is_still_checked_before_search(tmp_path, monkeypatch, 
     engine = create_engine(f'sqlite:///{tmp_path / "reuse.db"}')
     Base.metadata.create_all(engine)
     calls = []
+    full_description = ('Полное описание автомобиля с комплектацией. ' * 150) + f'ID: {PLACEMENT_ID}'
 
     async def inspector(source, url, _progress):
         calls.append((source, url))
         return {
-            'state': 'active', 'status_code': 'active',
-            'card': {'placement_id': PLACEMENT_ID},
+            'state': card_state,
+            'status_code': {'active': 'active', 'removed': 'closed', 'unknown': 'http_error'}[card_state],
+            'card': {'placement_id': PLACEMENT_ID, 'description': full_description,
+                     'description_excerpt': full_description},
             'evidence': EVIDENCE,
             'evidence_manifest': evidence_manifest_name(EVIDENCE),
         }
@@ -96,22 +101,39 @@ def test_current_bound_id_is_still_checked_before_search(tmp_path, monkeypatch, 
         ))
         db.commit()
 
+        preflight = {'batch_id': 'batch-reuse',
+                     'discovery': {'run_ids': [auto_run.id, avito_run.id]},
+                     'blocked_sources': [],
+                     'checks': {'car:avito': {'state': 'verified', 'url': NEW}}}
         result = PlacementCycleService(db, inspector=inspector, cycle_id='cycle-reuse').run(
-            {'batch_id': 'batch-reuse', 'discovery': {'run_ids': [auto_run.id, avito_run.id]},
-             'blocked_sources': []}, 'https://docs.google.com/spreadsheets/d/abc/export',
+            preflight, 'https://docs.google.com/spreadsheets/d/abc/export',
         )
 
-        assert result['status'] == 'complete'
+        assert result['status'] == ('complete' if card_state == 'active' else 'partial')
         assert calls == [(EngineType.AVITO, NEW)]
         record = db.get(ListingReconciliation, 'current-check')
+        db.flush()
+        db.expire(record)
         assert record.details['direct_inspection']['evidence'] == EVIDENCE
-        identity = db.query(ListingPlacementIdentity).one()
-        assert (identity.source, identity.listing_id, identity.placement_id) == (
-            EngineType.AVITO, 'car', PLACEMENT_ID,
-        )
+        assert record.details['direct_inspection']['card']['description'] == full_description
+        identity = db.query(ListingPlacementIdentity).one_or_none()
+        if known_identity or card_state == 'active':
+            assert (identity.source, identity.listing_id, identity.placement_id) == (
+                EngineType.AVITO, 'car', PLACEMENT_ID,
+            )
+        else:
+            assert identity is None
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
+        assert report['observed_cards'][0]['card']['description'] == full_description
+        assert report['observed_cards'][0]['card']['description_excerpt'] == full_description
+        summary = SellerReconciliationService(db, inspector=inspector).inspect_current_cards(preflight)
+        assert summary['checked'] == 0
+        assert summary['reused'] == (0 if card_state == 'removed' else 1)
+        assert summary['technical_errors'] == (1 if card_state == 'unknown' else 0)
+        assert preflight['checks']['car:avito']['state'] == ('removed' if card_state == 'removed' else 'verified')
+        assert calls == [(EngineType.AVITO, NEW)]
         assert report['reused_direct_cards'] == 1
-        assert report['new_verified_identities'] == (0 if known_identity else 1)
+        assert report['new_verified_identities'] == int(not known_identity and card_state == 'active')
         assert 'deferred_current_id_cards_by_source' not in report
     engine.dispose()
 
@@ -260,4 +282,48 @@ def test_cycle_does_not_claim_complete_coverage_when_card_limit_is_zero(tmp_path
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
         assert report['catalogue_complete']['avito'] is False
         assert report['skipped_cards_by_source']['avito'] == 1
+    engine.dispose()
+
+
+@pytest.mark.parametrize('proof', ['complete', 'missing_platform', 'wrong_platform', 'duplicate_card', 'duplicate_feed', 'duplicate_url', 'mixed_feed'])
+def test_mixed_card_claim_binds_only_with_exact_feed_platform_and_current_url(proof, tmp_path):
+    from app.service.marketplace_placement_reconciliation import OpenedMarketplaceCard
+
+    engine = create_engine(f'sqlite:///{tmp_path / "alias.db"}')
+    Base.metadata.create_all(engine)
+    snapshot = _snapshot()
+    feed = snapshot.rows_by_sheet['avito-feed-new'][0]
+    feed['AvitoId'] = '8176281881'
+    if proof == 'missing_platform':
+        feed['AvitoId'] = ''
+    elif proof == 'wrong_platform':
+        feed['AvitoId'] = '8047929828'
+    elif proof == 'duplicate_feed':
+        snapshot.rows_by_sheet['avito-feed-new'].append(feed.copy())
+    elif proof == 'mixed_feed':
+        feed['Id'] = 'М' + PLACEMENT_ID[1:]
+    raw_claim = 'М' + PLACEMENT_ID[1:]
+    inspection = {'state': 'active', 'card': {'placement_id': None, 'placement_id_raw': raw_claim},
+                  'evidence': EVIDENCE, 'evidence_manifest': evidence_manifest_name(EVIDENCE)}
+    cards = [OpenedMarketplaceCard(NEW, inspection)]
+    if proof == 'duplicate_card':
+        cards.append(OpenedMarketplaceCard(OLD, {**inspection, 'card': {'placement_id': PLACEMENT_ID}}))
+    with sessionmaker(bind=engine)() as db:
+        listing = Listing(id='car', vehicle_signature='car', source_avito=NEW, is_active=True)
+        db.add(listing)
+        listings = [listing]
+        if proof == 'duplicate_url':
+            other = Listing(id='other', vehicle_signature='other', source_avito=NEW, is_active=True)
+            db.add(other)
+            listings.append(other)
+        db.flush()
+        urls, added = PlacementCycleService(db, cycle_id='cycle')._identity_urls(
+            snapshot, {EngineType.AUTO_RU: [], EngineType.AVITO: cards}, listings)
+        assert added == (1 if proof == 'complete' else 0)
+        if proof == 'complete':
+            identity = db.query(ListingPlacementIdentity).one()
+            assert identity.placement_id == PLACEMENT_ID
+            assert urls[EngineType.AVITO][PLACEMENT_ID] == NEW
+        assert inspection['card']['placement_id_raw'] == raw_claim
+        assert inspection['card']['placement_id'] is None
     engine.dispose()

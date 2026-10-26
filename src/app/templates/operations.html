@@ -37,7 +37,7 @@
 <body class="workbench">
 {% set active_page = 'settings' %}{% include 'navigation.html' %}
 <header>
-  <div><h1>Настройки и диагностика</h1><p>Видимость объявлений на первых трёх страницах поиска · <a href="/api/v1/dashboard/listings">объявления</a> · <a href="/api/v1/dashboard/history">история</a> · <a href="/api/v1/dashboard/feedback">ошибки объявлений</a></p></div>
+  <div><h1>Настройки и диагностика</h1><p>Видимость объявлений · до {{ monitoring_search_pages() if monitoring_search_pages is defined else 5 }} страниц поиска · <a href="/api/v1/dashboard/listings">объявления</a> · <a href="/api/v1/dashboard/history">история</a> · <a href="/api/v1/dashboard/feedback">ошибки объявлений</a></p></div>
   <div>Срез: {{ context.days }} дней · {{ context.generated_at.strftime('%d.%m.%Y %H:%M') }} UTC</div>
 </header>
 <main id="main-content">
@@ -57,7 +57,7 @@
     <div class="card metric"><div class="label">Активные авто</div><div class="value">{{ context.listings_active }}</div><div class="muted">из {{ context.listings_total }}</div></div>
     <div class="card metric"><div class="label">Фильтры</div><div class="value">{{ context.active_filters|length }}</div></div>
     <div class="card metric"><div class="label">Назначения</div><div class="value">{{ context.canonical_filter_catalog.expectations }}</div><div class="muted">версия {{ context.canonical_filter_catalog.catalog_version }}</div></div>
-    <div class="card metric"><div class="label">Найдено</div><div class="value ok">{{ context.observation_counts.get('found',0) }}</div></div>
+    <div class="card metric"><div class="label">Найдено</div><div class="value ok">{{ context.observation_counts.get('found',0) }}</div><div class="muted">Из них без проверки unique_id: {{ context.unverified_positions }}</div></div>
     <div class="card metric"><div class="label">Непоказы</div><div class="value danger">{{ context.open_absences|length }}</div><div class="muted">подтверждённые эпизоды</div></div>
     <div class="card metric"><div class="label">Тех. сбои</div><div class="value">{{ context.observation_counts.get('technical_error',0) }}</div></div>
     <div class="card metric"><div class="label">Обратная связь</div><div class="value"><a href="/api/v1/dashboard/feedback">{{ context.open_feedback_count }}</a></div><div class="muted">в работе</div></div>
@@ -87,11 +87,11 @@
   </tbody></table></div></section>
 
   <section class="two">
-    <div class="card"><h2>Статистика по фильтрам</h2><div class="scroll"><table><thead><tr><th>Фильтр</th><th>Найдено</th><th>Стр. 1 / 2 / 3</th><th>Не найдено</th><th>Тех.</th></tr></thead><tbody>
-      {% for row in context.filter_statistics %}<tr><td><a href="/api/v1/dashboard/history?source={{ row.source }}"><strong>{{ row.name }}</strong></a><br><span class="muted">{{ row.source }}</span></td><td>{{ row.found }}</td><td>{{ row.page_1 }} / {{ row.page_2 }} / {{ row.page_3 }}</td><td>{{ row.absent_confirmed }} <span class="muted">(+{{ row.absent_uncertain }} ожид.)</span></td><td>{{ row.technical_error }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Статистика появится после первого настроенного скана</td></tr>{% endfor %}
+    <div class="card"><h2>Статистика по фильтрам</h2><div class="scroll"><table><thead><tr><th>Фильтр</th><th>Найдено</th><th>Найдено по страницам</th><th>Не найдено</th><th>Тех.</th></tr></thead><tbody>
+      {% for row in context.filter_statistics %}<tr><td><a href="/api/v1/dashboard/history?source={{ row.source }}"><strong>{{ row.name }}</strong></a><br><span class="muted">{{ row.source }}</span></td><td>{{ row.found }}{% if row.unverified_positions %}<br><span class="muted">Без проверки unique_id: {{ row.unverified_positions }}</span>{% endif %}</td><td>{% for page, count in row.page_counts.items() %}{{ page }}: {{ count }}{% if not loop.last %} / {% endif %}{% endfor %}</td><td>{{ row.absent_confirmed }} <span class="muted">(+{{ row.absent_uncertain }} ожид.)</span></td><td>{{ row.technical_error }}</td></tr>{% else %}<tr><td colspan="5" class="empty">Статистика появится после первого настроенного скана</td></tr>{% endfor %}
     </tbody></table></div></div>
     <div class="card"><h2>Последние найденные позиции</h2><div class="scroll"><table><thead><tr><th>Автомобиль</th><th>Фильтр</th><th>Страница</th><th>Позиция</th></tr></thead><tbody>
-      {% for item in context.latest_found %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}"><strong>{{ item.listing.vin or item.listing_id }}</strong></a><br>{% if context.latest_found_urls.get(item.id) %}<a href="{{ context.latest_found_urls.get(item.id) }}" target="_blank" rel="noreferrer">{{ item.title or 'Открыть объявление' }}</a>{% else %}<span class="muted">{{ item.title or 'ссылка не сохранена' }}</span>{% endif %}{% for evidence_page in context.latest_found_evidence.get(item.id, []) %}<br><a href="/api/v1/observations/{{ item.id }}/evidence/{{ evidence_page }}" target="_blank">снимок стр. {{ evidence_page }}</a>{% endfor %}</td><td>{{ item.filter.name }}</td><td>{{ item.page_number }}</td><td>{{ item.absolute_position or '—' }}<br><span class="muted">на стр.: {{ item.position_in_page }}</span></td></tr>{% else %}<tr><td colspan="4" class="empty">Найденных позиций пока нет</td></tr>{% endfor %}
+      {% for item in context.latest_found %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.listing_id }}"><strong>{{ item.listing.vin or item.listing_id }}</strong></a><br>{% if context.latest_found_urls.get(item.id) %}<a href="{{ context.latest_found_urls.get(item.id) }}" target="_blank" rel="noreferrer">{{ item.title or 'Открыть объявление' }}</a>{% else %}<span class="muted">{{ item.title or 'ссылка не сохранена' }}</span>{% endif %}{% for evidence_page in context.latest_found_evidence.get(item.id, []) %}<br><a href="/api/v1/observations/{{ item.id }}/evidence/{{ evidence_page }}" target="_blank">снимок стр. {{ evidence_page }}</a>{% endfor %}</td><td>{{ item.filter.name }}</td><td>{{ item.page_number }}</td><td>{{ item.absolute_position or '—' }}<br><span class="muted">на стр.: {{ item.position_in_page }}</span>{% if context.latest_found_notes.get(item.id) %}<br><span class="muted">{{ context.latest_found_notes.get(item.id) }}</span>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="empty">Найденных позиций пока нет</td></tr>{% endfor %}
     </tbody></table></div></div>
   </section>
 
@@ -100,7 +100,7 @@
   </tbody></table></div></section>
 
   <section class="two">
-    <div class="card"><h2>Активные авто с неполными ссылками</h2><div class="scroll"><table><thead><tr><th>VIN / авто</th><th>Auto.ru</th><th>Avito</th></tr></thead><tbody>
+    <div class="card"><h2>Площадки без ссылки в реестре</h2><p>Пустая ссылка означает, что размещение не заявлено. Если активная карточка найдена в каталоге, её позиция показывается в отчёте по ID.</p><div class="scroll"><table><thead><tr><th>VIN / авто</th><th>Auto.ru</th><th>Avito</th></tr></thead><tbody>
       {% for item in context.missing_links %}<tr><td><a href="/api/v1/dashboard/listings/{{ item.id }}"><strong>{{ item.vin or 'VIN не указан' }}</strong></a><br><span class="muted">{{ item.brand or '' }} {{ item.model or '' }} {{ item.year or '' }}</span></td><td>{% if context.listing_urls[item.id].auto_ru %}<a href="{{ context.listing_urls[item.id].auto_ru }}" target="_blank" rel="noreferrer">открыть</a>{% else %}нет{% endif %}</td><td>{% if context.listing_urls[item.id].avito %}<a href="{{ context.listing_urls[item.id].avito }}" target="_blank" rel="noreferrer">открыть</a>{% else %}нет{% endif %}</td></tr>{% else %}<tr><td colspan="3" class="empty">У активных авто обе ссылки заполнены</td></tr>{% endfor %}
     </tbody></table></div></div>
     <div class="card"><h2>Подтвердить найденную ссылку</h2><form id="listing-link-form">
@@ -173,7 +173,7 @@ async function refreshScanProgress(){
     if(d.status==='waiting_captcha'){
       current='Пройдите CAPTCHA в открытом приватном окне Chrome. Проверка ждёт, а не пропускает объявление.';
     }else if(d.status==='running'){
-      current=`${sourceName(c.source)} · ${c.filter_name||'подготовка'}${c.page?' · страница '+c.page+'/'+(c.pages_total||3):''}`;
+      current=`${sourceName(c.source)} · ${c.filter_name||'подготовка'}${c.page?' · страница '+c.page+'/'+(c.pages_total||'—'):''}`;
     }else if(d.status==='completed'||d.status==='partial'){
       current='Последняя проверка завершена';
     }else if(d.error){current=d.error;}

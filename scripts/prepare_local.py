@@ -12,14 +12,18 @@ def main():
         print('LOCAL_CONFIG_EXISTS · текущая конфигурация сохранена')
         return
     password = secrets.token_hex(24)
-    source = 'https://docs.google.com/spreadsheets/d/1afmXPsek-nu-1eH_n1PuYNIIIYcskJqwcSCIMHzJUNA/export?format=csv&gid=755848469'
+    source = 'https://docs.google.com/spreadsheets/d/1s4RSn6oE8CeHzASjGHcQNQK6Hvhje6CUOaFmA3C5UFA/export?format=csv&gid=0'
     values = {
         'APP_ENV': 'stage', 'APP_TZ': 'Europe/Moscow', 'APP_BIND_PORT': '18000',
         'DB_BIND_PORT': '15433', 'NETWORK_PROFILE': 'local_vpn', 'AUTH_ENABLED': 'false',
         'DB_PASSWORD': password, 'DATABASE_DSN': f'postgresql+psycopg2://monitor:{password}@127.0.0.1:15433/a1_search_monitor',
         'SOURCE_IMPORT_SOURCE': 'sheet', 'SOURCE_GOOGLE_SHEET_EXPORT_URL': source,
+        'PLACEMENT_FEED_WORKBOOK_URL': (
+            'https://docs.google.com/spreadsheets/d/'
+            '1s4RSn6oE8CeHzASjGHcQNQK6Hvhje6CUOaFmA3C5UFA/edit'
+        ),
         'SCHEDULER_ENABLED': 'false', 'DEALER_DISCOVERY_ENABLED': 'false',
-        'SCAN_ENABLED_ENGINES': 'auto_ru,avito', 'SCAN_PAGES_LIMIT': '3',
+        'SCAN_ENABLED_ENGINES': 'auto_ru,avito', 'SCAN_PAGES_LIMIT': '5',
         'SCAN_INTERVAL_MINUTES': '360', 'EVIDENCE_DIR': '/app/artifacts',
     }
     descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

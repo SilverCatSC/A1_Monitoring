@@ -25,7 +25,7 @@ from app.scraper.base import (
     is_marketplace_listing_url,
     is_marketplace_search_url,
 )
-from app.service.identity import IdentityService
+from app.service.identity import IdentityService, has_multiple_vins, marketplace_urls
 from app.service.registry_audit import record_registry_change, registry_values
 
 
@@ -62,9 +62,7 @@ def _clean_optional(value: Any) -> str | None:
 
 
 def _has_multiple_vins(value: Any) -> bool:
-    text = str(value or '').upper()
-    candidates = re.findall(r'\b[A-HJ-NPR-Z0-9]{17}\b', text)
-    return len(set(candidates)) > 1 or '\n' in text.strip()
+    return has_multiple_vins(value)
 
 
 def _is_active_status(value: Any) -> bool:
@@ -99,7 +97,7 @@ class SourceImporter:
         if rows is None:
             rows = []
 
-        parsed_rows: list[tuple[int, dict[str, Any], list[SearchFilterDefinition]]] = []
+        parsed_rows: list[tuple[int, dict[str, Any], list[SearchFilterDefinition], bool]] = []
         snapshot = SourceImportSnapshot(
             cycle_id=cycle_id,
             started_at=_utcnow(),
@@ -121,6 +119,8 @@ class SourceImporter:
         raw_headers: list[str] = []
         required_missing: list[str] = []
         invalid_data: list[str] = []
+        ambiguous_vin_rows: list[int] = []
+        unresolved_active_rows: list[int] = []
         seen_vins: set[str] = set()
         present_listing_ids: set[str] = set()
         optional_unknown_allowed = {
@@ -147,34 +147,49 @@ class SourceImporter:
                 missing += 1
                 continue
             _normalize_vehicle_names(row)
+            explicitly_active = str(row.get('source_status') or '').strip().casefold() == 'актуально'
+            ignore_vin = False
 
             anchor_keys = ('vehicle_signature', 'brand', 'model', 'generation', 'year', 'vin')
-            if any(row.get(key) for key in anchor_keys):
+            if explicitly_active or any(row.get(key) for key in anchor_keys):
                 has_anchor = True
             else:
                 required_missing.append(f'row:{item.row_number}')
 
             vin = str(row.get('vin') or '').strip().upper()
             if _has_multiple_vins(vin):
-                invalid_data.append(f'row:{item.row_number}:multiple_vin')
-                missing += 1
-                continue
+                if not marketplace_urls(row) and not explicitly_active:
+                    invalid_data.append(f'row:{item.row_number}:multiple_vin')
+                    missing += 1
+                    continue
+                # Keep the complete descriptive value. IdentityService does not
+                # fingerprint ambiguous VINs; an existing offer URL can anchor
+                # this source row without guessing which VIN is correct.
+                ambiguous_vin_rows.append(item.row_number)
+                ignore_vin = True
+                vin = ''
             if vin and vin in seen_vins:
-                invalid_data.append(f'row:{item.row_number}:duplicate_vin')
-                missing += 1
-                continue
+                if not explicitly_active:
+                    invalid_data.append(f'row:{item.row_number}:duplicate_vin')
+                    missing += 1
+                    continue
+                ignore_vin = True
+                unresolved_active_rows.append(item.row_number)
             if vin:
                 seen_vins.add(vin)
 
             signature = _canonical_signature(row)
             if not signature:
-                missing += 1
-                continue
+                if not explicitly_active:
+                    missing += 1
+                    continue
+                ignore_vin = True
+                unresolved_active_rows.append(item.row_number)
 
             # _canonical_signature is a validation anchor only.  It must not be
             # used to join no-VIN rows: same model/year is not evidence that two
             # rows describe the same physical vehicle.
-            parsed_rows.append((item.row_number, row, _coerce_filters(row)))
+            parsed_rows.append((item.row_number, row, _coerce_filters(row), ignore_vin))
             valid += 1
 
         previous_snapshot = (
@@ -203,6 +218,17 @@ class SourceImporter:
 
         if required_missing:
             snapshot.notes = (snapshot.notes or '') + f'Rows with missing anchor: {required_missing[:20]}'
+
+        if ambiguous_vin_rows:
+            snapshot.notes = (snapshot.notes or '') + (
+                f' Rows retained with ambiguous VIN: {ambiguous_vin_rows}; '
+                'VIN excluded from identity resolution.'
+            )
+        if unresolved_active_rows:
+            snapshot.notes = (snapshot.notes or '') + (
+                f' Active rows retained for review despite missing/duplicate anchors: '
+                f'{unresolved_active_rows}.'
+            )
 
         if drifted:
             self.db.add(
@@ -237,8 +263,10 @@ class SourceImporter:
         try:
             identity = IdentityService(self.db)
             identity.bootstrap_legacy_identities()
-            for row_number, row, filters in parsed_rows:
-                vehicle, listing, resolution = identity.resolve(row=row)
+            for row_number, row, filters, ignore_vin in parsed_rows:
+                vehicle, listing, resolution = identity.resolve(
+                    row=row, ignore_vin=ignore_vin, source_row_number=row_number
+                )
                 previous = registry_values(listing) if listing is not None else None
 
                 listing.brand = _clean_optional(row.get('brand'))

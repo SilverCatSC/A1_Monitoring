@@ -440,7 +440,7 @@ def test_importer_rejects_non_marketplace_listing_urls(db_modules):
         session.close()
 
 
-def test_importer_rejects_multi_vin_row_but_accepts_valid_rows(db_modules):
+def test_importer_rejects_unanchored_inactive_multi_vin_row_but_accepts_valid_rows(db_modules):
     app_db, _ = db_modules
     from app.importer.service import SourceImporter
     from app.models import Listing, SourceImportSnapshot
@@ -452,7 +452,7 @@ def test_importer_rejects_multi_vin_row_but_accepts_valid_rows(db_modules):
             {
                 'brand': 'B',
                 'vin': 'X89183511M1GB1114\nW1V44781313871282',
-                'source_status': 'Актуально',
+                'source_status': 'Не актуально',
             },
         )
 
@@ -465,6 +465,94 @@ def test_importer_rejects_multi_vin_row_but_accepts_valid_rows(db_modules):
         assert 'multiple_vin' in (snapshot.notes or '')
     finally:
         session.close()
+
+
+def test_original_marketing_multi_vin_row_is_retained_by_w_x_urls(db_modules, tmp_path):
+    import csv
+
+    from app.importer.service import SourceImporter
+    from app.importer.sheet_csv import CsvOrXlsxReader
+    from app.models import Listing, SourceImportSnapshot, SourceRecord, Vehicle
+
+    headers = [''] * 24
+    for index, name in ((5, 'Статус'), (8, 'Марка, модель'), (10, ' VIN номер'),
+                        (22, 'AUTO-RU'), (23, 'AVITO-RU')):
+        headers[index] = name
+    values = [''] * 24
+    values[5] = 'Актуально'
+    values[8] = 'Mercedes-Benz V-Class'
+    values[10] = 'X89183511M1GB1114\nW1V44781313871282'
+    values[22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133372535-bc8a1a79/'
+    values[23] = 'https://www.avito.ru/moskva/avtomobili/mercedes_8176328839'
+    path = tmp_path / 'marketing.csv'
+    with path.open('w', newline='') as output:
+        writer = csv.writer(output)
+        writer.writerow(headers)
+        writer.writerow(values)
+    rows = CsvOrXlsxReader(str(path)).read()
+    with db_modules[0].SessionLocal() as db:
+        for _ in range(2):
+            summary = SourceImporter(db).run(rows, source_signature='original-marketing')
+            assert summary['rows_valid'] == 1
+            assert summary['rows_invalid'] == 0
+        listing = db.query(Listing).one()
+        assert listing.vin == values[10]
+        assert listing.source_auto_ru == values[22]
+        assert listing.source_avito == values[23]
+        assert listing.is_active
+        assert db.query(Vehicle).one().vin_fingerprint is None
+        records = db.query(SourceRecord).order_by(SourceRecord.created_at).all()
+        assert len(records) == 2
+        assert all(record.row_number == 2 and record.vin_fingerprint is None for record in records)
+        assert records[-1].resolution == 'offer_match'
+        assert all('ambiguous VIN' in snapshot.notes
+                   for snapshot in db.query(SourceImportSnapshot).all())
+
+
+def test_multi_vin_source_row_does_not_overwrite_other_vehicle_with_same_url(db_modules):
+    from app.importer.service import SourceImporter
+    from app.models import Listing, SourceRecord
+
+    url = 'https://www.avito.ru/moskva/avtomobili/mercedes_8176328839'
+    single = {'brand': 'Zeekr', 'model': '009', 'vin': 'L6T79T2E2PP081956',
+              'listing_url_avito': url, 'source_status': 'Не актуально'}
+    ambiguous = {'brand': 'Mercedes-Benz', 'model': 'V-Class',
+                 'vin': 'X89183511M1GB1114\nW1V44781313871282',
+                 'listing_url_avito': url, 'source_status': 'Актуально'}
+    with db_modules[0].SessionLocal() as db:
+        SourceImporter(db).run(_make_rows(single))
+        for _ in range(2):
+            # The conflicting old row follows the active row in the original.
+            summary = SourceImporter(db).run(_make_rows(ambiguous, single))
+            assert summary['rows_valid'] == 2
+        listings = db.query(Listing).all()
+        assert len(listings) == 2
+        assert {item.vin for item in listings} == {single['vin'], ambiguous['vin']}
+        assert [item.model for item in listings if item.is_active] == ['V-Class']
+        assert db.query(SourceRecord).count() == 5
+
+
+def test_explicitly_active_rows_are_never_excluded_for_vin_or_missing_links(db_modules):
+    from app.importer.service import SourceImporter
+    from app.models import Listing, SourceImportSnapshot, SourceRecord
+
+    rows = _make_rows(
+        {'brand': 'A', 'vin': 'W1VVNLTZ5S4556796', 'source_status': 'Актуально'},
+        {'brand': 'B', 'vin': 'W1VVNLTZ5S4556796', 'source_status': 'Актуально'},
+        {'brand': 'C', 'vin': 'X89183511M1GB1114\nW1V44781313871282', 'source_status': 'Актуально'},
+        {'source_status': 'Актуально'},
+        {'source_status': 'Актуально'},
+        {'source_status': 'Актуально', 'listing_url_avito': 'объявление снято'},
+    )
+    with db_modules[0].SessionLocal() as db:
+        for _ in range(2):
+            summary = SourceImporter(db).run(rows, source_signature='marketing')
+            assert summary['rows_valid'] == 6
+            assert summary['rows_invalid'] == 0
+            assert db.query(Listing).filter_by(is_active=True).count() == 6
+        assert db.query(Listing).count() == 6
+        assert db.query(SourceRecord).count() == 12
+        assert all('retained for review' in s.notes for s in db.query(SourceImportSnapshot).all())
 
 
 def test_importer_quarantines_large_valid_row_drop(db_modules):

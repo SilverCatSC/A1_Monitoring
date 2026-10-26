@@ -209,3 +209,12 @@ def test_avito_uses_visible_card_when_catalogue_marker_is_empty():
     hits = AvitoAdapter()._extract(html, page_number=2)
     assert len(hits) == 1
     assert hits[0].external_id.endswith('8176083999')
+
+
+def test_auto_ru_result_count_ignores_daily_and_hidden_offers():
+    assert _declared_offer_count(
+        '<div hidden>9 предложений</div><aside>9 Предложения дня</aside>'
+        '<button>Показать 26 предложений</button><span>26 предложений</span>'
+    ) == 26
+    assert _declared_offer_count('<p>9 Предложения дня</p><h1>21 предложение</h1>') == 21
+    assert _declared_offer_count('<p>9 предложений</p><h1>26 предложений</h1>') is None

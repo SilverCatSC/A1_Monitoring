@@ -24,6 +24,7 @@ from app.models import (
     ObservationState,
 )
 from app.scraper.base import canonical_company_site_key, canonical_listing_key
+from app.service.vehicle_content import vins_conflict
 
 HEAD_TABLE_SHEET = 'Размещение_автомобилей'
 ACTIVE_STATUSES = {'актуально', 'активно', 'active'}
@@ -510,7 +511,7 @@ def audit_head_table(db: Session) -> dict[str, Any]:
                         evidence=direct_sample.get('card_evidence'),
                     )
                 )
-            if record.get('vin') and direct_card.get('vin') and record['vin'] != direct_card['vin']:
+            if vins_conflict(record.get('vin'), direct_card.get('vin')):
                 issues.append(
                     _issue(
                         'direct_card_vin_mismatch',

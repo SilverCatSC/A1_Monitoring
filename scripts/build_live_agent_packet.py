@@ -69,7 +69,7 @@ def build_packet(
             'captured_search_card_fields': ['title', 'card_text', 'price', 'url', 'page_number'],
             'captured_direct_card_fields': [
                 'title', 'price', 'year', 'vin', 'availability', 'vat_status',
-                'description_excerpt', 'status_code', 'reason', 'url',
+                'description', 'description_capture', 'description_excerpt', 'status_code', 'reason', 'url',
             ],
             'not_observed_fields': ['complete_photo_gallery', 'complete_options', 'seller_private_data'],
             'absence_rule': 'A partial or technical scan never proves an advertisement absent.',

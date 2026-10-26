@@ -2,7 +2,7 @@ name: Code checks
 
 on:
   push:
-    branches: [main, master]
+    branches: [main, master, codex/fix-avito]
   pull_request:
 
 permissions:
@@ -23,6 +23,8 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.lock
           python -m pip install --no-deps -e .
+      - name: Install Chrome for local fixture browser tests
+        run: python -m playwright install --with-deps chrome
       - name: Lint
         run: ruff check src tests scripts
       - name: Test

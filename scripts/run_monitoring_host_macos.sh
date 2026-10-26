@@ -19,16 +19,18 @@ VPN_ADMISSION_DIR="$ARTIFACTS_DIR/vpn_admission"
 VPN_POLICY_PATH="$VPN_ADMISSION_DIR/policy.json"
 
 ENGINES='auto_ru,avito'
-PAGES=3
+PAGES=5
 PACE='cautious'
-CAPTCHA_WAIT_SECONDS=180
+CAPTCHA_WAIT_SECONDS=-1
 CAPTCHA_WAIT_WAS_SET=0
+PACE_WAS_SET=0
 PREFLIGHT_ONLY=0
 ENGINES_WAS_SET=0
 PAGES_WAS_SET=0
 RETRY_CYCLE_ID=''
 WITH_PLACEMENT_ID=0
 DIAGNOSTIC_NO_VPN=0
+DIAGNOSTIC_ROUTING=0
 RUNNER_STARTED_AT=''
 RUNNER_PHASE='startup'
 SCAN_EXIT_CODE=-1
@@ -37,12 +39,18 @@ SIGNALLED=0
 LOCK_HELD=0
 LOCK_CONTEXT_REQUESTED="${A1_MONITORING_HOST_LOCK_HELD:-}"
 LOCK_FD="${A1_MONITORING_HOST_LOCK_FD:-}"
+RUN_DIRECTORY=''
+RUN_LOG_PATH=''
+CYCLE_ID=''
+SEARCH_ONLY=''
 
 usage() {
     cat <<'EOF'
 Usage: scripts/run_monitoring_host_macos.sh [--preflight]
-       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10] [--captcha-wait-seconds 0..600] [--placement-identity]
-       scripts/run_monitoring_host_macos.sh --diagnostic-no-vpn --engines auto_ru,avito --pages 3
+       scripts/run_monitoring_host_macos.sh --pace fast|normal|cautious [scan parameters]
+       scripts/run_monitoring_host_macos.sh [--engines auto_ru,avito|auto_ru|avito] [--pages 1..10] [--captcha-wait-seconds -1|0..600] [--placement-identity]
+       scripts/run_monitoring_host_macos.sh --diagnostic-no-vpn --engines auto_ru,avito --pages 5
+       scripts/run_monitoring_host_macos.sh --diagnostic-routing --search-only avito_voyah_dream_all --pages 5
        scripts/run_monitoring_host_macos.sh --retry-cycle <completed-partial-or-failed-cycle-uuid>
 
 Runs one cautious monitoring cycle through the signed-in macOS user's visible
@@ -60,8 +68,20 @@ It cannot be combined with scan parameters.
 --placement-identity is a compatibility flag; ID link synchronization now runs
 before search in every full cycle.
 
---captcha-wait-seconds sets a bounded wait for a person to clear Auto.ru CAPTCHA
-in the visible private Chrome tab. Default: 180; 0 disables the wait.
+--search-only avito_voyah_dream_all runs only the Voyah Dream search, up to five
+pages. It saves host_runs/<run>/search_result.json, skips catalogue/card scans
+and database cycle creation, and retains the GUI, kernel lock and routing gates.
+
+--pace selects fast, normal or cautious (default). Fast reduces programmed
+pauses fivefold, retaining the same checks, page depth and manual CAPTCHA wait.
+
+--captcha-wait-seconds waits for manual CAPTCHA recovery on Auto.ru and Avito
+in the visible private Chrome tab. Default: -1, until solved or Ctrl+C;
+0 disables the wait. An explicit Avito IP notice allows up to two delayed
+same-page reloads; other HTTP denials are not automatically refreshed.
+
+--diagnostic-routing runs one labeled diagnostic with operator-configured routing.
+It does not require disconnected VPN or claim verified egress.
 
 --diagnostic-no-vpn requires disconnected VPSUS and runs one explicitly labeled
 local test. It is not an accepted production cycle or a CAPTCHA workaround.
@@ -72,6 +92,21 @@ safe_message() {
     # Do not print command output or exception text: this script is also used
     # by launchd, whose logs must not become a source of private data.
     printf '%s\n' "$1" >&2
+    if [[ -n "$RUN_LOG_PATH" ]]; then
+        printf '%s\n' "$1" >>"$RUN_LOG_PATH"
+    fi
+}
+
+prepare_run_record() {
+    # Record refusals before GUI/lock admission as well as completed scans.
+    # Never replace the last cycle's evidence with a failed launch attempt.
+    /bin/mkdir -p "$ARTIFACTS_DIR/host_runs"
+    /bin/chmod 700 "$ARTIFACTS_DIR/host_runs"
+    RUN_DIRECTORY="$(/usr/bin/mktemp -d "$ARTIFACTS_DIR/host_runs/$(/bin/date -u '+%Y%m%dT%H%M%SZ').XXXXXX")"
+    RUN_LOG_PATH="$RUN_DIRECTORY/host_runner.log"
+    : >"$RUN_LOG_PATH"
+    /bin/chmod 600 "$RUN_LOG_PATH"
+    safe_message "HOST_RUNNER_RECORD directory=$RUN_DIRECTORY"
 }
 
 utc_timestamp() {
@@ -81,6 +116,12 @@ utc_timestamp() {
 parse_arguments() {
     while [[ $# -gt 0 ]]; do
         case "$1" in
+            --pace)
+                [[ $# -ge 2 ]] || { usage >&2; exit 64; }
+                PACE="$2"
+                PACE_WAS_SET=1
+                shift 2
+                ;;
             --engines)
                 [[ $# -ge 2 ]] || { usage >&2; exit 64; }
                 ENGINES="$2"
@@ -115,6 +156,16 @@ parse_arguments() {
                 WITH_PLACEMENT_ID=1
                 shift
                 ;;
+            --search-only)
+                [[ $# -ge 2 && -z "$SEARCH_ONLY" ]] || { usage >&2; exit 64; }
+                SEARCH_ONLY="$2"
+                shift 2
+                ;;
+            --diagnostic-routing)
+                [[ "$DIAGNOSTIC_ROUTING" -eq 0 ]] || { safe_message 'HOST_RUNNER_REFUSED reason=duplicate_diagnostic_routing'; exit 64; }
+                DIAGNOSTIC_ROUTING=1
+                shift
+                ;;
             --diagnostic-no-vpn)
                 if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
                     safe_message 'HOST_RUNNER_REFUSED reason=duplicate_diagnostic_no_vpn'
@@ -147,19 +198,36 @@ parse_arguments() {
         auto_ru,avito|auto_ru|avito) ;;
         *) safe_message 'HOST_RUNNER_REFUSED reason=invalid_engines'; exit 64 ;;
     esac
+    if [[ -n "$SEARCH_ONLY" ]]; then
+        [[ "$SEARCH_ONLY" == 'avito_voyah_dream_all' ]] || { safe_message 'HOST_RUNNER_REFUSED reason=unknown_targeted_filter'; exit 64; }
+        if [[ "$ENGINES_WAS_SET" -eq 0 ]]; then ENGINES='avito'; fi
+        [[ "$ENGINES" == 'avito' && -z "$RETRY_CYCLE_ID" && "$WITH_PLACEMENT_ID" -eq 0 ]] || {
+            safe_message 'HOST_RUNNER_REFUSED reason=conflicting_targeted_search_parameters'; exit 64;
+        }
+    fi
+    case "$PACE" in
+        fast|normal|cautious) ;;
+        *) safe_message 'HOST_RUNNER_REFUSED reason=invalid_pace'; exit 64 ;;
+    esac
     if [[ ! "$PAGES" =~ ^([1-9]|10)$ ]]; then
         safe_message 'HOST_RUNNER_REFUSED reason=invalid_pages'
         exit 64
     fi
-    if [[ ! "$CAPTCHA_WAIT_SECONDS" =~ ^[0-9]{1,3}$ ]] || (( CAPTCHA_WAIT_SECONDS > 600 )); then
+    if [[ -n "$SEARCH_ONLY" ]] && (( PAGES > 5 )); then
+        safe_message 'HOST_RUNNER_REFUSED reason=targeted_search_max_five_pages'
+        exit 64
+    fi
+    if [[ "$CAPTCHA_WAIT_SECONDS" != -1 ]] && { [[ ! "$CAPTCHA_WAIT_SECONDS" =~ ^[0-9]{1,3}$ ]] || (( CAPTCHA_WAIT_SECONDS > 600 )); }; then
         safe_message 'HOST_RUNNER_REFUSED reason=invalid_captcha_wait_seconds'
         exit 64
     fi
     if [[ "$PREFLIGHT_ONLY" -eq 1 ]] && \
         { [[ "$ENGINES_WAS_SET" -eq 1 ]] || [[ "$PAGES_WAS_SET" -eq 1 ]] || \
           [[ "$CAPTCHA_WAIT_WAS_SET" -eq 1 ]] || \
+          [[ "$PACE_WAS_SET" -eq 1 ]] || \
           [[ "$WITH_PLACEMENT_ID" -eq 1 ]] || \
-          [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] || \
+          [[ -n "$SEARCH_ONLY" ]] || \
+          [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] || [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]] || \
           [[ -n "$RETRY_CYCLE_ID" ]]; }; then
         safe_message 'HOST_RUNNER_REFUSED reason=preflight_does_not_accept_scan_parameters'
         exit 64
@@ -169,7 +237,11 @@ parse_arguments() {
         safe_message 'HOST_RUNNER_REFUSED reason=invalid_retry_cycle_id'
         exit 64
     fi
-    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] && [[ -n "$RETRY_CYCLE_ID" ]]; then
+    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] && [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
+        safe_message 'HOST_RUNNER_REFUSED reason=conflicting_diagnostic_modes'
+        exit 64
+    fi
+    if { [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]] || [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; } && [[ -n "$RETRY_CYCLE_ID" ]]; then
         safe_message 'HOST_RUNNER_REFUSED reason=diagnostic_retry_not_supported'
         exit 64
     fi
@@ -282,6 +354,12 @@ write_status() {
     if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
         run_kind='preflight'
         execution_model='readiness_only_no_cycle'
+    elif [[ -n "$SEARCH_ONLY" ]]; then
+        run_kind='targeted_search'
+        execution_model='one_filter_no_monitoring_cycle'
+    elif [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
+        run_kind='diagnostic_routing'
+        execution_model='one_diagnostic_cycle_per_invocation'
     elif [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
         run_kind='diagnostic_no_vpn'
         execution_model='one_diagnostic_cycle_per_invocation'
@@ -296,6 +374,10 @@ write_status() {
         printf '"runner":"macos_interactive_host",'
         printf '"run_kind":"%s",' "$run_kind"
         printf '"execution_model":"%s",' "$execution_model"
+        if [[ -n "$SEARCH_ONLY" ]]; then
+            printf '"filter_key":"%s",' "$SEARCH_ONLY"
+            printf '"writes_monitoring_cycle":false,'
+        fi
         if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
             printf '"preflight_only":true,'
         fi
@@ -307,18 +389,25 @@ write_status() {
             printf '"engines":"%s",' "$ENGINES"
             printf '"pages":%s,' "$PAGES"
             printf '"pace":"%s",' "$PACE"
-            if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+            if [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
+                printf '"network_profile":"local_routed_diagnostic",'
+            elif [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
                 printf '"network_profile":"local_no_vpn",'
             else
                 printf '"network_profile":"local_browser",'
             fi
-            if [[ -n "$RETRY_CYCLE_ID" ]]; then
+            if [[ -n "$SEARCH_ONLY" ]]; then
+                printf '"cycle_mode":"search_only",'
+            elif [[ -n "$RETRY_CYCLE_ID" ]]; then
                 printf '"cycle_mode":"controlled_retry",'
             else
                 printf '"cycle_mode":"ordinary",'
             fi
         fi
         printf '"lock_mode":"kernel_fcntl"'
+        if [[ -n "$CYCLE_ID" ]]; then
+            printf ',"cycle_id":"%s"' "$CYCLE_ID"
+        fi
         if [[ "$scan_exit_code" -ge 0 ]]; then
             printf ',"scan_exit_code":%s' "$scan_exit_code"
         fi
@@ -329,6 +418,9 @@ write_status() {
     } >"$temporary_path"
     /bin/chmod 600 "$temporary_path"
     /bin/mv -f "$temporary_path" "$STATUS_PATH"
+    if [[ -n "$RUN_DIRECTORY" ]]; then
+        /bin/cp "$STATUS_PATH" "$RUN_DIRECTORY/status.json"
+    fi
     safe_message "HOST_RUNNER_STATUS state=$state phase=$phase"
 }
 
@@ -336,6 +428,10 @@ cleanup() {
     local exit_code="$?" terminal_state
     trap - EXIT
     set +e
+    if [[ -n "$RUN_DIRECTORY" ]]; then
+        printf '%s\n' "$exit_code" >"$RUN_DIRECTORY/exit_code.txt"
+        safe_message "HOST_RUNNER_EXIT code=$exit_code phase=$RUNNER_PHASE"
+    fi
     if [[ "$LOCK_HELD" == '1' && "$FINAL_STATUS_WRITTEN" -eq 0 ]]; then
         if [[ "$PREFLIGHT_ONLY" -eq 1 ]]; then
             terminal_state='preflight_failed'
@@ -356,7 +452,11 @@ trap 'SIGNALLED=1; exit 143' TERM
 trap 'SIGNALLED=1; exit 129' HUP
 
 run_quietly() {
-    "$@" >/dev/null 2>&1
+    if [[ -n "$RUN_LOG_PATH" ]]; then
+        "$@" >>"$RUN_LOG_PATH" 2>&1
+    else
+        "$@" >/dev/null 2>&1
+    fi
 }
 
 acquire_kernel_lock_and_reexec() {
@@ -385,11 +485,14 @@ acquire_kernel_lock_and_reexec() {
     # The helper holds a non-blocking kernel fcntl lock and execs this script.
     # It is released automatically when the last lock-holding process exits;
     # unlike a PID directory, no time-based stale-lock deletion is required.
-    exec "$PYTHON" "$LOCK_HELPER" --lock-path "$LOCK_PATH" -- \
+    safe_message 'HOST_RUNNER_LOCK_HANDOFF'
+    exec "$PYTHON" "$LOCK_HELPER" --lock-path "$LOCK_PATH" \
+        --attempt-log "$RUN_LOG_PATH" --active-exit-code 75 -- \
         "$ROOT_DIR/scripts/run_monitoring_host_macos.sh" "$@"
 }
 
 main() {
+    prepare_run_record
     parse_arguments "$@"
     require_console_gui_user
     cd "$ROOT_DIR"
@@ -447,8 +550,13 @@ main() {
     if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
         RUNNER_PHASE='no_vpn_diagnostic_admission'
     fi
+    if [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
+        RUNNER_PHASE='routed_diagnostic_admission'
+    fi
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
-    if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
+    if [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
+        safe_message 'ROUTED_DIAGNOSTIC_ADMISSION_OK vpn=unchecked egress=unverified'
+    elif [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
         if ! require_no_vpn_diagnostic_state; then
             safe_message 'HOST_RUNNER_REFUSED reason=no_vpn_diagnostic_admission_required'
             return 1
@@ -458,14 +566,16 @@ main() {
         return 1
     fi
 
-    RUNNER_PHASE='recover_open_cycles'
-    write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
-    # The Docker database is exposed to the host on the private loopback port
-    # from .env.  Do not inherit the container-oriented localhost:5432 DSN.
-    if ! A1_MONITORING_HOST_RUNNER_CONTEXT=1 \
-        run_quietly "$PYTHON" "$ROOT_DIR/scripts/recover_open_cycles.py"; then
-        safe_message 'HOST_RUNNER_FAILED phase=recover_open_cycles'
-        return 1
+    if [[ -z "$SEARCH_ONLY" ]]; then
+        RUNNER_PHASE='recover_open_cycles'
+        write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
+        # The Docker database is exposed to the host on the private loopback port
+        # from .env. Do not inherit the container-oriented localhost:5432 DSN.
+        if ! A1_MONITORING_HOST_RUNNER_CONTEXT=1 \
+            run_quietly "$PYTHON" "$ROOT_DIR/scripts/recover_open_cycles.py"; then
+            safe_message 'HOST_RUNNER_FAILED phase=recover_open_cycles'
+            return 1
+        fi
     fi
 
     # Docker/readiness/recovery can take long enough for the user to lock the
@@ -479,6 +589,10 @@ main() {
     write_status running "$RUNNER_PHASE" "$SCAN_EXIT_CODE" false
     local scan_args=(--engines "$ENGINES" --pages "$PAGES" --pace "$PACE"
         --captcha-wait-seconds "$CAPTCHA_WAIT_SECONDS")
+    if [[ -n "$SEARCH_ONLY" ]]; then
+        scan_args+=(--search-only "$SEARCH_ONLY" --search-result "$RUN_DIRECTORY/search_result.json")
+        safe_message "HOST_RUNNER_SEARCH_ONLY filter=$SEARCH_ONLY pages=$PAGES"
+    fi
     if [[ "$WITH_PLACEMENT_ID" -eq 1 ]]; then
         scan_args+=(--placement-identity)
     fi
@@ -487,13 +601,39 @@ main() {
     fi
     if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
         scan_args+=(--diagnostic-no-vpn)
+    elif [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
+        scan_args+=(--diagnostic-routing)
     fi
     if A1_MONITORING_HOST_RUNNER_CONTEXT=1 \
-        "$ROOT_DIR/scripts/local_scan.sh" "${scan_args[@]}" \
-        >/dev/null 2>&1; then
+        run_quietly "$ROOT_DIR/scripts/local_scan.sh" "${scan_args[@]}"; then
         SCAN_EXIT_CODE=0
     else
         SCAN_EXIT_CODE=$?
+    fi
+    if [[ -n "$SEARCH_ONLY" ]]; then
+        if [[ -f "$RUN_DIRECTORY/search_result.json" ]]; then
+            safe_message "HOST_RUNNER_SEARCH_RESULT $RUN_DIRECTORY/search_result.json"
+        elif [[ "$SCAN_EXIT_CODE" -eq 0 ]]; then
+            SCAN_EXIT_CODE=1
+            safe_message 'HOST_RUNNER_FAILED reason=targeted_result_missing'
+        fi
+        if [[ "$SCAN_EXIT_CODE" -eq 0 ]]; then
+            write_status succeeded targeted_search_finished "$SCAN_EXIT_CODE" true
+            FINAL_STATUS_WRITTEN=1
+            safe_message 'HOST_RUNNER_SEARCH_OK no_cycle_created=true'
+            return 0
+        fi
+        local targeted_state='failed'
+        [[ "$SCAN_EXIT_CODE" -eq 2 ]] && targeted_state='partial'
+        write_status "$targeted_state" targeted_search_finished "$SCAN_EXIT_CODE" true
+        FINAL_STATUS_WRITTEN=1
+        safe_message 'HOST_RUNNER_SEARCH_INCOMPLETE no_cycle_created=true no_automatic_retry=true'
+        [[ "$SCAN_EXIT_CODE" -eq 2 ]] && return 2
+        return 1
+    fi
+    CYCLE_ID="$(/usr/bin/sed -nE 's/^LOCAL_CYCLE_ID ([[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12})$/\1/p' "$RUN_LOG_PATH" | /usr/bin/tail -n 1)"
+    if [[ -n "$CYCLE_ID" ]]; then
+        safe_message "HOST_RUNNER_CYCLE_ID $CYCLE_ID"
     fi
 
     if [[ "$SCAN_EXIT_CODE" -eq 0 ]]; then

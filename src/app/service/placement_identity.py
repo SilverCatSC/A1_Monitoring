@@ -23,7 +23,7 @@ _PLACEMENT_ID_RE = re.compile(
 # labels it. Looking for a bare 22-character token in a marketing description
 # would create a false identity assertion from arbitrary copy or a VIN-like ID.
 _DESCRIPTION_PLACEMENT_ID_RE = re.compile(
-    r'(?i)(?:\ba1\s*)?\b(?:идентификатор|placement\s*id|id|ид)'
+    r'(?i)(?:\ba1\s*)?\b(?:unique[_\s-]*id|идентификатор|placement\s*id|id|ид)'
     r'(?:\s*[-№#]?\s*(?:номер|number))?(?:\s*[:№#-]\s*|\s+)'
     r'(?P<placement_id>\w{1,64})\b'
 )
@@ -101,6 +101,12 @@ def format_placement_id(
         f'{vehicle_year:04d}{placement_date.strftime("%d%m%y")}{ordinal:04d}'
     )
     return parse_placement_id(candidate).value
+
+
+def placement_id_claims_from_description(description: str | None) -> list[str]:
+    """All distinct labelled claims, including malformed ones, for conflict review."""
+    return list(dict.fromkeys(match['placement_id']
+                              for match in _DESCRIPTION_PLACEMENT_ID_RE.finditer(str(description or ''))))
 
 
 def placement_id_claim_from_description(description: str | None) -> str | None:

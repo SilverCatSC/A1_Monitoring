@@ -1,4 +1,4 @@
-"""Apply only unambiguous, evidenced exact-ID republications before search."""
+"""Apply evidenced exact-ID republications before binding collected search results."""
 
 from __future__ import annotations
 

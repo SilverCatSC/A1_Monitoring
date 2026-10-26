@@ -67,9 +67,7 @@ def test_complete_dealer_snapshot_upserts_candidates(tmp_path, monkeypatch):
         engine.dispose()
 
 
-def test_incomplete_dealer_snapshot_does_not_deactivate_last_good_catalog(
-    tmp_path, monkeypatch
-):
+def test_incomplete_dealer_snapshot_does_not_deactivate_last_good_catalog(tmp_path, monkeypatch):
     engine = create_engine(f'sqlite:///{tmp_path / "dealer-fail.db"}')
     Base.metadata.create_all(engine)
     session = sessionmaker(bind=engine)()
@@ -112,9 +110,7 @@ def test_partial_dealer_snapshot_keeps_observed_new_candidates(tmp_path, monkeyp
     try:
         service = DealerDiscoveryService(
             session,
-            auto_adapter=FakeAdapter(
-                _result(_hit(listing_url), complete=False, error='page 2 uncertain')
-            ),
+            auto_adapter=FakeAdapter(_result(_hit(listing_url), complete=False, error='page 2 uncertain')),
             avito_adapter=FakeAdapter(_result()),
         )
 
@@ -175,3 +171,43 @@ def test_overlapping_dealer_discovery_is_rejected(tmp_path):
         discovery_module._local_discovery_lock.release()
         session.close()
         engine.dispose()
+
+
+def test_strict_count_drop_alert_survives_incomplete_catalogue_without_feed(tmp_path, monkeypatch):
+    from datetime import timedelta
+
+    from app.config import settings
+
+    monkeypatch.setattr(settings, 'scan_filter_pause_min_seconds', 0)
+    monkeypatch.setattr(settings, 'scan_filter_pause_max_seconds', 0)
+    engine = create_engine('sqlite://')
+    Base.metadata.create_all(engine)
+    url = 'https://auto.ru/diler/cars/all/a1_avto_moskva/'
+    hit = _hit('https://auto.ru/cars/used/sale/mercedes/v_class/1234567890-a/')
+
+    class StrictAdapter(FakeAdapter):
+        async def scan_filter(self, *args, **kwargs):
+            return self.result
+
+    events = []
+    with sessionmaker(bind=engine)() as db:
+        prior = DealerDiscoveryRun(
+            source=EngineType.AUTO_RU,
+            dealer_url=url,
+            network_profile='local_browser',
+            candidates_found=24,
+            complete=True,
+            started_at=datetime.now(UTC) - timedelta(days=1),
+            finished_at=datetime.now(UTC) - timedelta(hours=23),
+        )
+        db.add(prior)
+        db.commit()
+        service = DealerDiscoveryService(
+            db, auto_adapter=StrictAdapter(_result(hit, complete=False)), progress_callback=events.append
+        )
+        service.run(sources={'auto_ru': [url]}, strict=True)
+        alert = next(x for x in events if x['event'] == 'publication_alert')
+        assert (alert['previous_count'], alert['observed_count']) == (24, 1)
+        assert alert['certainty'] == 'coverage_unproven' and not alert['vehicle_sale_confirmed']
+        latest = db.query(DealerDiscoveryRun).filter(DealerDiscoveryRun.id != prior.id).one()
+        assert latest.diagnostics['publication_alert']['kind'] == 'inventory_drop'

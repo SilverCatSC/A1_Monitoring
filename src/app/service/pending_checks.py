@@ -19,10 +19,38 @@ from app.models import (
 )
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
 from app.scraper.seller import SELLER_SOURCES
+from app.service.placement_status import record_placement_status
 
 
 class PendingChecksError(RuntimeError):
     pass
+
+
+# Direct-card pending reasons split into what an operator must actually do.
+# 'not_in_active_catalogue' is the active_catalogue_only policy: the registry
+# URL is stale by design and is never re-opened; the work is link
+# reconciliation, not a card visit.  Link divergences are registry facts to
+# confirm.  Everything else (CAPTCHA, HTTP, redirects, blocks, limits) is a
+# real unfinished card verification.
+INTENTIONAL_DIRECT_SKIP = 'not_in_active_catalogue'
+LINK_DIVERGENCE_REASONS = frozenset({'link_missing', 'roster_mismatch'})
+DIRECT_CARD_ACTIONS = {
+    'intentional_skip': 'registry_link_reconciliation',
+    'link_divergence': 'registry_link_confirmation',
+    'unfinished_check': 'verify_card',
+    'source_unavailable': 'restore_source_access',
+    'catalogue_incomplete': 'complete_catalogue',
+}
+
+
+def _direct_disposition(reason):
+    if reason in {'source_unavailable', 'catalogue_incomplete'}:
+        return reason
+    if reason == INTENTIONAL_DIRECT_SKIP:
+        return 'intentional_skip'
+    if reason in LINK_DIVERGENCE_REASONS:
+        return 'link_divergence'
+    return 'unfinished_check'
 
 
 def _latest(rows, key_fields, time_field):
@@ -39,11 +67,12 @@ def _latest(rows, key_fields, time_field):
 
 def _blocked_reason(diagnostics: dict) -> tuple[str, str | None]:
     for key, value in diagnostics.items():
-        if key.endswith('_http_status') and value == 429:
-            return 'http_429', diagnostics.get(key.replace('_http_status', '_evidence'))
+        if key.endswith('_http_status') and value in {401, 403, 429}:
+            return f'http_{value}', diagnostics.get(key.replace('_http_status', '_evidence'))
     error = str(diagnostics.get('error') or '').lower()
-    if 'http 429' in error:
-        return 'http_429', None
+    for status in (401, 403, 429):
+        if f'http {status}' in error:
+            return f'http_{status}', None
     captcha_page = next((key.removesuffix('_final_url') for key, value in diagnostics.items()
                          if key.endswith('_final_url') and 'captcha' in str(value).lower()), None)
     if 'captcha' in error or captcha_page:
@@ -96,9 +125,18 @@ def build_pending_checks(db, *, cycle_id: str, roster: list[dict], selected_sour
 
     for listing in roster:
         listing_id = listing['listing_id']
+        resolved_sources = set()
+        for source in selected_sources:
+            record = direct_by_key.get((listing_id, EngineType(source)))
+            if record is None:
+                continue
+            registry_url = (record.details or {}).get('registry_url', record.url)
+            if (canonical_listing_key(EngineType(source), registry_url) == listing.get('sources', {}).get(source)
+                    and record_placement_status(record, registry_url) in {'not_expected', 'inactive'}):
+                resolved_sources.add(source)
         for entry in listing.get('filters', []):
             source = entry['source']
-            if source not in selected_sources:
+            if source not in selected_sources or source in resolved_sources:
                 continue
             observation = search_by_key.get((listing_id, entry['id'], EngineType(source)))
             observed_key = ((observation.raw_payload or {}).get('expected_listing_key')
@@ -118,7 +156,10 @@ def build_pending_checks(db, *, cycle_id: str, roster: list[dict], selected_sour
                 elif mismatch:
                     reason = 'roster_mismatch'
                 elif observation.state == ObservationState.REVIEW_REQUIRED:
-                    reason = 'review_required'
+                    reason = 'source_unavailable' if diagnostics.get('error') == 'source_unavailable' else 'review_required'
+                    failures = diagnostics.get('source_failures') or []
+                    if failures:
+                        evidence = failures[0].get('evidence')
                 elif diagnostics.get('blocked_by_filter_id'):
                     reason = 'blocked_after_prior_filter'
                 items.append({'phase': 'search', 'source': source, 'listing_id': listing_id,
@@ -128,10 +169,15 @@ def build_pending_checks(db, *, cycle_id: str, roster: list[dict], selected_sour
                               'blocked_by_filter_id': diagnostics.get('blocked_by_filter_id'),
                               'evidence': evidence})
         for source in sorted(selected_sources):
+            if source in resolved_sources:
+                continue
             key = listing.get('sources', {}).get(source)
             record = direct_by_key.get((listing_id, EngineType(source)))
             inspection = ((record.details or {}).get('direct_inspection') or {}) if record else {}
             evidence = inspection.get('evidence')
+            failure = next(iter((record.details or {}).get('source_failures') or []), {}) if record else {}
+            if not evidence:
+                evidence = failure.get('evidence')
             proven = (
                 inspection.get('state') in {'active', 'removed'}
                 and isinstance(evidence, str)
@@ -141,11 +187,22 @@ def build_pending_checks(db, *, cycle_id: str, roster: list[dict], selected_sour
             if not proven:
                 reason = ('link_missing' if not key else
                           'roster_mismatch' if record and canonical_listing_key(EngineType(source), record.url) != key
-                          else inspection.get('status_code') or inspection.get('state') or 'not_run')
-                items.append({'phase': 'direct_card', 'source': source, 'listing_id': listing_id,
-                              'listing_key': key, 'reason': reason,
-                              'reconciliation_id': record.id if record else None,
-                              'evidence': evidence})
+                          else inspection.get('status_code') or inspection.get('state')
+                          or ((record.details or {}).get('inspection_skip_reason') if record else None)
+                          or 'not_run')
+                disposition = _direct_disposition(reason)
+                item = {'phase': 'direct_card', 'source': source, 'listing_id': listing_id,
+                        'listing_key': key, 'reason': reason,
+                        'disposition': disposition,
+                        'action': DIRECT_CARD_ACTIONS[disposition],
+                        'reconciliation_id': record.id if record else None,
+                        'evidence': evidence}
+                for detail_key in ('http_status', 'content_state'):
+                    if inspection.get(detail_key) is not None:
+                        item[detail_key] = inspection[detail_key]
+                if reason in {'source_unavailable', 'catalogue_incomplete'}:
+                    item['source_failure'] = failure
+                items.append(item)
 
     if placement is not None:
         coverage = (placement_report or {}).get('catalogue_complete') or {}
@@ -185,9 +242,18 @@ def build_pending_checks(db, *, cycle_id: str, roster: list[dict], selected_sour
 
 
 def pending_summary(items: list[dict], path: str) -> dict:
-    return {'count': len(items), 'by_phase': dict(sorted(Counter(
+    summary = {'count': len(items), 'by_phase': dict(sorted(Counter(
         item['phase'] for item in items
     ).items())), 'report_path': path}
+    # Keep registry divergence and intentional stale-link skips visible as a
+    # separate direct-card view; they never reduce the pending count.
+    dispositions = Counter(
+        item.get('disposition', 'unfinished_check')
+        for item in items if item['phase'] == 'direct_card'
+    )
+    if dispositions:
+        summary['direct_card_dispositions'] = dict(sorted(dispositions.items()))
+    return summary
 
 
 def load_cycle_roster(evidence_dir: Path, manifest_path: str, cycle_id: str,

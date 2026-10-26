@@ -87,6 +87,29 @@ class DealerDiscoveryService:
                     record.candidates_found = len(result.hits)
                     record.error = result.error or ('Catalogue end not proven within the page limit' if strict and not result.exhausted else None)
                     record.diagnostics = result.diagnostics
+                    if strict:
+                        # Count changes are useful even when feed/ID inspection
+                        # fails later. Compare the same seller route only.
+                        prior = (self.db.query(DealerDiscoveryRun).filter(
+                            DealerDiscoveryRun.source == source,
+                            DealerDiscoveryRun.dealer_url == dealer_url,
+                            DealerDiscoveryRun.started_at < started,
+                            DealerDiscoveryRun.finished_at.isnot(None),
+                            DealerDiscoveryRun.id != record.id,
+                            (DealerDiscoveryRun.cycle_id.is_(None)
+                             | (DealerDiscoveryRun.cycle_id != self.cycle_id)),
+                        ).order_by(DealerDiscoveryRun.started_at.desc()).first())
+                        if prior and record.candidates_found < (prior.candidates_found or 0):
+                            alert = {'source': source.value, 'kind': 'inventory_drop',
+                                'title': 'Сократилось число наблюдаемых активных публикаций',
+                                'dealer_url': dealer_url,
+                                'previous_count': prior.candidates_found,
+                                'observed_count': record.candidates_found,
+                                'certainty': 'confirmed' if record.complete else 'coverage_unproven',
+                                'cause': 'unknown', 'vehicle_sale_confirmed': False,
+                                'previous_run_id': prior.id}
+                            record.diagnostics = {**result.diagnostics, 'publication_alert': alert}
+                            self.progress({'event': 'publication_alert', **alert})
                     self._attach_page_evidence(result.hits, result.diagnostics)
                     self._apply_observed_hits(
                         source,

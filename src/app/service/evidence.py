@@ -65,6 +65,28 @@ def read_evidence_manifest(stored: str | None, evidence_dir: str) -> dict[str, A
     return payload
 
 
+def read_direct_card_evidence(saved: dict[str, Any], evidence_dir: str) -> dict[str, Any]:
+    """Verify image integrity AND its association with this recorded advert.
+
+    A valid search/challenge screenshot or a different advert is not card proof.
+    URL hashes must match exactly; unverifiable redirects remain unresolved.
+    This validates a dated observation, not the advert's current availability.
+    """
+    manifest = read_evidence_manifest(saved.get('evidence'), evidence_dir)
+    url = saved.get('url')
+    if not isinstance(url, str) or saved.get('source') not in {'avito', 'auto_ru'}:
+        raise EvidenceAccessError('invalid direct card scope')
+    digest = hashlib.sha256(url.encode()).hexdigest()
+    statuses = {200, 404, 410} if saved.get('state') == 'removed' else {200}
+    if (manifest.get('source') != saved['source']
+            or manifest.get('purpose') != 'direct_card'
+            or manifest.get('requested_url_sha256') != digest
+            or manifest.get('final_url_sha256') != digest
+            or manifest.get('http_status') not in statuses):
+        raise EvidenceAccessError('direct card evidence scope differs')
+    return manifest
+
+
 def has_card_evidence(observation: ListingObservation) -> bool:
     return bool((observation.raw_payload or {}).get('card_evidence'))
 

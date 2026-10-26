@@ -103,6 +103,7 @@ def reconcile_avito_placements(
     first_data_rows: Mapping[str, int],
     current_urls_by_placement_id: Mapping[str, str] | None = None,
     catalogue_complete: bool = False,
+    operator_confirmed_ids: Mapping[str, str] | None = None,
 ) -> tuple[PlacementFinding, ...]:
     """Compare Avito ``Id`` across both feed tabs with opened seller cards.
 
@@ -131,6 +132,7 @@ def reconcile_avito_placements(
     return _reconcile(
         normalized, opened_cards, source=EngineType.AVITO,
         current_urls_by_placement_id=current_urls_by_placement_id, catalogue_complete=catalogue_complete,
+        operator_confirmed_ids=operator_confirmed_ids,
     )
 
 
@@ -141,6 +143,7 @@ def _reconcile(
     source: EngineType,
     current_urls_by_placement_id: Mapping[str, str] | None,
     catalogue_complete: bool,
+    operator_confirmed_ids: Mapping[str, str] | None = None,
 ) -> tuple[PlacementFinding, ...]:
     """Compare feed identities with active, evidenced cards and explicit anchors.
 
@@ -277,6 +280,11 @@ def _reconcile(
                 ))
             continue
         if claimed_id is None and platform_id:
+            confirmed_id = (operator_confirmed_ids or {}).get(key)
+            if (confirmed_id == platform_id and current_urls.get(confirmed_id)
+                    and canonical_listing_key(source, current_urls[confirmed_id]) == key):
+                cards_by_id[confirmed_id][key] = _CardObservation(opened.url, 'operator_confirmed', True)
+                continue
             row = feed_by_id[platform_id]
             current_url = current_urls.get(platform_id)
             findings.append(PlacementFinding(
@@ -300,7 +308,7 @@ def _reconcile(
             findings.append(PlacementFinding(
                 'mixed_script_id',
                 str(claim) if claim else None, row.row_number, current_url, (opened.url,),
-                'Card description ID needs correction; identity is supported by the feed and card evidence',
+                'Retrieved card text contains Cyrillic aliases; exact feed ID and card evidence support identity. This does not establish an error in the feed or original description',
                 row.sheet, placement_id, 'visual_alias',
                 platform_id == placement_id,
             ))

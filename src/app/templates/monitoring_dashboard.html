@@ -1,0 +1,72 @@
+{% set monitor = data.monitoring %}{% set fleet = data.vehicles %}
+<link rel="stylesheet" href="/static/monitoring.css">
+<section class="monitor-overview" id="business-review">
+  <div class="monitor-intro"><div><span class="eyebrow">A1 · МОНИТОРИНГ ОБЪЯВЛЕНИЙ</span><h1>Что происходит с нашими автомобилями</h1>
+  <p class="muted">Состояние на <time data-monitor-time="{{ monitor.created_at }}">{{ monitor.created_at[:19]|replace("T", " ") }} UTC</time>. Исправления размещения выполняет маркетинг; характеристики и условия продажи подтверждает отдел продаж.</p></div>
+  <a class="button secondary" href="#monitoring-evidence">Подробности проверки</a></div>
+  <div class="monitor-stats">
+    <div><span>Требуют внимания</span><strong>{{ fleet.attention }}</strong><small>строк автомобилей с сигналами</small></div>
+    <div><span>Неактивные публикации</span><strong>{{ fleet.inactive }}</strong><small>в таблице актуально и есть ссылка</small></div>
+    <div><span>Auto.ru / Avito</span><strong>{{ monitor.active_counts.get('auto_ru', 0) }} / {{ monitor.active_counts.get('avito', 0) }}</strong><small>прочитано активных объявлений</small></div>
+    <div><span>unique_id подтверждён</span><strong>{{ monitor.confirmed_ids }} / {{ monitor.cards_with_content }}</strong><small>по сохранённым карточкам</small></div>
+  </div>
+  <p class="monitor-note">«5+» — объявление активно, но не найдено в первых пяти страницах заданного поиска. «Неактивно» — публикация не обнаружена в полностью прочитанном активном каталоге. Причина не установлена; продажа автомобиля не подтверждена.</p>
+  {% if not fleet.metadata_available %}<p class="monitor-note">Для этого отчёта нет сохранённой сводки строк маркетинга. VIN, ожидание размещения и фотографии фида не подставляются автоматически.</p>{% endif %}
+  <div class="monitor-toolbar"><label>Найти автомобиль <input type="search" id="vehicle-search" placeholder="Модель, VIN, unique_id, ответственный"></label>
+    <label>Показать <select id="vehicle-filter"><option value="all">Все автомобили</option><option value="attention">Требуют внимания</option><option value="inactive">Есть неактивная публикация</option><option value="incomplete">Недостаточно данных</option><option value="ok">Без выявленных расхождений</option><option value="unplanned">Без ссылок на размещение</option></select></label>
+    <span id="vehicle-count" aria-live="polite">{{ fleet.vehicles|length }} записей</span></div>
+</section>
+<div class="vehicle-grid">
+{% for car in fleet.vehicles %}
+<article class="vehicle-tile" data-status="{{ car.status }}" data-inactive="{{ 'yes' if car.platforms|selectattr('state', 'equalto', 'inactive')|list else 'no' }}" data-incomplete="{{ 'yes' if car.incomplete else 'no' }}" data-search="{{ car.search_text }}">
+  <div class="vehicle-photo">
+    {% if car.image %}<img src="{{ car.image }}" alt="{{ car.title }} — фото из фида" loading="lazy" referrerpolicy="no-referrer"><span>Фото из фида</span>
+    {% elif car.evidence_image %}<img class="evidence-preview" src="{{ car.evidence_image }}" alt="Сохранённый снимок объявления {{ car.title }}" loading="lazy"><span>Снимок объявления</span>
+    {% else %}<div class="vehicle-placeholder">Фото не сохранено</div>{% endif %}
+  </div>
+  <div class="vehicle-body">
+    <div class="vehicle-status {{ car.status }}">{{ {'attention': 'Требует внимания', 'incomplete': 'Есть непроверенные данные', 'ok': 'Расхождений не выявлено', 'unplanned': 'Размещение не указано в таблице'}.get(car.status) }}</div>
+    <div class="vehicle-tags" aria-label="Ярлыки размещения">
+    {% for platform in car.platforms %}
+      <span class="vehicle-tag {{ platform.state }}" title="{{ platform.label }}{% if platform.position %} · {{ platform.position }}{% endif %}">
+        {{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }} ·
+        {% if platform.state == 'active' %}Активно{% if platform.position == '5+' %} · 5+{% elif platform.position.startswith('Стр.') %} · {{ platform.position }}{% endif %}
+        {% elif platform.state == 'inactive' %}Неактивно
+        {% elif platform.state == 'unknown' %}{{ 'Связь не подтверждена' if platform.url and platform.label.startswith('Ссылка активна') else 'Не проверено' }}
+        {% else %}{{ 'Нет ссылки' if car.marketing_row else 'Нет данных' }}{% endif %}
+      </span>
+    {% endfor %}
+    {% if car.issues|selectattr('is_difference')|list %}<span class="vehicle-tag difference">Есть расхождения</span>{% endif %}
+    {% if car.incomplete %}<span class="vehicle-tag unknown">Недостаточно данных</span>{% endif %}
+    </div>
+    <h2>{{ car.title }}</h2><p class="vehicle-price">{{ car.price_display }}</p>
+    <p class="vehicle-origin">{{ 'Данные таблицы маркетинга' if car.marketing_row else 'Данные объявления · связь с таблицей не подтверждена' }}</p>
+    <dl class="vehicle-facts"><div><dt>Год</dt><dd>{{ car.year or 'Нет данных' }}</dd></div><div><dt>Пробег</dt><dd>{{ car.mileage or 'Нет данных' }}</dd></div><div><dt>Владельцы</dt><dd>{{ car.owners or 'Нет данных' }}</dd></div><div><dt>Ответственный</dt><dd>{{ car.responsible or 'Не указан' }}</dd></div></dl>
+    <p class="vehicle-vin">VIN <strong>{{ car.vin or 'Не подтверждён в таблице' }}</strong></p>
+    <p class="vehicle-origin">Маркетинг: {{ car.marketing_status }}</p>
+    <div class="vehicle-platforms">
+    {% for platform in car.platforms %}
+      <div class="vehicle-platform {{ platform.state }}"><strong>{{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }}</strong><span>{{ platform.label }}</span>
+      {% if platform.position %}<b>{{ platform.position }}</b>{% endif %}
+      {% if platform.state == 'active' %}<small>{{ platform.price }} · {{ platform.year }} · {{ platform.mileage }}</small>{% endif %}
+      {% if platform.url %}<a href="{{ platform.url }}" target="_blank" rel="noopener noreferrer">{{ 'Объявление ↗' if platform.state == 'active' else 'Ссылка из таблицы ↗' }}</a>{% endif %}</div>
+    {% endfor %}</div>
+    {% if car.platforms|selectattr('state', 'equalto', 'inactive')|list %}<p class="vehicle-callout"><strong>Маркетингу и продажам:</strong> в таблице автомобиль актуален и указана ссылка, но публикация отсутствует в активном каталоге. Требуется проверить размещение. Перевыкладка без прочитанного unique_id не исключена.</p>{% endif %}
+    {% if car.issues %}<p class="vehicle-issue-summary">Расхождения: {{ car.issues|selectattr('is_difference')|list|length }} · Вопросы к данным: {{ car.issues|rejectattr('is_difference')|list|length }}</p>{% endif %}
+    <details class="vehicle-details"><summary>Замечания и источники{% if car.issues %} ({{ car.issues|length }}){% endif %}</summary>
+      <p>unique_id: <strong>{{ car.unique_id or 'не подтверждён' }}</strong>. VIN используется только для связи строк внутри таблицы.</p>
+      {% if car.sheet_url %}<p><a href="{{ car.sheet_url }}" target="_blank" rel="noopener noreferrer">Строка {{ car.marketing_row }} в маркетинге ↗</a></p>{% endif %}
+      {% for issue in car.issues %}<div class="vehicle-issue"><strong>{{ 'Auto.ru' if issue.source == 'auto_ru' else 'Avito' }} · {{ issue.title }}</strong><p>{{ issue.detail }}</p><p>{{ 'Продажам подтвердить значение; маркетингу согласовать источники и публикацию.' if issue.is_difference else 'Недостаточно данных для окончательного вывода. Проверить исходные данные или полноту чтения.' }}</p><p class="muted">{{ issue.action }}</p>
+      <details><summary>Ячейки источника</summary>{% for ref in issue.cells %}<a href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.sheet }}!{{ ref.a1 }}</a> {% endfor %}</details></div>{% endfor %}
+      {% for platform in car.platforms if platform.state == 'active' %}<p class="muted">{{ platform.source }}: владельцы — {{ platform.owners }}; снимок {{ platform.captured_at or 'дата не установлена' }} (UTC).</p>{% endfor %}
+    </details>
+  </div>
+</article>
+{% endfor %}
+</div>
+<p id="vehicle-empty" hidden>По выбранным условиям автомобилей нет.</p>
+<section class="panel" id="publication-alerts"><details><summary>История изменений публикаций и сводные сигналы ({{ monitor.placement|length + monitor.events|length }})</summary>
+<p>Ниже также видны прежние открытые сигналы. Они не складываются со счётчиком новых исчезновений.</p>
+{% for item in monitor.placement + monitor.events %}<div class="insight"><div><strong>{{ item.source }} · {{ item.title }}</strong><p>{{ item.status }} · {{ item.unique_id or 'Сводка каталога' }}</p><p>{{ item.detail }}</p><p>{{ item.action }}</p>{% for link in item.links %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.label }}</a> {% endfor %}</div></div>{% endfor %}
+</details></section>
+<script src="/static/monitoring.js" defer></script>

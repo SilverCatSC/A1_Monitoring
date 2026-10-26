@@ -44,9 +44,17 @@ class ScanProgressTracker:
             )
         elif name == 'source_refresh_started':
             self.state.update(status='preparing', error=None, started_at=event['at'],
-                              total_filters=0, completed_filters=0, summary=None, current={}, events=[], preflight=None)
+                              total_filters=0, completed_filters=0, summary=None, current={}, events=[], preflight=None,
+                              publication_alerts=[])
+        elif name == 'publication_alert':
+            alerts = list(self.state.get('publication_alerts') or [])
+            alerts.append(event)
+            self.state['publication_alerts'] = alerts[-500:]
         elif name == 'source_refresh_failed':
             self.state.update(status='failed', error=event.get('error'))
+        elif name == 'search_collection_started':
+            self.state.update(status='running', current={}, completed_filters=0,
+                              total_filters=int(event.get('total_filters') or 0))
         elif name == 'dealer_preflight_started':
             self.state.update(status='reconciling', current={}, preflight=None)
         elif name == 'dealer_preflight_finished':
@@ -69,8 +77,18 @@ class ScanProgressTracker:
             direct_cards['checked'] = int(event.get('card_index') or 0)
             direct_cards['total'] = int(event.get('card_total') or direct_cards.get('total') or 0)
             self.state['direct_cards'] = direct_cards
+        elif name == 'navigation_operator_required':
+            if self.state.get('status') != 'waiting_navigation':
+                self.state['before_navigation_status'] = self.state.get('status', 'running')
+            self.state['status'] = 'waiting_navigation'
+        elif name == 'navigation_operator_waiting':
+            self.state['status'] = 'waiting_navigation'
+        elif name == 'navigation_operator_resolved':
+            self.state['status'] = self.state.pop('before_navigation_status', 'running')
         elif name == 'captcha_operator_required':
             self.state['before_captcha_status'] = self.state.get('status', 'running')
+            self.state['status'] = 'waiting_captcha'
+        elif name == 'captcha_operator_waiting':
             self.state['status'] = 'waiting_captcha'
         elif name in {'captcha_operator_resolved', 'captcha_operator_unresolved'}:
             self.state['status'] = self.state.pop('before_captcha_status', 'running')
@@ -103,8 +121,15 @@ class ScanProgressTracker:
             'page_started',
             'page_finished',
             'page_failed',
+            'navigation_operator_required',
+            'navigation_operator_waiting',
+            'navigation_operator_resolved',
+            'lazy_load_started',
+            'lazy_load_finished',
             'captcha_refresh',
             'captcha_operator_required',
+            'captcha_operator_waiting',
+            'captcha_manual_refresh_hint',
             'captcha_operator_resolved',
             'captcha_operator_unresolved',
             'filter_finished',
@@ -113,6 +138,8 @@ class ScanProgressTracker:
             'dealer_catalogue_started',
             'dealer_catalogue_finished',
             'dealer_link_check',
+            'direct_content_waiting',
+            'direct_navigation_waiting',
             'direct_cards_started',
             'direct_card_finished',
             'direct_cards_finished',
@@ -162,12 +189,28 @@ def _terminal_line(event: dict[str, Any]) -> str:
         str(event.get('source') or ''), str(event.get('source') or '')
     )
     name = str(event.get('event') or '')
+    if name == 'publication_alert':
+        detail = (f" · было {event['previous_count']}, обнаружено {event['observed_count']}"
+                  if event.get('kind') == 'inventory_drop' else
+                  f" · unique_id {event['unique_id']}" if event.get('unique_id') else '')
+        uncertain = ' · полнота/состояние не подтверждены' if event.get('certainty') != 'confirmed' else ''
+        return f'[{stamp}] СИГНАЛ · {source} · {event.get("title")}{detail}{uncertain}'
+    if name == 'content_review_finished':
+        return (f'[{stamp}] СОДЕРЖАНИЕ · проверено карточек {event.get("cards_checked", 0)} · '
+                f'с предупреждениями {event.get("cards_with_warnings", 0)} · сверка с таблицей отдельно')
+    if name == 'search_collection_started':
+        return f'[{stamp}] ПОИСК · сначала собираем выдачу, до посещения карточек'
+    if name == 'search_collection_finished':
+        return f'[{stamp}] ПОИСК · выдача сохранена; переходим к активному каталогу и карточкам'
     if name == 'dealer_preflight_started':
-        return f'[{stamp}] СВЕРКА · сначала проверяем актуальные ссылки в каталогах продавца'
+        return f'[{stamp}] СВЕРКА · проверяем актуальные ссылки после сбора выдачи'
     if name == 'dealer_catalogue_started':
         return f'[{stamp}] СВЕРКА · {source} · {event["url"]} · пауза {event["wait_seconds"]} с'
     if name == 'dealer_catalogue_finished':
         return f'[{stamp}] СВЕРКА · {source} · кандидатов {event["candidates"]} · весь каталог: {event["complete"]} · {event.get("error") or ""}'
+    if name in {'direct_content_waiting', 'direct_navigation_waiting'}:
+        return (f'[{stamp}] КАРТОЧКА · {source} · ждём содержимое · '
+                f'{event.get("url")} · объявление не пропускается')
     if name == 'dealer_link_check':
         label = 'КАРТОЧКА' if event.get('purpose') == 'card_detail' else 'СВЕРКА · старая ссылка'
         position = (
@@ -212,6 +255,8 @@ def _terminal_line(event: dict[str, Any]) -> str:
             f'повтор фильтра через {event.get("retry_seconds")} с'
         )
     if name == 'filter_started':
+        if event.get('stage') == 'matching_saved_search':
+            return f'[{stamp}] {source} · сопоставляем сохранённую выдачу · {event.get("filter_name")}'
         return (
             f'[{stamp}] {source} · фильтр {event.get("source_index")}/'
             f'{event.get("source_total")} · {event.get("filter_name")} · '
@@ -235,16 +280,52 @@ def _terminal_line(event: dict[str, Any]) -> str:
         )
     if name == 'page_failed':
         return f'[{stamp}] {source} · страница {event.get("page")} · ОШИБКА: {event.get("error")}'
+    if name == 'lazy_load_started':
+        return f'[{stamp}] {source} · подгрузка в текущей вкладке · пауза {event.get("wait_seconds")} с'
+    if name == 'lazy_load_finished':
+        return f'[{stamp}] {source} · подгрузка завершена · собрано карточек: {event.get("cards")}'
+    if name in {'navigation_operator_required', 'navigation_operator_waiting'}:
+        return (f'[{stamp}] {source} · страница {event.get("page")} не загружена; '
+                'цикл ждёт восстановления доступа. Не закрывайте вкладку; '
+                'после восстановления обновите ЭТУ ЖЕ вкладку (Cmd+R).')
+    if name == 'navigation_operator_resolved':
+        return f'[{stamp}] {source} · доступ восстановлен; продолжаем ту же страницу'
     if name == 'captcha_refresh':
+        if event.get('reason') == 'ip_restriction':
+            return (f'[{stamp}] {source} · ограничение IP · обновление '
+                    f'{event.get("attempt")}/{event.get("limit")} в той же вкладке')
         return f'[{stamp}] {source} · CAPTCHA · одно обычное обновление страницы'
     if name == 'captcha_operator_required':
-        return (f'[{stamp}] {source} · CAPTCHA осталась · пройдите проверку в открытом Chrome '
-                f'в течение {event.get("wait_seconds")} с')
+        timing = ('без ограничения времени; остановка — Ctrl+C' if event.get('wait_seconds') == -1
+                  else f'в течение {event.get("wait_seconds")} с')
+        return f'[{stamp}] {source} · пройдите проверку в открытом Chrome · {timing}'
     if name == 'captcha_operator_resolved':
+        if event.get('outcome') == 'cleared_by_refresh':
+            return f'[{stamp}] {source} · ограничение IP снято после обновления · продолжаем текущую страницу'
         return f'[{stamp}] {source} · CAPTCHA пройдена · продолжаем текущую страницу'
+    if name == 'captcha_operator_waiting':
+        reason = {
+            'ip_refresh_wait': 'сообщение об ограничении IP; ждём перед обновлением этой страницы',
+            'ip_refresh_exhausted': 'повторы исчерпаны; ждём в той же вкладке, объявление не пропускается',
+            'profile_load_failed': 'Avito не загрузил профиль; нажмите «Обновить» в этой вкладке — проверка ждёт',
+            'redirect_pending': 'проверка пройдена; ждём перехода Avito, вкладку не обновляйте',
+            'redirect_stalled': 'Avito не завершил переход после проверки; обновите ЭТУ ЖЕ вкладку один раз (Cmd+R)',
+            'challenge_present': 'страница проверки ещё открыта',
+            'stabilizing': 'проверяем восстановленную страницу',
+            'wrong_destination': 'открыт другой адрес; вернитесь к исходной странице',
+            'manual_refresh_required': 'проверка снята, но документ ещё отдаёт отказ; обновите ЭТУ ЖЕ вкладку (Cmd+R)',
+            'awaiting_successful_document': 'ждём HTTP 200 страницы; если каталог уже открыт, обновите его вручную',
+        }.get(event.get('wait_reason'), 'ждём прохождения проверки')
+        return f'[{stamp}] {source} · ожидание CAPTCHA · {reason} · HTTP {event.get("http_status")}'
+    if name == 'captcha_manual_refresh_hint':
+        if event.get('instruction'):
+            return f'[{stamp}] {source} · {event["instruction"]}'
+        return f'[{stamp}] {source} · КАТАЛОГ УЖЕ ОТКРЫТ? — обновите ЭТУ ЖЕ вкладку (Cmd+R), чтобы программа получила HTTP 200'
     if name == 'captcha_operator_unresolved':
         return f'[{stamp}] {source} · CAPTCHA не снята · проверка остаётся незавершённой'
     if name == 'filter_finished':
+        if event.get('collection_only'):
+            return f'[{stamp}] {source} · выдача сохранена · {event.get("filter_name")} · карточек: {event.get("cards", 0)} · {event.get("status")}'
         return (
             f'[{stamp}] {source} · {event.get("filter_name")} · {event.get("status")} · '
             f'найдено своих: {event.get("found", 0)}/{event.get("expected", 0)}'

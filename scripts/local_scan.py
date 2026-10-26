@@ -13,7 +13,7 @@ import time
 from dataclasses import asdict
 from datetime import datetime, timedelta
 from pathlib import Path
-from urllib.parse import quote_plus, urlparse
+from urllib.parse import quote, quote_plus, urlparse
 from urllib.request import Request, urlopen
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -22,6 +22,15 @@ DEFAULT_EVIDENCE = PROJECT_ROOT / 'artifacts' / 'evidence'
 DEFAULT_VPN_POLICY = PROJECT_ROOT / 'artifacts' / 'vpn_admission' / 'policy.json'
 HOST_RUNNER_CONTEXT_ENV = 'A1_MONITORING_HOST_RUNNER_CONTEXT'
 PACING_PROFILES = {
+    'fast': {
+        'SCAN_FILTER_PAUSE_MIN_SECONDS': '2.4',
+        'SCAN_FILTER_PAUSE_MAX_SECONDS': '4',
+        'SCAN_PAGE_PAUSE_MIN_SECONDS': '1.2',
+        'SCAN_PAGE_PAUSE_MAX_SECONDS': '2.4',
+        'AUTO_RU_PAGE_DELAY_SECONDS': '1',
+        'AVITO_PAGE_DELAY_SECONDS': '0.8',
+        'TARGET_CLOSED_RETRY_SECONDS': '1',
+    },
     'normal': {
         'SCAN_FILTER_PAUSE_MIN_SECONDS': '2',
         'SCAN_FILTER_PAUSE_MAX_SECONDS': '5',
@@ -89,28 +98,37 @@ def _cdp_ready(url: str) -> bool:
         return False
 
 
-def _ensure_cdp_page(cdp_url: str) -> bool:
+def _ensure_cdp_page(cdp_url: str, initial_url: str = 'about:blank') -> bool:
     """Chrome can keep its debug endpoint alive after its final tab was closed."""
     try:
         with urlopen(f'{cdp_url.rstrip("/")}/json/list', timeout=2) as response:
             targets = json.load(response)
-        if any(item.get('type') == 'page' for item in targets):
+        pages = [item for item in targets if item.get('type') == 'page']
+        if pages and (initial_url == 'about:blank' or any(item.get('url') != 'about:blank' for item in pages)):
             return False
         request = Request(
-            f'{cdp_url.rstrip("/")}/json/new?about%3Ablank', method='PUT'
+            f'{cdp_url.rstrip("/")}/json/new?{quote(initial_url, safe="")}', method='PUT'
         )
         with urlopen(request, timeout=2) as response:
             target = json.load(response)
         if target.get('type') != 'page':
             raise RuntimeError('Chrome did not create a controllable page')
+        # Only replace empty startup tabs in the dedicated Monitoring profile.
+        # Existing nonempty tabs are preserved by the early return above.
+        for page in pages:
+            with urlopen(f'{cdp_url.rstrip("/")}/json/close/{quote(page["id"], safe="")}', timeout=2):
+                pass
         return True
     except (OSError, ValueError) as exc:
         raise RuntimeError(f'Cannot prepare a Chrome tab at {cdp_url}: {exc}') from exc
 
 
-def _ensure_local_chrome(cdp_url: str, profile: Path) -> bool:
+def _ensure_local_chrome(cdp_url: str, profile: Path, initial_url: str = 'about:blank') -> bool:
     if _cdp_ready(cdp_url):
-        _ensure_cdp_page(cdp_url)
+        if initial_url == 'about:blank':
+            _ensure_cdp_page(cdp_url)
+        else:
+            _ensure_cdp_page(cdp_url, initial_url)
         return False
     parsed = urlparse(cdp_url)
     if parsed.hostname not in {'127.0.0.1', 'localhost'} or not parsed.port:
@@ -125,7 +143,7 @@ def _ensure_local_chrome(cdp_url: str, profile: Path) -> bool:
         '--no-first-run',
         '--no-default-browser-check',
         '--disable-extensions',
-        'about:blank',
+        initial_url,
     ]
     subprocess.Popen(
         command,
@@ -135,7 +153,7 @@ def _ensure_local_chrome(cdp_url: str, profile: Path) -> bool:
     )
     for _ in range(30):
         if _cdp_ready(cdp_url):
-            _ensure_cdp_page(cdp_url)
+            _ensure_cdp_page(cdp_url, initial_url)
             return True
         time.sleep(1)
     raise RuntimeError('Local Chrome started but its control endpoint did not become ready')
@@ -147,6 +165,7 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     evidence_dir.mkdir(parents=True, exist_ok=True)
 
     os.environ['NETWORK_PROFILE'] = (
+        'local_routed_diagnostic' if getattr(args, 'diagnostic_routing', False) else
         'local_no_vpn' if getattr(args, 'diagnostic_no_vpn', False) else 'local_browser'
     )
     os.environ['BROWSER_CDP_URL'] = cdp_url
@@ -154,7 +173,8 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     os.environ['SCAN_ENABLED_ENGINES'] = args.engines
     # Every full host cycle must synchronize exact-ID links before search.
     # Probe mode never writes a cycle or registry link.
-    os.environ['PLACEMENT_RECONCILIATION_ENABLED'] = 'false' if args.probe_url else 'true'
+    search_only = bool(getattr(args, 'search_only', None))
+    os.environ['PLACEMENT_RECONCILIATION_ENABLED'] = 'false' if args.probe_url or search_only else 'true'
     os.environ['SCAN_PAGES_LIMIT'] = str(args.pages)
     os.environ['EVIDENCE_DIR'] = str(evidence_dir)
     os.environ['CAPTCHA_OPERATOR_WAIT_SECONDS'] = str(args.captcha_wait_seconds)
@@ -164,7 +184,7 @@ def _configure_runtime(args: argparse.Namespace, env_values: dict[str, str]) -> 
     for key, value in PACING_PROFILES[args.pace].items():
         os.environ[key] = value
 
-    if not args.probe_url:
+    if not args.probe_url and not search_only:
         password = env_values.get('DB_PASSWORD')
         if not password:
             raise RuntimeError('DB_PASSWORD is missing in .env')
@@ -254,12 +274,17 @@ def _parser() -> argparse.ArgumentParser:
         description='Run A1 monitoring through visible Chrome with ephemeral private contexts.'
     )
     parser.add_argument('--engines', default='auto_ru,avito')
-    parser.add_argument('--pages', type=int, default=3, choices=range(1, 11), metavar='1..10')
+    parser.add_argument('--pages', type=int, default=5, choices=range(1, 11), metavar='1..10')
     parser.add_argument('--probe-url', help='Check one search URL without writing observations to the DB')
+    parser.add_argument('--search-only', choices=('avito_voyah_dream_all',),
+                        help='Run only the named canonical search through the interactive host runner')
+    parser.add_argument('--search-result', help='Private JSON output for --search-only')
     parser.add_argument(
         '--diagnostic-no-vpn', action='store_true',
         help='One labeled MacBook diagnostic cycle only while VPN is disconnected',
     )
+    parser.add_argument('--diagnostic-routing', action='store_true',
+                        help='One labeled host diagnostic with operator-configured routing; egress unverified')
     parser.add_argument(
         '--placement-identity', action='store_true',
         help='Compatibility flag; exact-ID link reconciliation now runs before every full cycle',
@@ -270,8 +295,8 @@ def _parser() -> argparse.ArgumentParser:
     )
     parser.add_argument('--cdp-port', type=int, default=19223)
     parser.add_argument(
-        '--captcha-wait-seconds', type=int, default=180,
-        help='Bounded wait for a person to clear Auto.ru CAPTCHA in visible Chrome (0 disables)',
+        '--captcha-wait-seconds', type=int, default=-1,
+        help='Manual Auto.ru/Avito CAPTCHA wait in visible Chrome (default: -1 until solved, 0 disables)',
     )
     parser.add_argument('--browser-profile', default=str(DEFAULT_PROFILE))
     parser.add_argument('--evidence-dir', default=str(DEFAULT_EVIDENCE))
@@ -279,7 +304,7 @@ def _parser() -> argparse.ArgumentParser:
         '--pace',
         choices=tuple(PACING_PROFILES),
         default='cautious',
-        help='Request pacing profile; cautious is slower and is the local default',
+        help='Request pacing profile; fast uses 5x shorter programmed waits than cautious, which remains the default',
     )
     parser.add_argument('--full-json', action='store_true', help='Print complete hit payloads')
     parser.add_argument(
@@ -293,8 +318,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
-    if not 0 <= args.captcha_wait_seconds <= 600:
-        raise RuntimeError('captcha-wait-seconds must be between 0 and 600')
+    if not -1 <= args.captcha_wait_seconds <= 600:
+        raise RuntimeError('captcha-wait-seconds must be -1 or between 0 and 600')
     # Windows/MSI is deliberately source-only fallback material after the
     # MacBook primary-host decision. Reject even the read-only probe path here
     # because this raw Python entry point could otherwise bypass its PowerShell
@@ -303,7 +328,15 @@ def main() -> int:
         raise RuntimeError('Windows monitoring is not accepted; use the MacBook production host')
     if args.retry_cycle and args.probe_url:
         raise RuntimeError('retry-cycle cannot be combined with probe-url')
-    if args.diagnostic_no_vpn and (args.retry_cycle or args.probe_url or args.watch):
+    if args.search_only and (args.probe_url or args.retry_cycle or args.watch or args.placement_identity):
+        raise RuntimeError('search-only cannot be combined with probe, retry, watch, or placement identity')
+    if args.search_only and (args.engines != 'avito' or args.pages > 5 or not args.search_result):
+        raise RuntimeError('Voyah search-only requires --engines avito, up to five pages and --search-result')
+    if args.search_result and not args.search_only:
+        raise RuntimeError('search-result requires search-only')
+    if args.diagnostic_no_vpn and args.diagnostic_routing:
+        raise RuntimeError('diagnostic network modes are mutually exclusive')
+    if (args.diagnostic_no_vpn or args.diagnostic_routing) and (args.retry_cycle or args.probe_url or args.watch):
         raise RuntimeError('diagnostic-no-vpn cannot be combined with retry, probe, or watch')
     if args.retry_cycle and args.watch:
         raise RuntimeError('retry-cycle cannot be combined with watch')
@@ -317,6 +350,27 @@ def main() -> int:
         _require_interactive_host_runner_context()
     env_values = _env_file_values(PROJECT_ROOT / '.env')
     cdp_url = _configure_runtime(args, env_values)
+    if args.search_only:
+        from app.service.targeted_search import save_targeted_search, targeted_filter
+
+        definition = targeted_filter(args.search_only)
+        _prepare_vpn_admission_directory()
+        if args.diagnostic_routing:
+            print('ROUTED_DIAGNOSTIC_ADMISSION_OK vpn=unchecked egress=unverified')
+        elif args.diagnostic_no_vpn:
+            _require_no_vpn_diagnostic_admission()
+        else:
+            _require_vpn_admission()
+        dashboard = f'http://127.0.0.1:{int(env_values.get("APP_BIND_PORT", "8000"))}/api/v1/dashboard'
+        started = _ensure_local_chrome(cdp_url, Path(args.browser_profile).expanduser().resolve(), dashboard)
+        print('LOCAL_CHROME_STARTED' if started else 'LOCAL_CHROME_REUSED')
+        payload = asyncio.run(_probe(definition.url, args.pages))
+        record = save_targeted_search(args.search_only, payload, pages=args.pages,
+                                      output_path=args.search_result, evidence_dir=args.evidence_dir)
+        print(f'LOCAL_TARGETED_SEARCH_RESULT {args.search_result}')
+        complete = record['result']['complete']
+        print(f'LOCAL_TARGETED_SEARCH_FINISHED complete={str(complete).lower()} no_cycle_created=true')
+        return 0 if complete else 2
     if args.probe_url:
         started = _ensure_local_chrome(cdp_url, Path(args.browser_profile).expanduser().resolve())
         print('LOCAL_CHROME_STARTED' if started else 'LOCAL_CHROME_REUSED')
@@ -361,13 +415,16 @@ def main() -> int:
     exit_code = 0
     progress = ScanProgressTracker(str(Path(args.evidence_dir).expanduser().resolve()))
     def start_browser():
-        started = _ensure_local_chrome(cdp_url, Path(args.browser_profile).expanduser().resolve())
+        dashboard_url = f'http://127.0.0.1:{int(env_values.get("APP_BIND_PORT", "8000"))}/api/v1/dashboard'
+        started = _ensure_local_chrome(cdp_url, Path(args.browser_profile).expanduser().resolve(), dashboard_url)
         print('LOCAL_CHROME_STARTED' if started else 'LOCAL_CHROME_REUSED')
         print(f'LOCAL_SCAN_PACE {args.pace}')
     while True:
         # Recheck immediately before the DB-writing cycle. Probe mode remains
         # deliberately outside this full-cycle admission boundary.
-        if args.diagnostic_no_vpn:
+        if args.diagnostic_routing:
+            print('ROUTED_DIAGNOSTIC_ADMISSION_OK vpn=unchecked egress=unverified')
+        elif args.diagnostic_no_vpn:
             _require_no_vpn_diagnostic_admission()
         else:
             _require_vpn_admission()

@@ -71,6 +71,28 @@ def test_current_id_excludes_old_results_and_unattributed_legacy_absence(db):
     assert data['legacy_unattributed'] == 1
 
 
+@pytest.mark.parametrize('active,expected', [(True, 'beyond_scope'), (False, 'inactive')])
+def test_placements_use_catalogue_status_and_depth_label(db, active, expected):
+    from app.models import ListingReconciliation
+    db.get(ScanRun, 'run').cycle_id = 'cycle'
+    details = ({'direct_inspection': {'state': 'active'}} if active else {
+        'catalogue_complete': True, 'inspection_skip_reason': 'not_in_active_catalogue'})
+    db.add(ListingReconciliation(listing_id='car', source=EngineType.AUTO_RU,
+        batch_id='batch', cycle_id='cycle', state='verified' if active else 'review_required',
+        url=NEW, reason='fixture', details=details))
+    observe(db, ObservationState.ABSENT_UNCERTAIN, payload={
+        'expected_listing_key': canonical_listing_key(EngineType.AUTO_RU, NEW),
+        'filter_version': 1, 'scan_diagnostics': {'search_complete': True, 'search_pages_limit': 5}})
+    data = analytics_context(db)
+    placement = data['placements'][0]
+    assert placement['state'] == expected
+    assert placement['position_label'] == ('5+' if active else None)
+    env = Environment(loader=FileSystemLoader(Path(__file__).parents[2] / 'src/app/templates'),
+                      autoescape=select_autoescape(['html']))
+    rendered = env.get_template('placements.html').render(data=data)
+    assert ('5+' if active else 'Объявление неактивно на площадке') in rendered
+
+
 def test_latest_error_not_old_found_and_excluded_from_visibility_denominator(db):
     observe(db, ObservationState.FOUND, seconds_ago=90)
     observe(db, ObservationState.ABSENT_UNCERTAIN, seconds_ago=80)

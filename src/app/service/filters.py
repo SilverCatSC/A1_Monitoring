@@ -16,7 +16,7 @@ class FilterValidationError(ValueError):
     pass
 
 
-CATALOG_VERSION = 'a1-monitoring-rules-2026-09-14-v6'
+CATALOG_VERSION = 'a1-monitoring-rules-2026-10-15-v8'
 
 
 @dataclass(frozen=True)
@@ -29,9 +29,12 @@ class CanonicalFilterDefinition:
     condition: str
     output_type: str | None = None
     geo_radius_km: int | None = None
+    local_priority: int = 1
+    source_document: str = 'Инструкция по мониторингу машин.md'
 
 
-# Business-owned search-result URLs from "Инструкция по мониторингу машин.md".
+# Business-owned search-result URLs from "Инструкция по мониторингу машин.md"
+# and subsequent owner confirmations (recorded on each definition).
 # The two Avito Sprinter URLs in that document describe the same semantic search;
 # only one is retained so one marketplace page is not counted twice.
 CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
@@ -118,6 +121,16 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'all',
     ),
     CanonicalFilterDefinition(
+        'avito_v_class_all',
+        EngineType.AVITO,
+        'Mercedes-Benz V-Class — все',
+        'https://www.avito.ru/moskva/avtomobili/mercedes-benz/v-klass-ASgBAgICAkTgtg3omCjitg2ItCg?context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6IlhTQlNia3pubXA0ZnJzZ0kiO31dt5xwJgAAAA&f=ASgBAgICA0Tgtg3omCjitg2ItCiwsxSAoo8D&localPriority=0&radius=0&searchRadius=0',
+        'v_class',
+        'all',
+        local_priority=0,
+        source_document='Владелец: общий фильтр Avito V-Class, 2026-10-07',
+    ),
+    CanonicalFilterDefinition(
         'avito_sprinter_all',
         EngineType.AVITO,
         'Mercedes-Benz Sprinter — все',
@@ -165,6 +178,16 @@ CANONICAL_FILTERS: tuple[CanonicalFilterDefinition, ...] = (
         'hongqi_hq9',
         'new',
     ),
+    CanonicalFilterDefinition(
+        'avito_voyah_dream_all',
+        EngineType.AVITO,
+        'Voyah Dream — все',
+        'https://www.avito.ru/moskva/avtomobili/voyah/dreamer-ASgBAgICAkTgtg2o8OMC4rYNytbXEA?context=H4sIAAAAAAAA_wEmANn_YToxOntzOjE6InkiO3M6MTY6InZEWnRmM3lzMGN6Q0lPVTMiO31TZ_Z5JgAAAA&localPriority=0&radius=0&searchRadius=0',
+        'voyah_dream',
+        'all',
+        local_priority=0,
+        source_document='Владелец: Voyah Dream, Москва, радиус 0 км, пять страниц, 2026-10-15',
+    ),
 )
 
 
@@ -175,7 +198,7 @@ def _moscow_only(definition: CanonicalFilterDefinition) -> CanonicalFilterDefini
         geography = {'geo_radius': '0', 'rid': '213'}
     elif definition.source == EngineType.AVITO:
         parts = parts._replace(path=re.sub(r'^/(?:all|moskva)/', '/moskva/', parts.path))
-        geography = {'localPriority': '1', 'radius': '0', 'searchRadius': '0'}
+        geography = {'localPriority': str(definition.local_priority), 'radius': '0', 'searchRadius': '0'}
     else:
         return definition
     query = [
@@ -230,6 +253,7 @@ def _listing_family(listing: Listing, source: EngineType) -> str | None:
         ('land_rover_range_rover', 'range_rover'),
         ('hongqi_hq9', 'hongqi_hq9'),
         ('mercedes-benz_sprinter', 'sprinter'),
+        ('voyah_dream', 'voyah_dream'),
     )
     for marker, family in patterns:
         if marker in target:
@@ -294,7 +318,7 @@ def _canonical_url_contract_matches(definition: CanonicalFilterDefinition) -> bo
     if definition.source == EngineType.AUTO_RU:
         expected = {'geo_radius': '0', 'rid': '213'}
     elif definition.source == EngineType.AVITO:
-        expected = {'localPriority': '1', 'radius': '0', 'searchRadius': '0'}
+        expected = {'localPriority': str(definition.local_priority), 'radius': '0', 'searchRadius': '0'}
     else:
         return False
     return all(query.get(key) == [value] for key, value in expected.items())
@@ -575,7 +599,7 @@ class FilterRegistryService:
                 'catalog_key': definition.key,
                 'family': definition.family,
                 'condition': definition.condition,
-                'source_document': 'Инструкция по мониторингу машин.md',
+                'source_document': definition.source_document,
             }
             if definition.output_type is not None:
                 criteria['output_type'] = definition.output_type

@@ -37,9 +37,11 @@ class FakeAdapter:
         self.results = list(results)
 
     async def scan_filter(
-        self, _url: str, _max_pages: int, target_keys: set[str] | None = None
+        self, _url: str, _max_pages: int, target_keys: set[str] | None = None,
+        evidence_keys: set[str] | None = None,
     ) -> ScanResult:
         self.target_keys = target_keys
+        self.evidence_keys = evidence_keys
         return self.results.pop(0)
 
 
@@ -94,6 +96,104 @@ def _seed(session):
     session.add(VehicleFilterExpectation(filter_id=search_filter.id, listing_id=listing.id))
     session.commit()
     return listing, search_filter
+
+
+def test_search_collection_binds_replacement_link_without_visiting_search_again(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    monkeypatch.setattr('app.service.monitor.settings.evidence_dir', str(tmp_path))
+    session, engine = _session(tmp_path)
+    try:
+        listing, entity = _seed(session)
+        replacement = 'https://auto.ru/cars/used/sale/mercedes/v_class/9999999999-new/'
+        adapter = FakeAdapter([_result(_hit(replacement))])
+        monitor = MonitorService(session, auto_adapter=adapter, cycle_id=None)
+        monitor.collect_search_results()
+        assert session.query(ListingObservation).count() == 0
+        assert session.query(ScanRun).count() == 0
+        assert adapter.target_keys is None  # stale links must not cause early termination
+        assert adapter.evidence_keys == {'auto_ru:1234567890'}
+        # The later catalogue/ID stage proves the new link.
+        listing.source_auto_ru = replacement
+        session.commit()
+        monitor.preflight = {'batch_id': 'batch', 'blocked_sources': [], 'checks': {
+            f'{listing.id}:auto_ru': {'state': 'verified', 'url': replacement},
+        }}
+        summary = monitor.run_full_cycle()
+        assert summary['found'] == 1
+        assert not adapter.results  # a second call would fail, rather than silently re-scan
+        observation = session.query(ListingObservation).one()
+        assert observation.listing_url == replacement
+        assert observation.raw_payload['scan_diagnostics']['collection_order'] == 'search_before_active_cards'
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_changed_filter_after_collection_is_not_rescanned(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    session, engine = _session(tmp_path)
+    try:
+        listing, entity = _seed(session)
+        adapter = FakeAdapter([_result(_hit(listing.source_auto_ru))])
+        monitor = MonitorService(session, auto_adapter=adapter)
+        monitor.collect_search_results()
+        entity.raw_url += '?changed=1'
+        session.commit()
+        result = monitor.run_full_cycle()
+        assert result['technical_errors'] == 1
+        assert result['found'] == 0
+        observation = session.query(ListingObservation).one()
+        assert 'filter changed after search collection' in observation.raw_payload['scan_diagnostics']['error']
+    finally:
+        session.close()
+        engine.dispose()
+
+
+def test_collection_is_saved_before_any_matched_observation(tmp_path, monkeypatch):
+    import json
+
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    monkeypatch.setattr('app.service.monitor.settings.evidence_dir', str(tmp_path))
+    session, engine = _session(tmp_path)
+    try:
+        listing, entity = _seed(session)
+        monitor = MonitorService(session, auto_adapter=FakeAdapter([_result(_hit(listing.source_auto_ru))]),
+                                 cycle_id='test-collection')
+        monitor.collect_search_results()
+        saved = json.loads((tmp_path / 'cycles/test-collection/search_collection.json').read_text())
+        assert saved['cycle_id'] == 'test-collection'
+        assert saved['results'][0]['filter_id'] == entity.id
+        assert saved['results'][0]['url'] == entity.raw_url
+        assert saved['results'][0]['result']['hits'][0]['url'] == listing.source_auto_ru
+        assert session.query(ListingObservation).count() == 0
+        assert session.query(ScanRun).count() == 0
+    finally:
+        session.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize('http_status', [429, 439])
+def test_denied_collection_does_not_visit_remaining_source_filters(tmp_path, monkeypatch, http_status):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+        session.add(SearchFilter(id='filter-2', source=EngineType.AUTO_RU, name='other',
+                                 external_key='other', raw_url='https://auto.ru/cars/new/', active=True))
+        session.commit()
+        adapter = FakeAdapter([_result(complete=False, error=f'HTTP {http_status}')])
+        monitor = MonitorService(session, auto_adapter=adapter)
+        assert monitor.collect_search_results()['filters'] == 2
+        results = list(monitor._collected_search.values())
+        assert len(results) == 2
+        assert sum('blocked_by_filter_id' in r.diagnostics for r in results) == 1
+        assert not adapter.results
+        summary = monitor.run_full_cycle()
+        assert summary['found'] == 0
+        assert summary['blocked_sources'] == ['auto_ru']
+    finally:
+        session.close()
+        engine.dispose()
 
 
 @pytest.mark.parametrize('configured', ['', 'auto_ru,unknown_source'])
@@ -455,7 +555,8 @@ def test_absence_requires_two_validated_misses_and_can_recur(
         )
         assert found_observation.absolute_position == 2
         assert found_observation.position_in_page == 7
-        assert found_observation.raw_payload['scan_diagnostics'] == {'fixture': True}
+        assert found_observation.raw_payload['scan_diagnostics'] == {
+            'fixture': True, 'search_complete': True, 'search_pages_limit': 5}
         first_episode = session.query(AbsenceEpisode).one()
         assert first_episode.open is False
         assert listing.last_seen_at is not None
@@ -467,4 +568,32 @@ def test_absence_requires_two_validated_misses_and_can_recur(
         assert [episode.open for episode in episodes] == [False, True]
     finally:
         session.close()
+        engine.dispose()
+
+
+@pytest.mark.parametrize('with_target', [True, False])
+def test_failed_collected_search_is_counted_when_preflight_has_no_eligible_targets(tmp_path, monkeypatch, with_target):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    db, engine = _session(tmp_path)
+    try:
+        listing, entity = _seed(db)
+        if not with_target:
+            db.query(VehicleFilterExpectation).delete()
+            db.commit()
+        adapter = FakeAdapter([_result(complete=False, error='HTTP 439')])
+        monitor = MonitorService(db, auto_adapter=adapter)
+        monitor.collect_search_results()
+        monitor.preflight = {'batch_id': 'preflight-test', 'blocked_sources': [], 'checks': {}}
+        summary = monitor.run_full_cycle()
+        assert summary['technical_errors'] == 1
+        run = db.query(ScanRun).one()
+        assert run.technical_errors == 1 and run.pages_scanned == 1
+        assert 'HTTP 439' in run.notes
+        assert not adapter.results
+        if with_target:
+            assert db.query(ListingObservation).one().state == ObservationState.REVIEW_REQUIRED
+        else:
+            assert db.query(ListingObservation).count() == 0
+    finally:
+        db.close()
         engine.dispose()

@@ -1,13 +1,7 @@
 {% extends 'base.html' %}
 {% set active_page = 'reconciliation' %}
-{% block title %}Сверка ID объявлений{% endblock %}
+{% block title %}Мониторинг автомобилей{% endblock %}
 {% block content %}
-<header class="page-heading"><div>
-  <span class="eyebrow">СВЕРКА РАЗМЕЩЕНИЙ</span>
-  <h1>ID и перевыкладки</h1>
-  <p class="muted">Сопоставление фидов с открытыми карточками продавца. Новая ссылка — кандидат на проверку, а не автоматическое исправление.</p>
-</div></header>
-
 {% if not data.cycle %}
 <section class="panel empty">Циклов мониторинга пока нет. Живые объявления не проверены.</section>
 {% elif not data.report %}
@@ -19,33 +13,164 @@
 </section>
 {% else %}
 {% set report = data.report %}
+{% set actionable_review = data.review|rejectattr('finding.code', 'equalto', 'mixed_script_id')|list %}
+{% set script_notices = data.review|selectattr('finding.code', 'equalto', 'mixed_script_id')|list %}
+{% include 'monitoring_dashboard.html' %}
+<details class="monitoring-evidence" id="monitoring-evidence"><summary>Полнота проверки, исходные замечания и доказательства</summary>
 <section class="panel">
   <div class="section-head"><div>
     <h2>Цикл {{ data.cycle.id }}</h2>
-    <p class="muted">{{ report.created_at_utc }} · полный каталог:
-      Auto.ru {{ 'да' if report.catalogue_complete.get('auto_ru') else 'нет' }},
+    <p class="muted">{{ report.created_at_utc }} · ID подтверждены для всех карточек:
+      Auto.ru {{ ('да' if report.catalogue_complete.get('auto_ru') else 'нет') if 'auto_ru' in report.catalogue_complete else 'не проверялось в этом цикле' }},
       Avito {{ 'да' if report.catalogue_complete.get('avito') else 'нет' }}
     </p>
+    {% if report.get('catalogue_enumeration_complete') %}<p class="muted">Каталог прочитан полностью:
+      Auto.ru {{ ('да' if report.catalogue_enumeration_complete.get('auto_ru') else 'нет') if 'auto_ru' in report.catalogue_enumeration_complete else 'не проверялось в этом цикле' }},
+      Avito {{ 'да' if report.catalogue_enumeration_complete.get('avito') else 'нет' }}.
+      Полнота каталога и сопоставление его карточек по unique_id проверяются отдельно.</p>{% endif %}
   </div><a class="button secondary" href="/api/v1/status/cycles/{{ data.cycle.id }}/placement-report" target="_blank">Подробный JSON</a></div>
-  <p>Открыто новых карточек: {{ report.new_card_checks }}. Находок для проверки: {{ data.review|length }}. ID, которых не удалось подтвердить: {{ report.findings|selectattr('code', 'equalto', 'not_verified')|list|length }}.</p>
+  <p>Открыто новых карточек: {{ report.new_card_checks }}. Неподтверждённых связей и конфликтов ID: {{ actionable_review|length }}. Служебных замечаний о символах ID: {{ script_notices|length }}. ID из фида, не найденных в активном каталоге: {{ report.findings|selectattr('code', 'equalto', 'not_verified')|list|length }}.</p>
+  {% if report.get('identity_review') %}<p class="helper">Сверка завершена по сохранённым материалам {{ report.identity_review.confirmed_at_utc }}.
+    Для объявления {{ report.identity_review.listing_key }} подтверждён unique_id {{ report.identity_review.placement_id }} по оригинальной таблице маркетинга, фиду и решению владельца.
+    Исходный текст карточки и материалы прогона сохранены; повторного обхода площадок не было.</p>{% endif %}
   {% if data.latest_cycle and data.latest_cycle.id != data.cycle.id %}<p class="helper">После этой ID-сверки были другие циклы. Показанный отчёт не описывает их состояние.</p>{% endif %}
   <p class="helper">Фид может обновляться позже площадки. Совпадение одного AvitoId не подтверждает перевыкладку; исходный ID и ошибки сохраняются в отчёте.</p>
 </section>
 {% if data.available_cycles|length > 1 %}<section class="panel"><h2>Другие ID-проверки</h2><p>{% for cycle in data.available_cycles %}<a href="?cycle_id={{ cycle.id }}">{{ cycle.id }}</a> · {{ cycle.status }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p></section>{% endif %}
 
+{% if report.get('publication_alerts', {}).get('items') %}
+<section class="panel" id="publication-alert-details"><h2>Сигналы об изменении публикаций</h2>
+{% if report.get('publication_alert_reviewed_at_utc') %}<p class="helper">Точечное уточнение сигналов: {{ report.publication_alert_reviewed_at_utc }} (UTC). Исходные карточки и статус цикла сохранены.</p>{% endif %}
+<p>Идентификатор публикации — unique_id. Причина исчезновения неизвестна, пока не проверены перевыкладка, действия маркетинга и состояние площадки. Снятие объявления не подтверждает продажу машины.</p>
+{% for alert in report.publication_alerts['items'] %}
+<div class="insight"><div><strong>{{ alert.source }}: {{ alert.title }}</strong>
+{% if alert.get('ongoing') %}<p>Проблема остаётся открытой с проверки {{ alert.first_detected_cycle_id }}.</p>{% endif %}
+{% if alert.get('segment') %}<p>{{ 'Коммерческие автомобили' if alert.segment == 'commercial' else 'Легковые автомобили' }}: ранее {{ alert.previous_count }}, сейчас обнаружено {{ alert.observed_count }}.</p>{% endif %}
+{% if alert.unique_id %}<p>unique_id: {{ alert.unique_id }}</p>{% endif %}
+{% if alert.old_url %}<p><a href="{{ alert.old_url }}" target="_blank" rel="noopener noreferrer">Прежняя ссылка</a></p>{% endif %}
+{% if alert.new_url %}<p><a href="{{ alert.new_url }}" target="_blank" rel="noopener noreferrer">Найденная активная ссылка</a></p>{% endif %}
+{% for url in alert.get('urls', []) %}<p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">Публикация с этим unique_id</a></p>{% endfor %}
+{% if alert.certainty != 'confirmed' %}<p>Предупреждение: полнота каталога или состояние прежней ссылки не подтверждены. Это не доказанное исчезновение.</p>{% endif %}
+{% if alert.get('explanation') %}<p>{{ alert.explanation }}</p>{% endif %}
+</div></div>{% endfor %}</section>
+{% endif %}
+
+{% if report.get('business_review') %}
+<section class="panel" id="business-review-details"><h2>Сохранённые пояснения к проверке</h2>
+<p class="helper">{{ report.business_review.reviewed_at_utc }} · Уточнения владельца и сверка оригинальной таблицы. Последующие точечные проверки указаны отдельно с их датами. Исходные результаты цикла сохранены; их счётчик отсутствующих ссылок не равен числу необъяснённых отсутствующих автомобилей.</p>
+{% for item in report.business_review.entries %}
+<div class="insight"><div><strong>{{ item.title }} — {{ item.status }}</strong>
+<p>{{ item.explanation }}</p><p><strong>Что делать:</strong> {{ item.action }}</p>
+<p class="helper">Основание: {{ item.basis }}</p></div></div>
+{% endfor %}
+<h3>Карточки с проверенной привязкой</h3>
+{% for item in report.business_review.vclass_cards %}
+<div class="insight"><div><a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">{{ item.placement_id }}</a>
+<p>{{ item.design }}</p><p>{{ item.mapping }}</p></div></div>
+{% endfor %}
+<p class="helper">Идентификатор объявления — unique_id. VIN используется для сопоставления информации внутри маркетинговой таблицы; сам по себе он не подтверждает идентичность публикаций. Подтверждённые изменения локального реестра указаны выше. Исходная Google-таблица не изменялась.</p>
+</section>
+{% endif %}
+
+{% if report.get('content_review') or report.get('automatic_content_checks') %}
+{% set content = report.get('content_review') or report.automatic_content_checks %}
+<section class="panel" id="content-review"><h2>Проверка содержания сохранённых карточек</h2>
+<p>{{ content.scope }}</p>
+{% if content.get('targeted_live_check') %}
+<p class="helper">{{ content.created_at_utc }} · Точечно повторно открыты {{ content.targeted_live_check.cards_requested }} карточек Auto.ru:
+{{ content.targeted_live_check.started_at_utc }} — {{ content.targeted_live_check.finished_at_utc }} (UTC).
+VPN оставлен включённым, запросов Avito — {{ content.targeted_live_check.avito_requests }}. Полного прогона не было.
+Остальные карточки показаны с прежними датами. Фактический состав опций без спецификаций не подтверждается.</p>
+{% else %}
+<p class="helper">{{ content.created_at_utc }} · Новый обход площадок не выполнялся. Проверены сохранённые тексты и снимки; фактическое наличие опций без спецификаций не подтверждается.</p>
+{% endif %}
+{% for line in content.summary.highlights %}<p>{{ line }}</p>{% endfor %}
+{% if content.get('identity_diagnosis') %}
+<div class="insight"><div><strong>Разобраны 26 карточек без принятого unique_id</strong>
+<p>{{ content.identity_diagnosis.conclusion }}</p>
+{% for case in content.identity_diagnosis.pending_autoru %}
+<p><a href="{{ case.url }}" target="_blank" rel="noopener noreferrer">{{ case.title }}</a>:
+ожидаемый ID строки книги — {{ case.expected_unique_id or 'не установлен' }}. {{ case.action }}</p>
+<p class="helper">Источники ожидаемого ID: {{ case.candidate_cells|join('; ') }}. Это ожидание источника, а не прочитанный ID объявления.</p>
+{% endfor %}
+<p class="helper">Ожидаемые ID пяти карточек не присвоены публикациям. Исходные снимки и тексты сохранены.{% if not content.get('targeted_live_check') %} Новое посещение площадок не выполнялось.{% endif %}</p>
+</div></div>
+{% endif %}
+{% if content.get('marketing_comparison') %}
+<p>Таблица маркетинга: {{ content.marketing_comparison.read_started_at_utc }} — {{ content.marketing_comparison.read_finished_at_utc }} (UTC).
+{% if content.marketing_comparison.workbook_url %}<a href="{{ content.marketing_comparison.workbook_url }}" target="_blank" rel="noopener noreferrer">Оригинальная книга</a>.{% endif %}
+{{ content.marketing_comparison.error or '' }}</p>
+{% endif %}
+{% if content.get('autoru_missing_ids') %}
+{% set identity = content.autoru_missing_ids %}
+<h3>Девять карточек Auto.ru без опубликованного unique_id</h3>
+<p>{{ identity.conclusion }}</p>
+<p class="helper">Полные архивные HTML — от 12 октября, более поздние снимки — от 14 октября. Они показаны с собственными датами; нового посещения площадки не было. Ожидаемый ID строки книги не присваивается объявлению и не снимает неопределённость его идентификатора.</p>
+{% for case in identity.cases %}
+<details><summary>{{ case.listing_key }} · ожидаемый ID: {{ case.expected_unique_id or 'не установлен' }}</summary>
+<p><a href="{{ case.url }}" target="_blank" rel="noopener noreferrer">{{ case.title }}</a></p>
+<p>Фид: {{ case.feed_action or 'строка не установлена' }}{% if case.feed_row %} · autoru-feed-all!B{{ case.feed_row }}{% endif %}. {{ case.action }}</p>
+<p class="helper">Полный архивный текст: {{ case.full_capture_display }} · {{ case.description_capture.characters }} символов. Источники: {{ case.source_cells|join('; ') }}</p>
+<blockquote style="white-space:pre-wrap;overflow-wrap:anywhere">{{ case.full_description }}</blockquote>
+</details>
+{% endfor %}
+{% endif %}
+<h3>Расхождения и необходимые действия</h3>
+{% for group in content.issue_groups %}<div class="insight"><div><strong>{{ group.title }}</strong><p>{{ group.detail }}</p><p><strong>Что делать:</strong> {{ group.action }}</p></div></div>{% endfor %}
+<h3>Результат по каждой карточке</h3>
+{% for card in content.cards %}
+<details><summary>{{ card.source }} · {{ card.unique_id or 'unique_id не прочитан' }} · {{ card.title }} · {{ card.findings|length }} замечаний</summary>
+<p><a href="{{ card.url }}" target="_blank" rel="noopener noreferrer">Объявление</a> · сохранено {{ card.captured_at_utc }} (UTC).</p>
+{% if card.get('owners_raw') %}<p>Владельцы в характеристиках: {{ card.owners_raw }}.</p>{% endif %}
+<p class="helper">{{ card.identity_note }} {{ card.description_note }}</p>
+{% if card.get('identity_resolution') %}<p class="helper">Исходное значение в тексте: {{ card.identity_resolution.raw_claim or 'не найдено' }}.
+Основание ID: {{ {'exact': 'точное чтение', 'visual_alias': 'похожие кириллические буквы, подтверждено актуальным фидом', 'operator_confirmed': 'ранее явное подтверждение владельца', 'description_exact': 'точное чтение полного описания'}.get(card.identity_resolution.basis, card.identity_resolution.status) }}.</p>{% endif %}
+<table><thead><tr><th>Поле</th><th>Сохранённая карточка</th><th>Сравнение</th><th>Результат</th></tr></thead><tbody>
+{% for field in card.fields %}<tr><td>{{ field.label }}</td><td>{{ field.observed }}</td><td>{{ field.reference }}</td><td>{{ field.verdict }}</td></tr>{% endfor %}
+</tbody></table>
+{% for finding in card.findings %}<p><strong>{{ finding.title }}</strong>: {{ finding.detail }} {{ finding.action }}</p>{% endfor %}
+<p class="helper">Источники: {{ card.source_cells|join('; ') }}</p>
+{% if card.get('marketing_binding') %}
+<p>Связь с маркетингом: {{ card.marketing_binding.status }}.</p>
+<p>{% for ref in card.marketing_binding.cells %}<a href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.sheet }}!{{ ref.a1 }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</p>
+{% endif %}
+</details>
+{% endfor %}
+<p class="helper">{{ content.limitations }}</p>
+</section>
+{% endif %}
+
+<section class="panel"><h2>Активные объявления и позиции</h2>
+<p class="helper">Все проверенные карточки каталога, включая отсутствующие в маркетинговой таблице. «5+» означает: активная карточка не найдена в первых пяти страницах заданного поиска; точное место неизвестно.</p>
+{% for card in report.observed_cards if card.state == 'active' %}
+<div class="insight"><div>{% if card.safe_url %}<a href="{{ card.safe_url }}" target="_blank" rel="noopener noreferrer">{{ card.source }} · открыть объявление</a>{% else %}{{ card.source }}{% endif %}
+<p>unique_id: <strong>{{ card.get('unique_id') or 'не подтверждён' }}</strong></p>
+{% for position in card.get('search_positions', []) %}<p>{{ position.filter_name }}: <strong>{{ position.label }}</strong></p>{% endfor %}
+{% for position in card.get('supplemental_search_positions', []) %}<p>{{ position.filter_name }}: <strong>{{ position.label }}</strong></p><p class="helper">Точечная проверка после основного цикла · {{ position.checked_at_utc }} (UTC).</p>{% endfor %}
+{% if not card.get('search_positions') and not card.get('supplemental_search_positions') %}<p>Позиция по сохранённой выдаче не установлена.</p>{% endif %}</div></div>
+{% endfor %}
+</section>
 <section class="panel"><h2>Что требует проверки</h2>
-{% for row in data.review %}
+{% for row in actionable_review %}
 {% set item = row.finding %}
 <div class="insight"><div>
   <strong>{{ row.label }} · {{ item.placement_id or item.suggested_placement_id or 'ID не указан' }}</strong>
   <p>{{ row.action }}</p>
-  <details><summary>Основание проверки</summary><p class="helper">{{ item.reason }}</p><p class="helper">{{ item.feed_sheet or 'Строка фида не установлена' }}{% if item.feed_row %} · строка {{ item.feed_row }}{% endif %}{% if item.id_match_basis %} · {{ item.id_match_basis }}{% endif %} · {{ item.code }}</p></details>
+  <details><summary>Основание проверки</summary><p class="helper">{% if item.code == 'mixed_script_id' %}Различие обнаружено в полученном тексте страницы площадки. Эталонный ID фида: {{ item.suggested_placement_id }}. Причина подмены символов не установлена; это не доказательство ошибки исходного описания.{% else %}{{ item.reason }}{% endif %}</p><p class="helper">{{ item.feed_sheet or 'Строка фида не установлена' }}{% if item.feed_row %} · строка {{ item.feed_row }}{% endif %}{% if item.id_match_basis %} · {{ item.id_match_basis }}{% endif %} · {{ item.code }}</p></details>
   {% if item.current_url %}<p class="helper">Ссылка в реестре: {{ item.current_url }}</p>{% endif %}
   {% for url in row.urls %}<p><a href="{{ url }}" target="_blank" rel="noopener noreferrer">Открыть найденное объявление →</a></p>{% endfor %}
   {% if row.evidence_index is not none %}<p><a href="/api/v1/status/cycles/{{ data.cycle.id }}/placement-evidence/{{ row.evidence_index }}" target="_blank">Снимок карточки →</a></p>{% endif %}
   {% if item.operator_review_check_id %}<p><a href="/api/v1/dashboard/reconciliation#check-{{ item.operator_review_check_id }}">Проверить и подтвердить ссылку вручную →</a></p>{% endif %}
 </div><span class="badge {{ 'technical_error' if item.code in ['identity_conflict','duplicate_feed_id','duplicate_platform_id'] else 'absent_uncertain' }}">{{ 'Конфликт' if item.code in ['identity_conflict','duplicate_feed_id','duplicate_platform_id'] else 'Проверить' }}</span></div>
-{% else %}<p class="empty">Явных расхождений в отчёте нет. Проверьте полноту каталога и количество неподтверждённых ID выше.</p>{% endfor %}
+{% else %}<p class="empty">Неподтверждённых связей ID с реестром и конфликтов в этом разделе нет. Вопросы размещения и качества данных перечислены в уточнениях к отчёту.</p>{% endfor %}
 </section>
+{% if script_notices %}<section class="panel"><details><summary>Служебные замечания о кириллице и латинице: {{ script_notices|length }}</summary>
+<p class="helper">Сопоставление с ID фида выполнено. Эти отметки не доказывают ошибку в исходной таблице или описании и не означают, что карточки не прочитаны.</p>
+{% for row in script_notices %}<div class="insight"><div>
+<strong>{{ row.finding.suggested_placement_id }}</strong><p class="helper">Полученный текст: {{ row.finding.placement_id }} · {{ row.finding.feed_sheet }}, строка {{ row.finding.feed_row }}.</p>
+{% if row.evidence_index is not none %}<a href="/api/v1/status/cycles/{{ data.cycle.id }}/placement-evidence/{{ row.evidence_index }}" target="_blank">Снимок карточки →</a>{% endif %}
+</div></div>{% endfor %}
+</details></section>{% endif %}
+</details>
 {% endif %}
 {% endblock %}

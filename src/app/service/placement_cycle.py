@@ -24,6 +24,10 @@ from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_m
 from app.scraper.browser_session import run_browser_task
 from app.scraper.seller import inspect_direct_link
 from app.service.analytics import money
+from app.service.automatic_content import automatic_content_review
+from app.service.catalogue_visibility import add_catalogue_visibility
+from app.service.identity_review import confirmed_operator_id
+from app.service.marketing_content import add_marketing_comparison
 from app.service.marketplace_placement_reconciliation import (
     OpenedMarketplaceCard,
     reconcile_autoru_placements,
@@ -35,21 +39,27 @@ from app.service.placement_identity import (
     parse_placement_id,
     visual_ascii_placement_candidate,
 )
+from app.service.placement_status import record_placement_status
+from app.service.publication_alerts import add_publication_alerts
 
 
-def _card_has_usable_id_claim(inspection: dict) -> bool:
+def _card_identity_claim(inspection: dict) -> tuple[str | None, bool]:
     card = inspection.get('card')
     if not isinstance(card, Mapping):
-        return False
+        return None, False
     exact = card.get('placement_id')
     if isinstance(exact, str):
         try:
-            parse_placement_id(exact)
-            return True
+            return parse_placement_id(exact).value, False
         except PlacementIdError:
             pass
-    raw = card.get('placement_id_raw')
-    return isinstance(raw, str) and visual_ascii_placement_candidate(raw) is not None
+    raw = card.get('placement_id_raw') or exact
+    candidate = visual_ascii_placement_candidate(raw) if isinstance(raw, str) else None
+    return candidate, candidate is not None
+
+
+def _card_has_usable_id_claim(inspection: dict) -> bool:
+    return _card_identity_claim(inspection)[0] is not None
 
 
 class PlacementCycleService:
@@ -100,7 +110,7 @@ class PlacementCycleService:
             .filter(ListingReconciliation.batch_id == preflight['batch_id'])
             .all()
         )
-        cached = {}
+        cached = preflight.setdefault('active_card_inspections', {})
         for record in previous:
             inspection = (record.details or {}).get('direct_inspection')
             key = canonical_listing_key(record.source, record.url)
@@ -112,6 +122,7 @@ class PlacementCycleService:
         unverified = Counter()
         blocked = set(preflight.get('blocked_sources', []))
         new_checks = 0
+        operator_confirmations = {}
         for candidate in candidates:
             source = candidate.source
             if source.value in blocked:
@@ -125,12 +136,17 @@ class PlacementCycleService:
                     continue
                 new_checks += 1
                 inspection = run_browser_task(self.inspector(source, candidate.listing_url, self.progress))
+                cached[(source, key)] = inspection
             if inspection.get('state') == 'blocked':
                 blocked.add(source.value)
             evidence = inspection.get('evidence')
+            operator_id = (confirmed_operator_id(self.db, settings.evidence_dir, candidate.listing_url, inspection)
+                           if source == EngineType.AVITO and not _card_has_usable_id_claim(inspection) else None)
+            if operator_id:
+                operator_confirmations[key] = operator_id
             if (inspection.get('state') != 'active' or not isinstance(evidence, str)
                     or inspection.get('evidence_manifest') != evidence_manifest_name(evidence)
-                    or not _card_has_usable_id_claim(inspection)):
+                    or not (_card_has_usable_id_claim(inspection) or operator_id)):
                 unverified[source.value] += 1
             opened[source].append(OpenedMarketplaceCard(candidate.listing_url, inspection))
 
@@ -159,10 +175,11 @@ class PlacementCycleService:
                              for sheet in ('avito-feed-new', 'avito-feed-used')},
             current_urls_by_placement_id=urls_by_source[EngineType.AVITO],
             catalogue_complete=coverage[EngineType.AVITO],
+            operator_confirmed_ids=operator_confirmations,
         ) if EngineType.AVITO in selected_sources else ()
         findings = [asdict(item) for item in (*auto, *avito)]
-        # Reuse a current, evidenced card opened for ID comparison as the
-        # direct-card check for this cycle. Never reuse an unknown/blocked card.
+        # Reuse the current visit, including failures, without treating an
+        # unknown/blocked result as success. Explicit removal gates search.
         opened_inspections = {}
         opened_counts = Counter()
         for source, cards in opened.items():
@@ -176,13 +193,15 @@ class PlacementCycleService:
                 continue
             key = (record.source, canonical_listing_key(record.source, record.url))
             inspection = opened_inspections.get(key)
-            if (opened_counts[key] != 1 or not isinstance(inspection, dict)
-                    or inspection.get('state') != 'active'
-                    or not isinstance(inspection.get('evidence'), str)
-                    or inspection.get('evidence_manifest')
-                    != evidence_manifest_name(inspection['evidence'])):
+            if opened_counts[key] != 1 or not isinstance(inspection, dict):
                 continue
             record.details = {**(record.details or {}), 'direct_inspection': inspection}
+            if inspection.get('state') == 'removed':
+                record.state = 'removed'
+                record.reason = inspection.get('reason', 'Объявление снято') + '; это не подтверждает продажу автомобиля компании'
+                check = preflight.get('checks', {}).get(f'{record.listing_id}:{record.source.value}')
+                if check is not None:
+                    check.update(state=record.state, reason=record.reason)
             reused_direct_cards += 1
         candidate_updates = self._operator_candidate_updates(
             findings, snapshot, opened, candidates, listings, previous,
@@ -194,6 +213,11 @@ class PlacementCycleService:
             'feed_sha256_by_sheet': snapshot.sha256_by_sheet,
             'feed_rows_by_sheet': {sheet: len(rows) for sheet, rows in snapshot.rows_by_sheet.items()},
             'catalogue_complete': {source.value: complete for source, complete in coverage.items()},
+            'catalogue_enumeration_complete': {
+                source.value: (any(run.source == source for run in discovery_runs)
+                               and all(run.complete for run in discovery_runs if run.source == source))
+                for source in selected_sources
+            },
             'new_card_checks': new_checks,
             'skipped_cards_by_source': dict(skipped),
             'unverified_cards_by_source': dict(unverified),
@@ -207,15 +231,28 @@ class PlacementCycleService:
                     'state': card.inspection.get('state'),
                     'evidence': card.inspection.get('evidence'),
                     'evidence_manifest': card.inspection.get('evidence_manifest'),
+                    'card': card.inspection.get('card'),
                 }
                 for source in (EngineType.AUTO_RU, EngineType.AVITO)
                 for card in opened[source]
             ],
             'findings': findings,
         }
+        add_catalogue_visibility(report, settings.evidence_dir)
+        report['automatic_content_checks'] = automatic_content_review(report, settings.evidence_dir)
+        add_marketing_comparison(report['automatic_content_checks'], report['observed_cards'], snapshot,
+                                 evidence_dir=settings.evidence_dir, operator_confirmed_ids=operator_confirmations)
+        self.progress({'event': 'content_review_finished', **report['automatic_content_checks']['summary']})
+        alerts = add_publication_alerts(self.db, report, settings.evidence_dir)
+        for alert in alerts['items']:
+            self.progress({'event': 'publication_alert', **alert})
         report_path = self._write_report(report)
         for record, updated in candidate_updates:
             record.candidates = updated
+            check = preflight.get('checks', {}).get(f'{record.listing_id}:{record.source.value}')
+            if check is not None:
+                current_url = record.listing.source_auto_ru if record.source == EngineType.AUTO_RU else record.listing.source_avito
+                check['placement_status'] = record_placement_status(record, current_url)
         if candidate_updates or reused_direct_cards or new_identities:
             self.db.commit()
         self.progress({'event': 'placement_reconciliation_finished', 'findings': len(findings)})
@@ -224,10 +261,15 @@ class PlacementCycleService:
             'findings': len(findings),
             'codes': dict(Counter(item['code'] for item in findings)),
             'report_path': report_path,
+            'publication_alerts': {'total': alerts['total'], 'counts': alerts['counts']},
         }
 
     def _identity_urls(self, snapshot, opened, listings):
-        """Bootstrap only from an exact current URL/card/feed triple, never VIN."""
+        """Bind exact feed IDs with current URL/card proof, never VIN.
+
+        A mixed-script card claim additionally needs the exact, unique AvitoId
+        in the same feed row. Preserve the raw claim and its validation warning.
+        """
         rows_by_source = {
             EngineType.AUTO_RU: snapshot.rows_by_sheet['autoru-feed-all'],
             EngineType.AVITO: (
@@ -275,22 +317,15 @@ class PlacementCycleService:
         card_counts = Counter()
         for source, cards in opened.items():
             for card in cards:
-                value = (card.inspection.get('card') or {}).get('placement_id')
-                if card.inspection.get('state') == 'active' and isinstance(value, str):
-                    try:
-                        card_counts[source, parse_placement_id(value).value] += 1
-                    except PlacementIdError:
-                        pass
+                value, _alias = _card_identity_claim(card.inspection)
+                if card.inspection.get('state') == 'active' and value is not None:
+                    card_counts[source, value] += 1
         added = 0
         for source, cards in opened.items():
             for card in cards:
                 inspection = card.inspection
-                value = (inspection.get('card') or {}).get('placement_id')
-                if not isinstance(value, str):
-                    continue
-                try:
-                    placement_id = parse_placement_id(value).value
-                except PlacementIdError:
+                placement_id, alias = _card_identity_claim(inspection)
+                if placement_id is None:
                     continue
                 evidence = inspection.get('evidence')
                 key = canonical_listing_key(source, card.url)
@@ -307,10 +342,16 @@ class PlacementCycleService:
                     continue
                 if source == EngineType.AVITO:
                     platform_id = key.removeprefix('avito:')
+                    if alias and (avito_platform_counts[platform_id] != 1
+                                  or avito_platform_ids.get(platform_id) != placement_id):
+                        continue
                     if (avito_platform_counts[platform_id] > 1
                             or (platform_id in avito_platform_ids
                                 and avito_platform_ids[platform_id] != placement_id)):
                         continue
+                elif alias:
+                    # Visual similarity alone is never an identity proof.
+                    continue
                 identity = ListingPlacementIdentity(
                     source=source, listing_id=listing.id, placement_id=placement_id,
                     evidence=evidence,
@@ -404,7 +445,7 @@ class PlacementCycleService:
                 'ID в карточке и фиде совпал с ранее подтверждённой связью unique_id и автомобиля.'
                 if finding['id_match_basis'] == 'exact' else
                 'ID в карточке сопоставлен по известному кириллическому двойнику; '
-                'связь unique_id и автомобиля подтверждена ранее. Нужна ручная проверка ошибки ID.'
+                'связь unique_id и автомобиля подтверждена ранее. Источник различия символов не установлен.'
             )
             entry = {
                 'id': candidate.id, 'url': new_url,

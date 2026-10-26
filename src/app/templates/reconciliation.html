@@ -72,9 +72,17 @@
 <section class="panel" id="check-{{ r.id }}">
   <div class="section-head">
     <div><a class="table-link" href="/api/v1/dashboard/listings/{{ r.listing_id }}">{{ item.name }}</a><span class="subline">{{ item.vin }} · {{ 'Auto.ru' if r.source.value == 'auto_ru' else 'Avito' }} · {{ item.time }} МСК</span></div>
-    <span class="badge {{ 'found' if r.state == 'verified' and not item.changed else 'technical_error' }}">{{ item.label }}</span>
+    <span class="badge {{ 'found' if (r.state == 'verified' and not item.changed) or item.placement_status == 'not_expected' else 'technical_error' }}">{{ item.label }}</span>
   </div>
   <p class="helper">{{ r.reason }}</p>
+  {% if not item.direct and r.details and r.details.get('inspection_skip_reason') == 'not_in_active_catalogue' %}
+  <p class="notice">{% if r.details.get('catalogue_complete') %}Объявление неактивно на площадке: публикация не найдена в полном активном каталоге. Причина — снятие, блокировка или перевыкладка — не установлена. Автомобиль остаётся актуальным в маркетинговом реестре.{% else %}Каталог проверен не полностью; активность объявления пока не установлена.{% endif %}</p>
+  {% endif %}
+  {% if not item.direct and r.details and r.details.get('inspection_skip_reason') == 'source_unavailable' %}
+  <p class="notice">Каталог площадки недоступен. Наличие объявления не проверено; менять ссылку на основании этого запуска не нужно. Сначала восстановите доступ к площадке.</p>
+  {% elif not item.direct and r.details and r.details.get('inspection_skip_reason') == 'catalogue_incomplete' %}
+  <p class="notice">Каталог прочитан не полностью. Принадлежность объявления активному каталогу пока не установлена; сначала завершите сверку каталога.</p>
+  {% endif %}
   {% if item.current_url %}<p><a href="{{ item.current_url }}" target="_blank" rel="noopener noreferrer">Текущая ссылка на объявление</a></p>{% endif %}
   {% if item.direct %}
   <div class="insight"><div><strong>Прямая карточка: {{ item.direct.reason }}</strong>

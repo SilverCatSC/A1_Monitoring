@@ -5,5 +5,5 @@
   <nav>{% for slug, title, icon in [('', 'Обзор', '◫'), ('listings', 'Автомобили', '▦'), ('reconciliation', 'Сверка ссылок', '⇄'), ('company-site', 'Сайт A1Auto', '⌂'), ('placements', 'Размещения', '↗'), ('analytics', 'Статистика', '▥'), ('history', 'История проверок', '◷'), ('feedback', 'Замечания', '☷'), ('activity', 'Активность', '≋'), ('settings', 'Настройки', '⚙')] %}
     <a href="/api/v1/dashboard{{ '/' + slug if slug else '' }}" {% if active_page|default('') == slug %}aria-current="page"{% endif %}><span aria-hidden="true">{{ icon }}</span>{{ title }}</a>
   {% endfor %}</nav>
-  <div class="nav-foot"><span class="status-dot"></span> Локальное приложение<br><small>Москва · первые 3 страницы<br>Результаты публичного поиска</small></div>
+  <div class="nav-foot"><span class="status-dot"></span> Локальное приложение<br><small>Москва · до {{ monitoring_search_pages() if monitoring_search_pages is defined else 5 }} страниц<br>Результаты публичного поиска</small></div>
 </aside>

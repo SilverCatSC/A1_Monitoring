@@ -47,8 +47,11 @@ def test_cycle_imports_before_scan(monkeypatch):
     class Monitor:
         def __init__(self, db, progress_callback=None, preflight=None, cycle_id=None):
             assert db == 'db'
-            assert preflight['batch_id'] == 'batch'
+            assert preflight is None
             assert cycle_id == 'cycle-1'
+
+        def collect_search_results(self):
+            events.append(('collect_search', None))
 
         def run_full_cycle(self):
             events.append(('scan', None))
@@ -105,6 +108,7 @@ def test_cycle_imports_before_scan(monkeypatch):
         'refresh',
         'catalog',
         'chrome',
+        'collect_search',
         'discover',
         'scan',
         'direct_cards',
@@ -123,6 +127,8 @@ def test_cycle_imports_before_scan(monkeypatch):
             'search_technical_errors': 0,
             'direct_cards_technical_errors': 0,
             'links_need_review': 0,
+            'inactive_placements': 0,
+            'not_expected_placements': 0,
             'direct_cards_incomplete': 0,
             'partial_reasons': [],
         },
@@ -175,6 +181,9 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
         def __init__(self, *_args, **_kwargs):
             pass
 
+        def collect_search_results(self):
+            return {}
+
         def run_full_cycle(self):
             return {'technical_errors': 0, 'links_need_review': 0, 'blocked_sources': []}
 
@@ -216,7 +225,7 @@ def test_placement_stage_is_in_cycle_and_incomplete_coverage_keeps_partial(monke
     assert result['completion'].get('search_skipped') is not True
 
 
-def test_exact_id_link_stage_precedes_roster_search_and_direct_cards(monkeypatch):
+def test_raw_search_precedes_cards_but_identity_sync_precedes_matched_observations(monkeypatch):
     import app.service.cycle as cycle_module
 
     events = []
@@ -259,8 +268,11 @@ def test_exact_id_link_stage_precedes_roster_search_and_direct_cards(monkeypatch
         def __init__(self, *_args, **_kwargs):
             pass
 
+        def collect_search_results(self):
+            events.append('collect_search')
+
         def run_full_cycle(self):
-            events.append('search')
+            events.append('match_search')
             return {'technical_errors': 0, 'links_need_review': 0, 'blocked_sources': []}
 
     monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', True)
@@ -276,12 +288,12 @@ def test_exact_id_link_stage_precedes_roster_search_and_direct_cards(monkeypatch
     result = cycle_module.MonitoringCycleService('db')._run('cycle-1', Ledger())
 
     assert events == [
-        'seller_catalogue', 'placement_ids', 'link_sync', 'seal_roster', 'search', 'direct_cards',
+        'collect_search', 'seller_catalogue', 'placement_ids', 'link_sync', 'seal_roster', 'match_search', 'direct_cards',
     ]
     assert result['completion']['status'] == 'completed'
 
 
-def test_unavailable_identity_stage_skips_search(monkeypatch):
+def test_unavailable_identity_stage_preserves_raw_search_but_skips_vehicle_binding(monkeypatch):
     import app.service.cycle as cycle_module
 
     class Ledger:
@@ -315,7 +327,13 @@ def test_unavailable_identity_stage_skips_search(monkeypatch):
 
     class Monitor:
         def __init__(self, *_args, **_kwargs):
-            raise AssertionError('search must not run')
+            pass
+
+        def collect_search_results(self):
+            return {}
+
+        def run_full_cycle(self):
+            raise AssertionError('unverified vehicle binding must not run')
 
     monkeypatch.setattr(cycle_module.settings, 'placement_reconciliation_enabled', True)
     monkeypatch.setattr(cycle_module, 'cleanup_evidence', lambda *_args: 0)

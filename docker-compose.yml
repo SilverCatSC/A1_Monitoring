@@ -28,7 +28,7 @@ services:
       DATABASE_DSN: "postgresql+psycopg2://monitor:${DB_PASSWORD:?Set DB_PASSWORD in .env}@db:5432/a1_search_monitor"
       APP_TZ: Europe/Moscow
       PLAYWRIGHT_HEADLESS: "true"
-      SCAN_PAGES_LIMIT: 3
+      SCAN_PAGES_LIMIT: "${SCAN_PAGES_LIMIT:-5}"
       SCAN_INTERVAL_MINUTES: 360
       APP_ENV: "${APP_ENV:-stage}"
       COMPANY_SITE_AUDIT_DIR: /app/company_site_audits

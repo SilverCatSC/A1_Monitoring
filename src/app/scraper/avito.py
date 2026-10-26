@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import re
 from collections.abc import Callable
+from contextlib import AsyncExitStack
 from datetime import UTC, datetime
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
@@ -21,11 +22,26 @@ from app.scraper.base import (
     evidence_manifest_name,
     is_marketplace_listing_url,
 )
-from app.scraper.browser_session import browser_page
-from app.scraper.challenge_retry import refresh_explicit_captcha
+from app.scraper.browser_session import browser_page, read_page_content
+from app.scraper.challenge_retry import operator_wait_seconds, refresh_explicit_captcha
+from app.scraper.lazy_load import LazyLoadBlocked, load_more_results
+from app.scraper.navigation_recovery import (
+    recoverable_navigation_error,
+    wait_for_navigation_recovery,
+    watch_main_frame_documents,
+)
 from app.scraper.pacing import choose_pause
-from app.scraper.result_scope import pagination_state, primary_cards
-from app.scraper.seller import catalogue_html, seller_page_matches
+from app.scraper.result_scope import (
+    avito_active_catalogue_url,
+    avito_catalogue_result_count,
+    avito_catalogue_show_all_url,
+    avito_model_search_scope_problem,
+    pagination_next_url,
+    pagination_state,
+    primary_cards,
+    seller_catalogue_counters,
+)
+from app.scraper.seller import catalogue_html, seller_page_matches, source_challenged
 
 AVITO_CARD_SELECTOR = (
     '[data-marker^="item_list_with_filters/item"][data-item-id], '
@@ -53,25 +69,92 @@ class AvitoAdapter:
             except Exception:
                 pass
 
+    async def _wait_for_recovered_results(self, page, page_number):
+        """Wait for the redirected list, without treating a timer as absence."""
+        await page.mouse.wheel(0, 1600)
+        await asyncio.sleep(settings.avito_page_delay_seconds)
+        previous = None
+        next_notice = 0
+        loop = asyncio.get_running_loop()
+        while True:
+            html = await read_page_content(page)
+            hits = self._extract(html, page_number)
+            state, _ = classify_result_page(html, len(hits))
+            if state in {'empty', 'blocked'}:
+                return html
+            signature = tuple(hit.external_id or hit.url for hit in hits)
+            if state == 'results' and signature == previous:
+                return html
+            previous = signature if state == 'results' else None
+            if loop.time() >= next_notice:
+                self._progress('page_wait', page=page_number,
+                               wait_reason='post_captcha_rendering', wait_seconds=1)
+                next_notice = loop.time() + 30
+            await asyncio.sleep(1)
+
     async def scan_filter(
         self,
         search_url: str,
-        max_pages: int = 3,
+        max_pages: int = 5,
         target_keys: set[str] | None = None,
         seller_catalogue: bool = False,
+        evidence_keys: set[str] | None = None,
     ) -> ScanResult:
         start = datetime.now(UTC)
         hits: list[ListingHit] = []
         pages_scanned = 0
+        load_actions = 0
         exhausted = False
+        targets_complete = False
         error: str | None = None
         diagnostics = {'engine': 'avito', 'start_url': search_url}
         seen_pages: set[frozenset[str]] = set()
+        catalogue_url = search_url
+        catalogue_boundary_url = search_url
+        expanded_catalogue = False
+        catalogue_counters = None
+        counter_conflict = False
+
+        def observe_counters(body, current_url):
+            nonlocal catalogue_counters, counter_conflict
+            observed = seller_catalogue_counters(catalogue_html(body), current_url)
+            result_count = avito_catalogue_result_count(catalogue_html(body), current_url)
+            diagnostics['seller_primary_result_count'] = result_count
+            if result_count is not None:
+                if observed and observed.get('active') is not None and observed['active'] != result_count:
+                    counter_conflict = True
+                elif not observed or observed.get('active') is None:
+                    observed = {'active': result_count, 'completed': None, 'basis': 'primary_result_count'}
+            if observed and observed.get('active') is not None:
+                if catalogue_counters and observed['active'] != catalogue_counters['active']:
+                    counter_conflict = True
+                catalogue_counters = observed
+            diagnostics['seller_active_counter'] = (catalogue_counters or {}).get('active')
+            diagnostics['seller_completed_counter'] = (catalogue_counters or {}).get('completed')
+            diagnostics['seller_counter_conflict'] = counter_conflict
 
         async with async_playwright() as p:
-            async with browser_page(p, source=self.source.value) as page:
-                for page_number in range(1, max_pages + 1):
-                    url = _page_url(search_url, page_number)
+            async with AsyncExitStack() as browser_pages:
+                async def reopen():
+                    return await browser_pages.enter_async_context(browser_page(p, source=self.source.value))
+
+                page_number = 1
+                resumed_response = None
+                try:
+                    page = await reopen()
+                except Exception as exc:
+                    if not operator_wait_seconds(self.source.value) or not recoverable_navigation_error(exc):
+                        raise
+                    page, resumed_response = await wait_for_navigation_recovery(
+                        None, url=search_url, reopen=reopen, progress=self.progress_callback,
+                        page_number=page_number, request_timeout=self.request_timeout,
+                    )
+                while page_number <= max_pages:
+                    if load_actions >= max_pages:
+                        diagnostics['load_budget_exhausted'] = True
+                        error = 'lazy-load budget reached before full coverage; traversal incomplete'
+                        break
+                    url = catalogue_url if seller_catalogue else _page_url(search_url, page_number)
                     wait_seconds = choose_pause(
                         settings.scan_page_pause_min_seconds,
                         settings.scan_page_pause_max_seconds,
@@ -88,12 +171,21 @@ class AvitoAdapter:
                         'page_started', page=page_number, pages_total=max_pages, url=url
                     )
                     diagnostics[f'page_{page_number}'] = 0
+                    checkpoint = (len(hits), pages_scanned, load_actions, seen_pages.copy())
+                    document = watch_main_frame_documents(page)
                     try:
-                        response = await page.goto(
-                            url,
-                            timeout=self.request_timeout * 1000,
-                            wait_until='domcontentloaded',
-                        )
+                        load_actions += 1
+                        diagnostics['load_actions'] = load_actions
+                        if resumed_response is not None:
+                            if document.request is None and document.response is None:
+                                document.response = resumed_response
+                            response, resumed_response = resumed_response, None
+                        else:
+                            response = await page.goto(
+                                url,
+                                timeout=self.request_timeout * 1000,
+                                wait_until='domcontentloaded',
+                            )
                         http_status = response.status if response is not None else None
                         diagnostics[f'page_{page_number}_http_status'] = http_status or 0
                         if http_status is None or http_status < 400:
@@ -112,17 +204,69 @@ class AvitoAdapter:
                                     )
                                 except PlaywrightTimeoutError:
                                     pass
-                        html = await page.content()
+                        html = await read_page_content(page)
+                        captcha_wait = operator_wait_seconds(self.source.value)
                         recovery = await refresh_explicit_captcha(
                             page, response, html, progress=self.progress_callback,
                             source=self.source.value, url=url,
+                            wait_seconds=captcha_wait,
+                            capture_challenge=(
+                                lambda challenge_page, challenge_response, current_page=page_number: capture_page_evidence(
+                                    challenge_page, source=self.source, search_url=search_url,
+                                    page_number=current_page, evidence_dir=settings.evidence_dir,
+                                    purpose='captcha_challenge', final_url=challenge_page.url,
+                                    http_status=challenge_response.status if challenge_response else None,
+                                )
+                            ) if captcha_wait else None,
                         )
                         response, html = recovery.response, recovery.html
-                        if recovery.refreshes:
+                        if recovery.outcome in {'resolved_by_operator', 'cleared_by_refresh'}:
+                            # The gate's document redirect is not proof that the
+                            # asynchronous result list has finished rendering.
+                            # Stay on this page and trigger its native lazy rendering.
+                            latest_response = response
+
+                            def recovered_document(candidate, current_page=page):
+                                nonlocal latest_response
+                                if (candidate.request.is_navigation_request()
+                                        and candidate.request.frame == current_page.main_frame):
+                                    latest_response = candidate
+
+                            page.on('response', recovered_document)
+                            try:
+                                while True:
+                                    html = await self._wait_for_recovered_results(page, page_number)
+                                    response = latest_response
+                                    repeated = await refresh_explicit_captcha(
+                                        page, response, html, progress=self.progress_callback,
+                                        source=self.source.value, url=url,
+                                        wait_seconds=captcha_wait,
+                                        capture_challenge=(lambda p, r, current_page=page_number: capture_page_evidence(
+                                            p, source=self.source, search_url=search_url,
+                                            page_number=current_page, evidence_dir=settings.evidence_dir,
+                                            purpose='captcha_challenge', final_url=p.url,
+                                            http_status=r.status if r else None,
+                                        )) if captcha_wait else None,
+                                    )
+                                    response, html = repeated.response, repeated.html
+                                    latest_response = response
+                                    if repeated.outcome == 'not_needed':
+                                        break
+                                    recovery = repeated
+                                    if repeated.outcome not in {'resolved_by_operator', 'cleared_by_refresh'}:
+                                        break
+                            finally:
+                                page.remove_listener('response', recovered_document)
+                        if recovery.outcome != 'not_needed':
                             http_status = response.status if response is not None else None
                             diagnostics[f'page_{page_number}_captcha_refreshes'] = recovery.refreshes
                             diagnostics[f'page_{page_number}_captcha_outcome'] = recovery.outcome
                             diagnostics[f'page_{page_number}_http_status'] = http_status or 0
+                            if recovery.challenge_evidence:
+                                diagnostics[f'page_{page_number}_captcha_evidence'] = recovery.challenge_evidence
+                                diagnostics[f'page_{page_number}_captcha_evidence_manifest'] = evidence_manifest_name(
+                                    recovery.challenge_evidence
+                                )
                         diagnostics[f'page_{page_number}_requested_url'] = url
                         diagnostics[f'page_{page_number}_final_url'] = page.url
                         evidence_path = await capture_page_evidence(
@@ -145,7 +289,7 @@ class AvitoAdapter:
                             diagnostics[f'page_{page_number}_state'] = 'evidence_missing'
                             break
                         if recovery.outcome in {'unresolved', 'operator_timeout', 'wrong_destination',
-                                                'no_document_response'}:
+                                                'challenge_evidence_missing', 'no_document_response'}:
                             reason = ('no document response' if recovery.outcome == 'no_document_response'
                                       else f'CAPTCHA {recovery.outcome}')
                             error = f'blocked page {page_number}: {reason}'
@@ -153,16 +297,98 @@ class AvitoAdapter:
                             break
                         if http_status is not None and http_status >= 400:
                             error = f'page {page_number}: RuntimeError: HTTP {http_status}'
-                            diagnostics[f'page_{page_number}_state'] = 'technical_error'
+                            diagnostics[f'page_{page_number}_state'] = (
+                                'blocked' if source_challenged(error, {}) else 'technical_error'
+                            )
                             break
-                        if seller_catalogue and not seller_page_matches(search_url, page.url):
-                            error = 'seller page redirected outside the approved seller catalogue'
+                        if not seller_catalogue:
+                            scope_problem = avito_model_search_scope_problem(search_url, page.url)
+                            if scope_problem:
+                                error = f'search filter scope lost page {page_number}: {scope_problem}'
+                                diagnostics[f'page_{page_number}_state'] = 'filter_scope_mismatch'
+                                # Retain inspectable provisional data without treating
+                                # an unverified scope as a valid search observation.
+                                diagnostics[f'page_{page_number}_rejected_scope_snapshot'] = {
+                                    'pagination': pagination_state(html, self.source.value),
+                                    'provisional_hits': [
+                                        {'url': hit.url, 'title': hit.title, 'price': hit.price,
+                                         'page_number': hit.page_number, 'position': hit.position}
+                                        for hit in self._extract(html, page_number, moscow_only=True)
+                                    ],
+                                }
+                                break
+                        if seller_catalogue and not seller_page_matches(catalogue_boundary_url, page.url):
+                            if expanded_catalogue and seller_page_matches(search_url, page.url):
+                                catalogue_boundary_url = page.url
+                            else:
+                                error = 'seller page redirected outside the approved seller catalogue'
+                                break
+                        if seller_catalogue and not avito_active_catalogue_url(page.url):
+                            error = 'seller page redirected outside the approved active inventory'
                             break
-                        catalogue = catalogue_html(html) if seller_catalogue else html
+                        if seller_catalogue and not expanded_catalogue:
+                            observe_counters(html, page.url)
+                            show_all_url = avito_catalogue_show_all_url(html, page.url)
+                            if show_all_url:
+                                diagnostics['catalogue_preview_evidence'] = evidence_path
+                                diagnostics['catalogue_show_all_url'] = show_all_url
+                                catalogue_url = catalogue_boundary_url = show_all_url
+                                expanded_catalogue = True
+                                self._progress('catalogue_show_all', url=show_all_url)
+                                continue
+                        if seller_catalogue:
+                            observe_counters(html, page.url)
+                        # A documented next-page control is the provable
+                        # continuation of this catalogue: while it exists, the
+                        # remaining document slots of the shared ceiling are
+                        # reserved for pagination and load-more batches run
+                        # only with actions pagination cannot use.
+                        pagination_before = pagination_state(html, self.source.value)
+                        reserved_pages = (
+                            max_pages - page_number
+                            if pagination_before['has_next'] and page_number < max_pages else 0
+                        )
+                        if reserved_pages:
+                            diagnostics[f'page_{page_number}_lazy_budget_reserved'] = reserved_pages
+                        lazy = await load_more_results(
+                            page, response, html, source=self.source, requested_url=url,
+                            search_url=search_url, page_number=page_number,
+                            extract=lambda body, current_page=page_number: self._extract(catalogue_html(body) if seller_catalogue else body, current_page),
+                            root_selector='[data-marker="catalog-serp"]', card_selector=AVITO_CARD_SELECTOR,
+                            declared_total=((catalogue_counters or {}).get('active')
+                                            if seller_catalogue else pagination_before['total']),
+                            target_keys=(set(target_keys) - {canonical_listing_key(self.source, hit.url) for hit in hits}) if target_keys and not seller_catalogue else None,
+                            progress=self.progress_callback,
+                            batch_budget=max(0, max_pages - load_actions - reserved_pages),
+                            seller_catalogue=seller_catalogue,
+                        )
+                        load_actions += lazy.batches
+                        diagnostics['load_actions'] = load_actions
+                        response, html = lazy.response, lazy.html
+                        http_status = response.status if response is not None else None
+                        diagnostics[f'page_{page_number}_lazy_batches'] = lazy.batches
+                        diagnostics[f'page_{page_number}_lazy_outcome'] = lazy.outcome
+                        for lazy_recovery in lazy.recoveries:
+                            diagnostics[f'page_{page_number}_captcha_outcome'] = lazy_recovery.outcome
+                            if lazy_recovery.challenge_evidence:
+                                diagnostics[f'page_{page_number}_captcha_evidence'] = lazy_recovery.challenge_evidence
+                                diagnostics[f'page_{page_number}_captcha_evidence_manifest'] = evidence_manifest_name(lazy_recovery.challenge_evidence)
+                        if lazy.batches or lazy.outcome == 'pagination_revealed':
+                            evidence_path = await capture_page_evidence(
+                                page, source=self.source, search_url=search_url,
+                                page_number=page_number, evidence_dir=settings.evidence_dir,
+                                purpose='search_page', final_url=page.url, http_status=http_status,
+                            )
+                            if not evidence_path:
+                                raise RuntimeError('lazy-load page evidence missing')
+                            diagnostics[f'page_{page_number}_evidence'] = evidence_path
+                            diagnostics[f'page_{page_number}_evidence_manifest'] = evidence_manifest_name(evidence_path)
+                        diagnostics[f'page_{page_number}_http_status'] = http_status or 0
+
                         # A Moscow query can legitimately paginate into offers from
                         # other cities.  Classify the response from all visible cards;
                         # apply the city scope only to the returned monitoring hits.
-                        parsed_all = self._extract(catalogue, page_number)
+                        parsed_all = lazy.hits
                         moscow_only = not seller_catalogue and '/moskva/' in urlsplit(search_url).path
                         parsed = (
                             [hit for hit in parsed_all if _is_moscow_listing_url(hit.url)]
@@ -170,6 +396,8 @@ class AvitoAdapter:
                             else parsed_all
                         )
                         pagination = pagination_state(html, self.source.value)
+                        if seller_catalogue:
+                            observe_counters(html, page.url)
                         diagnostics[f'page_{page_number}_pagination'] = pagination
                         if pagination['current'] is not None and pagination['current'] != page_number:
                             error = f'pagination mismatch: requested {page_number}, displayed {pagination["current"]}'
@@ -186,12 +414,13 @@ class AvitoAdapter:
                         page_state, reason = classify_result_page(html, len(parsed_all))
                         card_evidence = 0
                         missing_card_evidence: list[str] = []
-                        if page_state == 'results' and target_keys:
+                        capture_keys = target_keys if evidence_keys is None else evidence_keys
+                        if page_state == 'results' and capture_keys:
                             for hit in parsed:
                                 key = canonical_listing_key(self.source, hit.url)
-                                if key not in target_keys:
+                                if key not in capture_keys:
                                     continue
-                                card_path = await capture_listing_card_evidence(
+                                card_path = hit.raw.get('card_evidence') or await capture_listing_card_evidence(
                                     page,
                                     source=self.source,
                                     search_url=search_url,
@@ -233,12 +462,96 @@ class AvitoAdapter:
                         if page_state == 'empty':
                             exhausted = True
                             break
-                        hits.extend(parsed)
-                        if pagination['last'] or (page_number == 1 and pagination['total'] is not None
-                                                  and len(page_keys) == pagination['total'] and not pagination['has_next']):
+                        if seller_catalogue:
+                            # Page boundaries can overlap (e.g. 24 + 6 cards
+                            # with one repeated publication). Keep the inventory
+                            # and downstream candidate counts unique.
+                            collected = {canonical_listing_key(self.source, hit.url) for hit in hits}
+                            hits.extend(hit for hit in parsed
+                                        if canonical_listing_key(self.source, hit.url) not in collected)
+                        else:
+                            hits.extend(parsed)
+                        unique_keys = {canonical_listing_key(self.source, hit.url) for hit in hits}
+                        declared_active = (catalogue_counters or {}).get('active')
+                        if seller_catalogue and counter_conflict:
+                            error = 'Catalogue active counter changed during traversal; coverage must be rechecked'
+                            break
+                        counter_incomplete = (seller_catalogue and declared_active is not None
+                                              and len(unique_keys) != declared_active)
+                        if not counter_incomplete and (pagination['last'] or (page_number == 1 and pagination['total'] is not None
+                                                  and len(page_keys) == pagination['total'] and not pagination['has_next'])):
+                            if seller_catalogue:
+                                diagnostics['catalogue_end_proven_by'] = (
+                                    'seller_active_counter' if declared_active is not None else 'pagination_last')
                             exhausted = True
                             break
+                        targets_complete = bool(not seller_catalogue and target_keys and set(target_keys) <= {
+                            canonical_listing_key(self.source, hit.url) for hit in hits
+                        })
+                        if targets_complete:
+                            diagnostics['target_coverage_complete'] = True
+                            break
+                        if seller_catalogue:
+                            next_url = pagination_next_url(html, self.source.value, page.url)
+                            if next_url and page_number < max_pages:
+                                if not seller_page_matches(catalogue_boundary_url, next_url):
+                                    diagnostics['catalogue_navigation_unproven'] = True
+                                    error = 'Catalogue next-page link leaves the seller catalogue'
+                                    break
+                                catalogue_url = next_url
+                            elif not next_url:
+                                # No observed continuation.  Only the seller's own
+                                # ACTIVE-ads counter can prove the catalogue end,
+                                # and only when it equals the number of unique
+                                # primary IDs collected inside this confirmed
+                                # seller scope (redirect and block checks above
+                                # have already passed).  Anything less keeps the
+                                # traversal incomplete; nothing is paginated by
+                                # guesswork.
+                                if declared_active is not None and len(unique_keys) == declared_active:
+                                    diagnostics['catalogue_end_proven_by'] = 'seller_active_counter'
+                                    exhausted = True
+                                    break
+                                diagnostics['catalogue_navigation_unproven'] = True
+                                error = 'Catalogue end not proven; no observed next-page link'
+                                break
+                            elif page_number == max_pages:
+                                diagnostics['catalogue_navigation_unproven'] = True
+                    except LazyLoadBlocked as exc:
+                        # A marketplace denial during the load-more wait halts
+                        # this source, exactly like a blocked primary page.
+                        error = f'page {page_number}: {type(exc).__name__}: {exc}'
+                        diagnostics[f'page_{page_number}_state'] = 'blocked'
+                        diagnostics[f'page_{page_number}_block_reason'] = str(exc)
+                        if exc.captcha_outcome:
+                            diagnostics[f'page_{page_number}_captcha_outcome'] = exc.captcha_outcome
+                            diagnostics[f'page_{page_number}_captcha_refreshes'] = exc.captcha_refreshes
+                        self._progress(
+                            'page_failed',
+                            page=page_number,
+                            pages_total=max_pages,
+                            error=error,
+                        )
+                        break
                     except Exception as exc:
+                        if getattr(exc, 'navigation', None):
+                            diagnostics[f'page_{page_number}_lazy_navigation'] = exc.navigation
+                        if operator_wait_seconds(self.source.value) and recoverable_navigation_error(exc):
+                            hit_count, pages_scanned, load_actions, seen_pages = checkpoint
+                            del hits[hit_count:]
+                            diagnostics['load_actions'] = load_actions
+                            self._progress('navigation_operator_required', page=page_number, url=url,
+                                           error=f'{type(exc).__name__}: {exc}')
+                            try:
+                                page, resumed_response = await wait_for_navigation_recovery(
+                                    page, url=url, reopen=reopen, progress=self.progress_callback,
+                                    page_number=page_number, request_timeout=self.request_timeout,
+                                    document_watcher=document,
+                                )
+                            except Exception as recovery_exc:
+                                exc = recovery_exc
+                            else:
+                                continue
                         error = f'page {page_number}: {type(exc).__name__}: {exc}'
                         diagnostics[f'page_{page_number}_state'] = 'technical_error'
                         self._progress(
@@ -248,6 +561,9 @@ class AvitoAdapter:
                             error=error,
                         )
                         break
+                    finally:
+                        document.detach()
+                    page_number += 1
 
         return ScanResult(
             filter_id='',
@@ -256,7 +572,7 @@ class AvitoAdapter:
             diagnostics=diagnostics,
             scanned_at=start,
             requested_pages=max_pages,
-            complete=error is None and (pages_scanned == max_pages or exhausted),
+            complete=error is None and (pages_scanned == max_pages or exhausted or targets_complete),
             exhausted=exhausted,
             error=error,
         )

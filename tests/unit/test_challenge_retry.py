@@ -104,14 +104,15 @@ def test_http_429_after_single_refresh_never_becomes_cleared_captcha(monkeypatch
     assert page.reloads == 1
 
 
-def test_visible_auto_ru_is_only_operator_wait_path(monkeypatch):
+def test_visible_marketplaces_allow_operator_wait(monkeypatch):
     from app.scraper.challenge_retry import settings
 
     monkeypatch.setattr(settings, 'browser_cdp_url', 'http://127.0.0.1:19223')
     monkeypatch.setattr(settings, 'playwright_headless', False)
     monkeypatch.setattr(settings, 'captcha_operator_wait_seconds', 180)
     assert operator_wait_seconds('auto_ru') == 180
-    assert operator_wait_seconds('avito') == 0
+    assert operator_wait_seconds('avito') == 180
+    assert operator_wait_seconds('other') == 0
     monkeypatch.setattr(settings, 'playwright_headless', True)
     assert operator_wait_seconds('auto_ru') == 0
 
@@ -140,11 +141,11 @@ def test_operator_can_clear_captcha_on_same_requested_page(monkeypatch):
         source='auto_ru', url=page.url, wait_seconds=1,
     ))
     assert result.outcome == 'resolved_by_operator'
-    assert result.refreshes == 1
-    assert page.reloads == 1
+    assert result.refreshes == 0
+    assert page.reloads == 0
     assert page.front_calls == 1
-    assert [event['event'] for event in events] == [
-        'captcha_refresh', 'captcha_operator_required', 'captcha_operator_resolved',
+    assert [event['event'] for event in events if event['event'] != 'captcha_operator_waiting'] == [
+        'captcha_operator_required', 'captcha_operator_resolved',
     ]
 
 
@@ -170,7 +171,7 @@ def test_unresolved_captcha_stays_incomplete_after_bounded_wait(monkeypatch):
         source='auto_ru', url=page.url, wait_seconds=0.03, poll_seconds=0.01,
     ))
     assert result.outcome == 'operator_timeout'
-    assert result.refreshes == 1
+    assert result.refreshes == 0
     assert events[-1]['event'] == 'captcha_operator_unresolved'
 
 
@@ -240,6 +241,25 @@ def test_browser_error_during_operator_wait_clears_waiting_progress(monkeypatch)
             page, _Response(200), page.html, progress=events.append,
             source='auto_ru', url=page.url, wait_seconds=1,
         ))
-    assert [event['event'] for event in events][-2:] == [
+    assert [event['event'] for event in events if event['event'] != 'captcha_operator_waiting'][-2:] == [
         'captcha_operator_required', 'captcha_operator_unresolved',
     ]
+
+
+def test_avito_brand_seller_id_is_redundant_but_search_scope_is_preserved():
+    assert _same_requested_page(
+        'https://www.avito.ru/brands/a1auto/all/avtomobili?src=search_seller_info&iid=8047929828&sellerId=abc',
+        'https://www.avito.ru/brands/a1auto/items/all/avtomobili',
+    )
+    assert not _same_requested_page(
+        'https://www.avito.ru/brands/a1auto/all/avtomobili?sellerId=abc',
+        'https://www.avito.ru/brands/other/all/avtomobili',
+    )
+    assert not _same_requested_page(
+        'https://www.avito.ru/moskva/avtomobili?sellerId=abc&p=2',
+        'https://www.avito.ru/moskva/avtomobili?p=2',
+    )
+    assert not _same_requested_page(
+        'https://www.avito.ru/brands/a1auto/all/avtomobili?sellerId=abc&p=2',
+        'https://www.avito.ru/brands/a1auto/all/avtomobili',
+    )

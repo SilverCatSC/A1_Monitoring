@@ -99,7 +99,7 @@ def test_captcha_on_page_two_continues_page_two_then_three_in_same_context(monke
     assert result.page_count == 3
     assert [hit.page_number for hit in result.hits] == [1, 2, 3]
     assert len(page.visited) == 3
-    assert page.reloads == 1
+    assert page.reloads == 0
     assert page.front_calls == 1
     assert result.diagnostics['page_2_captcha_outcome'] == 'resolved_by_operator'
     assert result.diagnostics['page_2_captcha_evidence'] == 'page-evidence.png'

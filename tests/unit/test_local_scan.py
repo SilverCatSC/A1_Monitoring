@@ -51,6 +51,34 @@ def test_reused_chrome_is_prepared_before_scan(monkeypatch, tmp_path):
     assert calls == ['http://127.0.0.1:19222']
 
 
+def test_monitoring_startup_replaces_only_empty_tabs_with_dashboard(monkeypatch):
+    requests = []
+    dashboard = 'http://127.0.0.1:18000/api/v1/dashboard'
+
+    def fake_urlopen(request, timeout):
+        requests.append(request)
+        if isinstance(request, str) and request.endswith('/json/list'):
+            return _Response([{'type': 'page', 'id': 'empty', 'url': 'about:blank'}])
+        return _Response({'type': 'page', 'id': 'dashboard'})
+
+    monkeypatch.setattr(local_scan, 'urlopen', fake_urlopen)
+    assert local_scan._ensure_cdp_page('http://127.0.0.1:19223', dashboard)
+    assert requests[1].full_url.endswith('/json/new?' + local_scan.quote(dashboard, safe=''))
+    assert requests[2].endswith('/json/close/empty')
+
+
+def test_monitoring_startup_preserves_existing_nonempty_tabs(monkeypatch):
+    requests = []
+
+    def fake_urlopen(request, timeout):
+        requests.append(request)
+        return _Response([{'type': 'page', 'id': 'operator', 'url': 'https://example.com/'}])
+
+    monkeypatch.setattr(local_scan, 'urlopen', fake_urlopen)
+    assert not local_scan._ensure_cdp_page('http://127.0.0.1:19223', 'http://127.0.0.1:18000/api/v1/dashboard')
+    assert len(requests) == 1
+
+
 def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     monkeypatch.setenv('PLACEMENT_RECONCILIATION_ENABLED', 'false')
     for key in local_scan.PACING_PROFILES['cautious']:
@@ -84,10 +112,40 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
 
 
+def test_voyah_search_only_calls_one_search_without_opening_database(monkeypatch, tmp_path):
+    from app.service.targeted_search import targeted_filter
+
+    calls = []
+    output = tmp_path / 'search_result.json'
+
+    async def probe(url, pages):
+        calls.append((url, pages))
+        return {'complete': True, 'error': None, 'page_count': 1, 'hits': [],
+                'diagnostics': {'page_1_final_url': url}}
+
+    monkeypatch.setattr(local_scan, '_require_interactive_host_runner_context', lambda: calls.append('host-gate'))
+    monkeypatch.setattr(local_scan, '_env_file_values', lambda _: {})
+    monkeypatch.setattr(local_scan, '_prepare_vpn_admission_directory', lambda: None)
+    monkeypatch.setattr(local_scan, '_ensure_local_chrome', lambda *_: False)
+    monkeypatch.setattr(local_scan, '_probe', probe)
+    monkeypatch.setattr('app.db.get_db_context', lambda: pytest.fail('search-only must never open the DB'))
+    for key in ('NETWORK_PROFILE', 'BROWSER_CDP_URL', 'PLAYWRIGHT_HEADLESS', 'SCAN_ENABLED_ENGINES',
+                'PLACEMENT_RECONCILIATION_ENABLED', 'SCAN_PAGES_LIMIT', 'EVIDENCE_DIR',
+                'CAPTCHA_OPERATOR_WAIT_SECONDS', 'VPN_OPERATIONAL_POLICY_PATH',
+                *local_scan.PACING_PROFILES['cautious']):
+        monkeypatch.delenv(key, raising=False)
+    monkeypatch.setattr('sys.argv', ['local_scan.py', '--search-only', 'avito_voyah_dream_all',
+                                    '--engines', 'avito', '--pages', '5', '--diagnostic-routing',
+                                    '--search-result', str(output), '--evidence-dir', str(tmp_path / 'evidence')])
+    assert local_scan.main() == 0
+    assert calls == ['host-gate', (targeted_filter('avito_voyah_dream_all').url, 5)]
+    assert json.loads(output.read_text())['result']['complete']
+
+
 def test_private_chrome_uses_a_separate_extension_free_endpoint():
     args = local_scan._parser().parse_args([])
     assert args.cdp_port == 19223
-    assert args.captcha_wait_seconds == 180
+    assert args.captcha_wait_seconds == -1
     assert args.browser_profile == str(local_scan.DEFAULT_PROFILE)
     assert args.browser_profile.endswith('local_chrome_isolated_profile')
 
@@ -104,7 +162,7 @@ def test_new_monitoring_chrome_disables_extensions(monkeypatch, tmp_path):
     commands = []
     ready = iter([False, True])
     monkeypatch.setattr(local_scan, '_cdp_ready', lambda _url: next(ready))
-    monkeypatch.setattr(local_scan, '_ensure_cdp_page', lambda _url: False)
+    monkeypatch.setattr(local_scan, '_ensure_cdp_page', lambda *_args: False)
     monkeypatch.setattr(local_scan, '_chrome_executable', lambda: '/fake/chrome')
     monkeypatch.setattr(local_scan.subprocess, 'Popen', lambda command, **_kwargs: commands.append(command))
     assert local_scan._ensure_local_chrome('http://127.0.0.1:19223', tmp_path / 'profile') is True

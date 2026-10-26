@@ -51,6 +51,7 @@ from app.schemas import (
 )
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
 from app.service.analytics import STATES, activity_context, analytics_context
+from app.service.catalogue_visibility import add_catalogue_visibility
 from app.service.company_site_report import company_site_audit_context
 from app.service.cycle import (
     CycleConfigurationError,
@@ -77,6 +78,7 @@ from app.service.feedback import (
 from app.service.filters import FilterRegistryService, FilterValidationError
 from app.service.listings import ListingRegistryService, ListingValidationError
 from app.service.monitor import ScanAlreadyRunning, ScanConfigurationError
+from app.service.monitoring_digest import monitoring_digest
 from app.service.offer_reconciliation import offer_review_queue
 from app.service.placement_report import PlacementReportError, read_cycle_placement_report
 from app.service.public_report import public_report_context
@@ -96,12 +98,14 @@ from app.service.report import (
 )
 from app.service.republication_review import exact_candidate_proof_url, exact_republication_candidate
 from app.service.scan_progress import read_scan_progress
+from app.service.vehicle_dashboard import vehicle_dashboard
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
+templates.env.globals['monitoring_search_pages'] = lambda: settings.scan_pages_limit
 PLACEMENT_REVIEW_LABELS = {
     'republication_candidate': ('Возможная перевыкладка', 'Сверьте снимок новой карточки и подтвердите ссылку у оператора.'),
-    'mixed_script_id': ('Похожая кириллическая буква в ID', 'Машина сопоставлена с предупреждением; исправление текста не требуется для проверки.'),
+    'mixed_script_id': ('Кириллица в полученном тексте карточки', 'ID фида и текст страницы различаются. Связь подтверждена; это не доказывает ошибку в таблице или исходном описании.'),
     'mixed_script_feed_id': ('Ошибка буквы в фиде', 'Проверка продолжается, но исходный ID фида требует исправления.'),
     'platform_id_candidate': ('Совпал только номер Avito', 'Не меняйте ссылку без ID из описания или ручного подтверждения.'),
     'identity_conflict': ('Противоречие идентификаторов', 'Проверьте фид и карточку; связь автоматически не установлена.'),
@@ -112,9 +116,10 @@ PLACEMENT_REVIEW_LABELS = {
     'invalid_card_id': ('Некорректный ID карточки', 'Проверьте исходный текст объявления.'),
     'invalid_feed_id': ('Некорректный ID фида', 'Проверьте исходную строку фида.'),
     'card_evidence_missing': ('Нет подтверждённого снимка', 'Повторите контролируемое открытие карточки.'),
+    'card_id_missing': ('unique_id не прочитан в карточке', 'Проверьте полное описание и публикацию ID из фида. VIN, модель и цена не заменяют unique_id; повтор поиска сам по себе не восстановит эту связь.'),
     'current_link_missing': ('Нет ссылки в реестре', 'Проверьте строку реестра и найденную карточку.'),
     'current_link_invalid': ('Некорректная ссылка в реестре', 'Проверьте ссылку и найденную карточку.'),
-    'vehicle_anchor_missing': ('Нет связи с автомобилем', 'Нужна подтверждённая связь unique_id с записью автомобиля; VIN не используется.'),
+    'vehicle_anchor_missing': ('Активный unique_id без связи с реестром', 'Карточка и строка фида найдены. Проверьте актуальную ссылку и запись маркетинга; автоматически связывать автомобиль по VIN или сходству характеристик нельзя.'),
     'public_id_without_feed_row': ('Карточка без строки фида', 'Проверьте публикацию и актуальность выгрузки.'),
 }
 
@@ -360,6 +365,7 @@ def placement_identity_html(
     if cycle is not None:
         try:
             report = read_cycle_placement_report(cycle, settings.evidence_dir)
+            add_catalogue_visibility(report, settings.evidence_dir)
         except PlacementReportError as exc:
             data['error'] = str(exc)
         else:
@@ -370,6 +376,10 @@ def placement_identity_html(
             }
             for finding in report['findings']:
                 if not isinstance(finding, dict) or finding.get('code') in {'link_current', 'not_verified'}:
+                    continue
+                if finding.get('post_run_resolution') in {
+                    'owner_confirmed_registry_binding', 'source_verified_registry_binding',
+                }:
                     continue
                 urls = [
                     url for url in finding.get('observed_urls', [])
@@ -391,6 +401,8 @@ def placement_identity_html(
                                             if url in evidence_by_url), None),
                 })
             data['report'] = report
+            data['monitoring'] = monitoring_digest(report)
+            data['vehicles'] = vehicle_dashboard(report)
     return templates.TemplateResponse(
         request=request, name='placement_identity.html', context={'data': data},
     )

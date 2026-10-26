@@ -13,6 +13,7 @@ from urllib.parse import unquote, urlparse
 from bs4 import BeautifulSoup
 
 from app.models import EngineType
+from app.scraper.result_scope import SUPPLEMENT_HEADING
 
 
 @dataclass
@@ -69,21 +70,64 @@ EMPTY_PAGE_MARKERS = (
     'search-no-results',
 )
 
+# Structural markers must occur on explicit visible DOM components, not in
+# scripts, styles or resource URLs. Empty assertions also require result scope.
+STRUCTURAL_PAGE_MARKERS = ('cf-chl-', 'items-not-found', 'search-no-results')
+
 EVIDENCE_SCHEMA_VERSION = 'evidence.v1'
+
+_HIDDEN_STYLE = re.compile(r'display\s*:\s*none|visibility\s*:\s*hidden', re.IGNORECASE)
+
+
+def _visible_markup(html: str) -> BeautifulSoup:
+    """Exclude explicit hidden markup; external CSS visibility is not inferred."""
+    soup = BeautifulSoup(html, 'html.parser')
+    for node in reversed(soup.select('template, [hidden], [aria-hidden="true"], '
+                                     'noscript, script, style')):
+        node.decompose()
+    for node in reversed(soup.find_all(style=_HIDDEN_STYLE)):
+        node.decompose()
+    return soup
+
+
+def _structural_marker(scope, marker: str) -> bool:
+    # A JS/CSS string or resource URL naming an empty component does not mean
+    # that the component is present in the requested result list.
+    return any(marker in str(node.get(attr, '')).lower()
+               for node in scope.find_all(True) for attr in ('class', 'id', 'data-marker'))
 
 
 def classify_result_page(html: str, card_count: int) -> tuple[str, str | None]:
     """Classify a result page without turning parser failures into false absences."""
-    visible_text = BeautifulSoup(html, 'html.parser').get_text(' ', strip=True).lower()
-    lower_html = html.lower()
+    soup = _visible_markup(html)
+    visible_text = soup.get_text(' ', strip=True).lower()
     for marker in BLOCK_PAGE_MARKERS:
-        if marker in visible_text or marker in lower_html:
+        if marker in visible_text or (marker in STRUCTURAL_PAGE_MARKERS and _structural_marker(soup, marker)):
             return 'blocked', marker
     if card_count > 0:
         return 'results', None
-    for marker in EMPTY_PAGE_MARKERS:
-        if marker in visible_text or marker in lower_html:
-            return 'empty', marker
+    # Unlike a visible denial (which can cover any part of the page), an
+    # empty-result assertion must belong to the primary results, not widgets.
+    for node in reversed(soup.select('aside, header, footer, nav, [data-marker*="recommend"], '
+                                     '[class*="Recommendations"], [class*="RelatedOffers"]')):
+        node.decompose()
+    roots = soup.select('[data-marker="catalog-serp"], .ListingCars__items, .CardGroupOffersList__items')
+    scopes = roots or soup.select('main') or [soup]
+    empty_reasons = []
+    for scope in scopes:
+        ordered = list(scope.find_all(True))
+        boundary = next((i for i, node in enumerate(ordered)
+                         if node.name in {'h2', 'h3'} or node.get('role') == 'heading'
+                         if SUPPLEMENT_HEADING.search(node.get_text(' ', strip=True))), None)
+        if boundary is not None:
+            for node in reversed(ordered[boundary:]):
+                node.decompose()
+        text = scope.get_text(' ', strip=True).lower()
+        empty_reasons.append(next((marker for marker in EMPTY_PAGE_MARKERS
+                                  if marker in text or (marker in STRUCTURAL_PAGE_MARKERS
+                                                        and _structural_marker(scope, marker))), None))
+    if empty_reasons and all(empty_reasons):
+        return 'empty', empty_reasons[0]
     return 'unrecognized', 'no listing cards and no explicit empty-result marker'
 
 

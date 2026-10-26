@@ -298,3 +298,49 @@ def test_screenshot_ignores_hidden_copy_and_captures_visible_card(tmp_path):
             finally:
                 await browser.close()
     asyncio.run(exercise())
+
+
+@pytest.mark.parametrize('offer_count', [21, 26])
+def test_auto_ru_single_page_count_does_not_probe_nonexistent_pages(tmp_path, monkeypatch, offer_count):
+    for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds', 'auto_ru_page_delay_seconds'):
+        monkeypatch.setattr(settings, key, 0)
+    monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
+    requests = []
+
+    async def exercise():
+        async with async_playwright() as p:
+            browser = await p.chromium.launch(channel='chrome', headless=True)
+            page = await browser.new_page()
+
+            async def route_page(route):
+                requests.append(route.request.url)
+                cards = ''.join(
+                    '<div class="ListingItemUniversal-test"><a class="ListingItemTitle__link" '
+                    f'href="https://auto.ru/cars/new/group/hongqi/hq9/1/2/{1133335000 + i}-car/">'
+                    'Hongqi HQ9</a></div>' for i in range(offer_count)
+                )
+                await route.fulfill(content_type='text/html; charset=utf-8', body=(
+                    '<div hidden>9 предложений</div><aside>9 Предложения дня</aside>'
+                    f'<button>Показать {offer_count} предложений</button>'
+                    f'<div class="ListingCars__items">{cards}</div>'
+                ))
+
+            await page.route('**/*', route_page)
+
+            @asynccontextmanager
+            async def local_page(_playwright, source=None):
+                yield page
+
+            monkeypatch.setattr('app.scraper.auto_ru.browser_page', local_page)
+            try:
+                return await AutoRuAdapter().scan_filter(
+                    'https://auto.ru/moskva/cars/hongqi/hq9/new/?geo_radius=0&rid=213', max_pages=3,
+                )
+            finally:
+                await browser.close()
+
+    result = asyncio.run(exercise())
+    assert result.complete and result.exhausted and result.error is None
+    assert result.page_count == 1 and len(requests) == 1
+    assert len(result.hits) == offer_count
+    assert result.diagnostics['page_1_declared_offers'] == offer_count
