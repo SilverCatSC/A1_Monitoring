@@ -135,9 +135,11 @@ def resolve_content_identity(saved, snapshot, *, evidence_dir=None, operator_con
     if basis == 'operator_confirmed' and (not platform_id or f'avito:{platform_id}' != key):
         result['status'] = 'operator_confirmation_not_corroborated'
         return result
-    feed_text = BeautifulSoup(row.get('Description') or '', 'html.parser').get_text(' ', strip=True)
-    feed_claims = placement_id_claims_from_description(feed_text)
-    if feed_claims != [candidate]:
+    # Duplicate descriptions may differ in wording. They corroborate an ID only
+    # when every retained variant independently claims the same exact ID.
+    descriptions = snapshot.field_values(sheet, number, 'Description', row.get('Description') or '')
+    if not all(placement_id_claims_from_description(
+            BeautifulSoup(text, 'html.parser').get_text(' ', strip=True)) == [candidate] for text in descriptions):
         result['status'] = 'feed_description_id_unverified'
         return result
     result.update(

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import FastAPI
 from fastapi.responses import JSONResponse
@@ -40,6 +41,25 @@ app.mount('/static', StaticFiles(directory=Path(__file__).parent / 'static'), na
 
 @app.middleware('http')
 async def basic_auth(request, call_next):
+    # Browsers can attach cached Basic credentials to a cross-site form POST.
+    # CLI clients without browser-origin headers retain authenticated access.
+    if request.method not in {'GET', 'HEAD', 'OPTIONS'}:
+        origin = request.headers.get('origin')
+        cross_site = request.headers.get('sec-fetch-site', '').lower() == 'cross-site'
+        if origin:
+            try:
+                supplied, expected = urlsplit(origin), urlsplit(str(request.base_url))
+                def authority(value):
+                    return (value.scheme, value.hostname,
+                            value.port or (443 if value.scheme == 'https' else 80))
+                cross_site = cross_site or (supplied.scheme not in {'http', 'https'}
+                    or supplied.username is not None or supplied.password is not None
+                    or supplied.path not in {'', '/'} or bool(supplied.query or supplied.fragment)
+                    or authority(supplied) != authority(expected))
+            except ValueError:
+                cross_site = True
+        if cross_site:
+            return JSONResponse({'detail': 'cross-origin mutation refused'}, status_code=403)
     if settings.auth_enabled and request.url.path not in {
         '/api/v1/health',
         '/api/v1/ready',

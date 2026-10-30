@@ -13,6 +13,7 @@ from app.scraper.base import canonical_listing_key
 from app.service.listings import ListingRegistryService
 from app.service.placement_report import PlacementReportError, read_cycle_placement_report
 from app.service.republication_review import exact_candidate_proof_url, exact_republication_candidate
+from app.service.workbook_identity import report_identity_conflicts
 
 
 class AutomaticLinkSyncService:
@@ -47,6 +48,7 @@ class AutomaticLinkSyncService:
         url_counts = Counter((record.source, canonical_listing_key(record.source, candidate['url']))
                              for record, candidate in exact)
         updated = []
+        conflicts = report_identity_conflicts(report.get('automatic_content_checks') or {})
         blocked = [
             {'check_id': finding.get('operator_review_check_id'),
              'reason': 'non_exact_or_unresolved_republication'}
@@ -56,6 +58,9 @@ class AutomaticLinkSyncService:
                  or finding.get('operator_review_check_id') not in eligible_check_ids)
         ]
         for record, candidate in exact:
+            if candidate['placement_id'] in conflicts:
+                blocked.append({'check_id': record.id, 'reason': 'workbook_identity_conflict'})
+                continue
             listing = self.db.get(Listing, record.listing_id)
             current = (listing.source_auto_ru if record.source == EngineType.AUTO_RU else listing.source_avito)
             new_key = canonical_listing_key(record.source, candidate['url'])

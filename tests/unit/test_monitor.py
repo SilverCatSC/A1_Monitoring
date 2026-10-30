@@ -98,6 +98,38 @@ def _seed(session):
     return listing, search_filter
 
 
+def test_replayed_search_does_not_advance_consecutive_absence_count(tmp_path, monkeypatch):
+    monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
+    monkeypatch.setattr('app.service.monitor.settings.network_profile', 'local_browser')
+    monkeypatch.setattr('app.service.monitor.settings.min_confirmed_absence_runs', 3)
+    session, engine = _session(tmp_path)
+    try:
+        _seed(session)
+        original = _result()
+        original.diagnostics['search_collected_at'] = original.scanned_at.isoformat()
+        replay = _result()
+        replay.scanned_at = original.scanned_at
+        replay.diagnostics['search_collected_at'] = original.scanned_at.isoformat()
+        replay.diagnostics['recovery'] = {'source_cycle_id': 'interrupted', 'fresh_browser_visit': False}
+        fresh, another = _result(), _result()
+        fresh.diagnostics['search_collected_at'] = fresh.scanned_at.isoformat()
+        another.diagnostics['search_collected_at'] = another.scanned_at.isoformat()
+        service = MonitorService(session, auto_adapter=FakeAdapter([original, replay, fresh, another]))
+        assert service.run_full_cycle()['missed_uncertain'] == 1
+        # The same saved search is one observation, not a second independent miss.
+        repeated = service.run_full_cycle()
+        assert repeated['missed_uncertain'] == 1
+        assert repeated['missed_confirmed'] == 0
+        assert session.query(AbsenceEpisode).count() == 0
+        # The next actual scan must also count the replay and parent only once.
+        assert service.run_full_cycle()['missed_uncertain'] == 1
+        assert session.query(AbsenceEpisode).count() == 0
+        assert service.run_full_cycle()['missed_confirmed'] == 1
+    finally:
+        session.close()
+        engine.dispose()
+
+
 def test_search_collection_binds_replacement_link_without_visiting_search_again(tmp_path, monkeypatch):
     monkeypatch.setattr('app.service.monitor.settings.scan_enabled_engines', 'auto_ru')
     monkeypatch.setattr('app.service.monitor.settings.evidence_dir', str(tmp_path))

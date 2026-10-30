@@ -124,6 +124,8 @@ def test_current_card_opened_once_and_removal_gates_search(tmp_path, monkeypatch
         else:
             assert identity is None
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
+        assert report['analytical_summary']['cycle_id'] == 'cycle-reuse'
+        assert (tmp_path / 'evidence/cycles/cycle-reuse/marketing_summary.txt').is_file()
         assert report['observed_cards'][0]['card']['description'] == full_description
         assert report['observed_cards'][0]['card']['description_excerpt'] == full_description
         summary = SellerReconciliationService(db, inspector=inspector).inspect_current_cards(preflight)
@@ -248,10 +250,11 @@ def test_cycle_queues_id_candidate_only_for_reviewable_check_without_url_write(
     engine.dispose()
 
 
-def test_cycle_does_not_claim_complete_coverage_when_card_limit_is_zero(tmp_path, monkeypatch):
+@pytest.mark.parametrize('reason', ['limit', 'blocked', 'mid_block'])
+def test_cycle_does_not_claim_complete_coverage_when_card_limit_is_zero(tmp_path, monkeypatch, reason):
     monkeypatch.setattr(settings, 'network_profile', 'local_browser')
     monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path / 'evidence'))
-    monkeypatch.setattr(settings, 'seller_identity_checks_limit', 0)
+    monkeypatch.setattr(settings, 'seller_identity_checks_limit', 0 if reason == 'limit' else 80)
     monkeypatch.setattr('app.service.placement_cycle.read_placement_feed_snapshot',
                         lambda _url: _snapshot())
     engine = create_engine(f'sqlite:///{tmp_path / "placement.db"}')
@@ -270,18 +273,50 @@ def test_cycle_does_not_claim_complete_coverage_when_card_limit_is_zero(tmp_path
             network_profile='local_browser', active=True,
             raw_payload={'discovery_run_id': run.id},
         ))
+        target = NEW
+        if reason == 'mid_block':
+            target = NEW.replace('8176281881', '8176281882')
+            db.add(DealerListingCandidate(
+                source=EngineType.AVITO, external_key=canonical_listing_key(EngineType.AVITO, target),
+                dealer_url=run.dealer_url, listing_url=target, network_profile='local_browser', active=True,
+                raw_payload={'discovery_run_id': run.id},
+            ))
         db.commit()
 
+        async def inspector(*_args):
+            assert reason == 'mid_block'
+            return {'state': 'blocked'}
+
         result = PlacementCycleService(
-            db, inspector=lambda *_args: 1 / 0, cycle_id='cycle-2'
+            db, inspector=inspector, cycle_id='cycle-2'
         ).run({'batch_id': 'batch-2', 'discovery': {'run_ids': [run.id]},
-               'blocked_sources': []}, 'https://docs.google.com/spreadsheets/d/abc/export')
+               'blocked_sources': ['avito'] if reason == 'blocked' else []}, 'https://docs.google.com/spreadsheets/d/abc/export')
 
         assert result['status'] == 'partial'
         assert result['codes'] == {'not_verified': 1}
         report = json.loads((tmp_path / 'evidence' / result['report_path']).read_text())
         assert report['catalogue_complete']['avito'] is False
         assert report['skipped_cards_by_source']['avito'] == 1
+
+        # Exercise production service output through both downstream consumers.
+        from app.service.publication_alerts import publication_alerts
+        from app.service.vehicle_dashboard import vehicle_dashboard
+        report['automatic_content_checks']['marketing_vehicles'] = [{
+            'key': 'row:2', 'marketing_row': 2, 'unique_id': PLACEMENT_ID,
+            'title': 'Synthetic vehicle', 'expected_urls': {'avito': target},
+        }]
+        assert report['catalogue_enumeration_complete']['avito'] is True
+        assert report['catalogue_listing_urls']['avito'] == sorted({NEW, target})
+        fleet = vehicle_dashboard(report)
+        assert fleet['inactive'] == 0
+        assert next(p for p in fleet['vehicles'][0]['platforms'] if p['source'] == 'avito')['state'] == 'unknown'
+        previous = {'cycle_id': 'prior', 'observed_cards': [{
+            'source': 'avito', 'url': target, 'state': 'active', 'card': {'placement_id': PLACEMENT_ID},
+            'evidence': 'prior.png', 'evidence_manifest': evidence_manifest_name('prior.png'),
+        }]}
+        alerts = publication_alerts(report, {'avito': previous})
+        assert any(a['kind'] == 'publication_unverified' for a in alerts['items'])
+        assert not any(a['kind'] == 'publication_disappeared' for a in alerts['items'])
     engine.dispose()
 
 

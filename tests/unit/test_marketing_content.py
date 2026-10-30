@@ -1,6 +1,8 @@
 import copy
+from dataclasses import replace
 
 import httpx
+import pytest
 
 from app.service.automatic_content import automatic_content_review
 from app.service.marketing_content import add_marketing_comparison, number
@@ -190,3 +192,148 @@ def test_missing_workbook_vin_can_link_feed_platform_id_to_main_x_after_id_is_es
     assert check()['status'] == 'marketing_row_missing'
     s.rows_by_sheet['avito-feed-new'][0]['VIN'] = 'not a VIN'
     assert check()['status'] == 'feed_vin_ambiguous'
+
+
+def test_verified_autoru_id_can_use_declared_url_to_link_vin_empty_workbook_row():
+    s = snapshot()
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    c, _ = compare(s)
+    assert c['marketing_binding']['status'] == 'matched'
+    assert c['marketing_binding']['row_basis'] == 'workbook_confirmed_id_reference'
+    assert c['unique_id'] == UID
+    assert 'marketing_vin_empty' in {f['code'] for f in c['findings']}
+    assert compare(s, placement_id=None)[0]['marketing_binding']['status'] == 'id_missing_or_invalid'
+
+
+def test_autoru_verified_uid_can_follow_sibling_feed_avito_id_inside_workbook():
+    s = snapshot()
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    s.rows_by_sheet['avito-feed-new'] = [{'Id': UID, 'VIN': VIN, 'AvitoId': '8176281881'}]
+    s.first_data_rows['avito-feed-new'] = 4
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][23] = 'https://www.avito.ru/moskva/avtomobili/car_8176281881'
+    c, _ = compare(s)
+    assert c['marketing_binding']['status'] == 'matched'
+    assert c['marketing_binding']['marketing_row'] == 2
+    assert any(r['sheet'] == 'avito-feed-new' and r['value'] == '8176281881'
+               for r in c['marketing_binding']['cells'])
+
+
+def test_known_feed_vin_can_link_blank_main_vin_by_independent_publication_reference():
+    s = snapshot()
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    assert compare(s)[0]['marketing_binding']['status'] == 'matched'
+    # A nonblank conflicting workbook VIN cannot be ignored in favour of a URL.
+    s.marketing_rows[1][10] = OTHER
+    assert compare(s)[0]['marketing_binding']['status'] == 'marketing_row_missing'
+
+
+def test_vin_empty_reference_must_not_choose_between_two_active_rows():
+    s = snapshot()
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    s.marketing_rows.append(copy.deepcopy(s.marketing_rows[1]))
+    assert compare(s)[0]['marketing_binding']['status'] == 'marketing_row_duplicate'
+
+
+def test_reference_fallback_does_not_override_bad_vin_or_global_id_conflict():
+    s = snapshot()
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = 'invalid'
+    assert compare(s)[0]['marketing_binding']['status'] == 'feed_vin_ambiguous'
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    s.rows_by_sheet['avito-feed-new'] = [{'Id': UID, 'VIN': VIN}, {'Id': UID, 'VIN': OTHER}]
+    s.first_data_rows['avito-feed-new'] = 4
+    assert compare(s)[0]['marketing_binding']['status'] != 'matched'
+
+
+def test_missing_ad_id_can_show_workbook_expectation_but_cannot_bind_by_declared_url():
+    s = snapshot()
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    c, _ = compare(s, placement_id=None)
+    assert c['expected_workbook_ids'] == [UID]
+    assert c['expected_marketing_rows'] == [2]
+    assert c['expected_id_is_publication_binding'] is False
+    assert c['unique_id'] is None
+    assert c['marketing_binding']['status'] == 'id_missing_or_invalid'
+    assert 'marketing_price_difference' not in {f['code'] for f in c['findings']}
+
+
+def test_empty_vin_reference_does_not_hide_other_active_nonempty_reference():
+    s = snapshot()
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    s.rows_by_sheet['avito-feed-new'] = [{'Id': UID, 'VIN': VIN, 'AvitoId': '8176281881'}]
+    s.first_data_rows['avito-feed-new'] = 4
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    competing = copy.deepcopy(s.marketing_rows[1])
+    competing[10] = VIN
+    competing[22] = ''
+    competing[23] = 'https://www.avito.ru/moskva/avtomobili/car_8176281881'
+    s.marketing_rows.append(competing)
+    assert compare(s)[0]['marketing_binding']['status'] == 'marketing_row_duplicate'
+
+
+def test_empty_vin_reference_does_not_override_sibling_uid_vin_mapping():
+    s = snapshot()
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    s.rows_by_sheet['avito-feed-new'] = [{'Id': UID, 'VIN': VIN, 'AvitoId': ''}]
+    s.first_data_rows['avito-feed-new'] = 4
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    competing = copy.deepcopy(s.marketing_rows[1])
+    competing[10] = VIN
+    competing[22] = ''
+    s.marketing_rows.append(competing)
+    assert compare(s)[0]['marketing_binding']['status'] == 'marketing_row_duplicate'
+
+
+@pytest.mark.parametrize('reverse', [False, True])
+def test_late_reference_conflict_invalidates_earlier_comparison_and_dashboard_join(reverse):
+    from app.service.vehicle_dashboard import vehicle_dashboard
+
+    s = snapshot()
+    s.rows_by_sheet['autoru-feed-all'][0]['vin'] = ''
+    avito_url = 'https://www.avito.ru/moskva/avtomobili/car_8176281881'
+    s.rows_by_sheet['avito-feed-new'] = [{'Id': UID, 'VIN': VIN, 'AvitoId': '8176281881'}]
+    s.first_data_rows['avito-feed-new'] = 4
+    auto_url = 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1133334801-a/'
+    s.marketing_rows[1][10] = ''
+    s.marketing_rows[1][22] = auto_url
+    competing = copy.deepcopy(s.marketing_rows[1])
+    competing[10], competing[22], competing[23] = VIN, '', avito_url
+    s.marketing_rows.append(competing)
+    cards = [{'source': 'avito', 'url': avito_url, 'state': 'active', 'card': {'placement_id': UID, 'price': 12000000}},
+             {'source': 'auto_ru', 'url': auto_url, 'state': 'active', 'card': {'placement_id': UID, 'price': 12000000}}]
+    if reverse:
+        cards.reverse()
+    report = {'cycle_id': 'synthetic', 'observed_cards': cards,
+              'catalogue_enumeration_complete': {'auto_ru': True, 'avito': True}}
+    review = automatic_content_review(report)
+    add_marketing_comparison(review, cards, s)
+    assert UID in review['identity_conflicts']
+    assert review['summary']['marketing_bindings'].get('matched', 0) == 0
+    assert all(c['marketing_binding']['status'] != 'matched' for c in review['cards'])
+    assert not any(f['code'].startswith('marketing_price') for c in review['cards'] for f in c['findings'])
+    report['automatic_content_checks'] = review
+    dashboard = vehicle_dashboard(report)
+    active = [v for v in dashboard['vehicles'] if any(p['state'] == 'active' for p in v['platforms'])]
+    assert len(active) == 2
+    assert all(v.get('identity_conflict') and not v.get('marketing_row') for v in active)
+    assert dashboard['inactive'] == 0
+
+
+def test_normal_content_pipeline_extracts_feed_photos_without_marketing_row():
+    s = replace(snapshot(), marketing_rows=[], marketing_sha256=None)
+    s.rows_by_sheet['autoru-feed-all'][0]['images'] = 'https://storage.yandexcloud.net/a1autofeed/car/1.jpg'
+    card, review = compare(s)
+    assert card['unique_id'] == UID
+    assert card['marketing_binding']['status'] != 'matched'
+    assert review['marketing_vehicles'] == []
+    assert len(review['feed_photo_candidates']) == 1
+    assert review['feed_photo_candidates'][0]['unique_id'] == UID

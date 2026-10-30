@@ -3,6 +3,7 @@ import base64
 import json
 
 import httpx
+import pytest
 
 from app.config import settings
 from app.db import get_db
@@ -39,7 +40,8 @@ class _DB:
         return _Query(self.cycle)
 
 
-def test_cycle_report_is_visible_read_only_in_api_and_dashboard(tmp_path, monkeypatch):
+@pytest.mark.parametrize('is_recovery', [False, True])
+def test_cycle_report_is_visible_read_only_in_api_and_dashboard(tmp_path, monkeypatch, is_recovery):
     monkeypatch.setattr(settings, 'auth_enabled', False)
     monkeypatch.setattr(settings, 'evidence_dir', str(tmp_path))
     cycle_id = 'cycle-1'
@@ -59,9 +61,12 @@ def test_cycle_report_is_visible_read_only_in_api_and_dashboard(tmp_path, monkey
         'created_at_utc': '2026-09-24T12:00:00+00:00',
         'catalogue_complete': {'auto_ru': True, 'avito': True},
         'new_card_checks': 1,
+        'recovery': {'resume_of_cycle_id': 'interrupted', 'reused_search_filters': 2,
+                     'reused_cards': 1, 'catalogues_refreshed': True} if is_recovery else None,
         'observed_cards': [{
             'source': 'avito', 'url': card_url, 'state': 'active',
             'evidence': image.name, 'evidence_manifest': evidence_manifest_name(image.name),
+            **({'recovery': {'captured_at': '2026-09-24T11:00:00+00:00'}} if is_recovery else {}),
         }],
         'findings': [{
             'code': 'republication_candidate', 'placement_id': 'MBVC011220262508260009',
@@ -93,6 +98,22 @@ def test_cycle_report_is_visible_read_only_in_api_and_dashboard(tmp_path, monkey
                 assert 'Возможная перевыкладка' in page.text
                 assert 'MBVC011220262508260009' in page.text
                 assert 'Снимок карточки' in page.text
+                assert 'Что проверить маркетингу' in page.text
+                assert 'aria-controls="vehicle-panel"' in page.text
+                assert 'aria-label="Полнота сохранённой проверки"' in page.text
+                assert 'Проверка неполная' in page.text
+                assert 'карточки и unique_id' in page.text
+                assert 'aria-controls="marketing-panel"' in page.text
+                assert 'aria-label="Показать автомобили"' in page.text
+                assert '/static/monitoring.js?v=' in page.text
+                assert '/static/monitoring-theme.css?v=' in page.text
+                if is_recovery:
+                    assert 'Продолжение прерванной проверки' in page.text
+                    assert '2026-09-24T11:00:00+00:00' in page.text
+                    assert 'не новый полный обход площадок' in page.text
+                brief = await client.get(f'/api/v1/status/cycles/{cycle_id}/marketing-summary')
+                assert brief.status_code == 200
+                assert 'Сводка для маркетинга' in brief.text
                 evidence = await client.get(
                     f'/api/v1/status/cycles/{cycle_id}/placement-evidence/0'
                 )
@@ -115,6 +136,9 @@ def test_cycle_report_is_visible_read_only_in_api_and_dashboard(tmp_path, monkey
                 monkeypatch.setattr(settings, 'admin_password', 'local-long-password')
                 assert (await client.get(
                     f'/api/v1/status/cycles/{cycle_id}/placement-report'
+                )).status_code == 401
+                assert (await client.get(
+                    f'/api/v1/status/cycles/{cycle_id}/marketing-summary'
                 )).status_code == 401
                 token = base64.b64encode(b'local-admin:local-long-password').decode()
                 headers = {'Authorization': f'Basic {token}'}

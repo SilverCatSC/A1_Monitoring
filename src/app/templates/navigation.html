@@ -1,9 +1,13 @@
 <a class="skip-link" href="#main-content">К содержимому</a>
+{% macro navigation_links() %}
+{% for slug, title, icon in [('', 'Обзор', '◫'), ('placement-identity', 'Мониторинг', '◉'), ('listings', 'Автомобили', '▦'), ('reconciliation', 'Сверка ссылок', '⇄'), ('company-site', 'Сайт A1Auto', '⌂'), ('placements', 'Размещения', '↗'), ('analytics', 'Статистика', '▥'), ('history', 'История проверок', '◷'), ('feedback', 'Замечания', '☷'), ('activity', 'Активность', '≋'), ('settings', 'Настройки', '⚙')] %}
+  <a href="/api/v1/dashboard{{ '/' + slug if slug else '' }}" aria-label="{{ title }}" title="{{ title }}" {% if active_page|default('') == slug %}aria-current="page"{% endif %}><span class="nav-icon" aria-hidden="true">{{ icon }}</span><span class="nav-text">{{ title }}</span></a>
+{% endfor %}
+{% endmacro %}
 <aside class="app-nav" aria-label="Основная навигация">
   <a class="app-brand" href="/api/v1/dashboard"><span class="brand-symbol">A1</span><span>Search Monitor<small>Контроль размещений</small></span></a>
   <div class="nav-label">РАБОЧЕЕ ПРОСТРАНСТВО</div>
-  <nav>{% for slug, title, icon in [('', 'Обзор', '◫'), ('listings', 'Автомобили', '▦'), ('reconciliation', 'Сверка ссылок', '⇄'), ('company-site', 'Сайт A1Auto', '⌂'), ('placements', 'Размещения', '↗'), ('analytics', 'Статистика', '▥'), ('history', 'История проверок', '◷'), ('feedback', 'Замечания', '☷'), ('activity', 'Активность', '≋'), ('settings', 'Настройки', '⚙')] %}
-    <a href="/api/v1/dashboard{{ '/' + slug if slug else '' }}" {% if active_page|default('') == slug %}aria-current="page"{% endif %}><span aria-hidden="true">{{ icon }}</span>{{ title }}</a>
-  {% endfor %}</nav>
+  <nav class="nav-desktop" aria-label="Разделы приложения">{{ navigation_links() }}</nav>
+  <details class="nav-mobile-menu"><summary>Меню</summary><nav aria-label="Разделы приложения на мобильном устройстве">{{ navigation_links() }}</nav></details>
   <div class="nav-foot"><span class="status-dot"></span> Локальное приложение<br><small>Москва · до {{ monitoring_search_pages() if monitoring_search_pages is defined else 5 }} страниц<br>Результаты публичного поиска</small></div>
 </aside>

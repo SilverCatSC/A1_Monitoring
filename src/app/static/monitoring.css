@@ -2,3 +2,110 @@
 
 .vehicle-status.unplanned{background:#eef0f5;color:#637184}.vehicle-photo img[hidden]{display:none}
 .vehicle-tags{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px}.vehicle-tag{display:inline-block;border-radius:6px;padding:5px 8px;font-size:11px;line-height:1.4;background:#eef1f5;color:#576678}.vehicle-tag.active{background:#e8f2ed;color:#226348}.vehicle-tag.inactive{background:#fff0ed;color:#933f2c}.vehicle-tag.unknown{background:#fff7e7;color:#7c5b21}.vehicle-tag.difference{background:#fff0e5;color:#963e16}
+.marketing-brief{background:#fff;border:1px solid #dce4e9;border-radius:14px;padding:20px;margin:22px 0}.marketing-brief h2{margin:0;font-size:23px}.marketing-brief .monitor-intro p{max-width:780px;font-size:14px}.brief-group{border-top:1px solid #e4e9ed;padding:12px 0}.brief-group>summary{cursor:pointer;font-weight:650}.brief-count{display:inline-block;background:#edf2f5;border-radius:5px;padding:1px 7px;margin-left:5px}.brief-case{padding:14px 8px;border-bottom:1px solid #edf1f5}.brief-case p{margin:7px 0;font-size:14px;line-height:1.55}.brief-case small{color:#667688;overflow-wrap:anywhere}.brief-case a{display:inline-block;margin-right:12px}.brief-case details{font-size:13px;color:#536579}.brief-proof{background:#f4f7ed;padding:9px 12px;border-left:3px solid #79924f}.brief-case .vehicle-tag{margin-left:8px}@media(max-width:680px){.marketing-brief{padding:14px}.brief-case .vehicle-tag{margin:6px 0}}
+.vehicle-status.exception{background:#edf3eb;color:#466b3c}.brief-fact{color:#465d73}
+
+/* Responsive report: overview, two task-focused views, then evidence. */
+.monitor-intro>div {min-width:0}
+.monitor-intro h1 {max-width:780px;font-size:clamp(24px,2.3vw,32px);line-height:1.2}
+.monitor-intro .muted {max-width:70ch}
+.monitor-recovery-note {font-size:12px;color:#617681}
+.monitor-evidence-link {flex-shrink:0;display:inline-flex;align-items:center;min-height:44px;font-size:13px;white-space:nowrap}
+.monitor-stats {gap:12px;margin:20px 0 16px}
+.monitor-stats>div {padding:16px;min-width:0;gap:6px}
+.monitor-stats strong {line-height:1.2;font-variant-numeric:tabular-nums}
+.monitor-stats small {font-size:12px;line-height:1.4}
+.workbench .monitor-help>summary {display:flex;align-items:center;min-height:44px;font-size:13px;color:#48636e}
+.monitor-help .monitor-note {margin:4px 0 16px}
+.workbench .monitor-tabs {display:flex;gap:6px;flex-wrap:wrap;border-bottom:1px solid #cfdcde;margin:12px 0 20px;padding-bottom:8px}
+.monitor-tabs[hidden],#vehicle-panel[hidden],#marketing-panel[hidden] {display:none}
+.workbench .monitor-tabs button {display:flex;align-items:center;justify-content:center;gap:9px;min-height:44px;background:transparent;color:#425e68;border:1px solid transparent;border-radius:8px;padding:10px 14px;font-weight:600}
+.workbench .monitor-tabs button[aria-selected="true"] {background:#e0f2ea;border-color:#b1d8cc;color:#13584f}
+.monitor-tabs button span {font-size:12px;min-width:24px;padding:1px 6px;border-radius:5px;background:#ffffffa6;color:inherit}
+.monitor-section-title {margin-bottom:12px!important}
+.monitor-tabs:not([hidden])+#vehicle-panel>.monitor-section-title {display:none}
+.monitor-toolbar {display:grid;grid-template-columns:minmax(220px,1.5fr) minmax(220px,1fr) auto;gap:14px;align-items:end;margin:0 0 20px}
+.monitor-toolbar label {min-width:0;gap:6px;font-size:13px;color:#48636e}
+.monitor-toolbar input,.monitor-toolbar select {min-width:0;width:100%;min-height:46px;font-size:16px;padding:10px 12px}
+.monitor-toolbar>span {align-self:end;padding-bottom:12px;font-size:12px;white-space:nowrap}
+.vehicle-grid {gap:18px;align-items:start}
+.vehicle-tile {box-shadow:0 2px 7px #263b4908}
+.vehicle-photo {height:auto;aspect-ratio:16/10}
+.vehicle-placeholder {min-height:160px;padding:20px;text-align:center}
+.vehicle-photo.image-unavailable::before {content:'Изображение недоступно';display:grid;place-items:center;height:100%;min-height:160px;color:#526274;font-size:13px}
+.vehicle-photo.image-unavailable>span {display:none}
+.vehicle-body {padding:18px}
+.vehicle-body h2 {font-size:18px;line-height:1.4;margin:10px 0 8px}
+.vehicle-price {font-size:24px;line-height:1.3;overflow-wrap:anywhere}
+.vehicle-status,.vehicle-tag {line-height:1.45;font-size:12px}
+.vehicle-tags {gap:5px;margin:9px 0 12px}
+.vehicle-facts {gap:12px 16px;margin:16px 0}
+.vehicle-facts>div {min-width:0}
+.vehicle-facts dt {font-size:12px;color:#617383}
+.vehicle-facts dd {font-size:14px;line-height:1.5}
+.vehicle-vin {font-size:12px}
+.vehicle-platform {grid-template-columns:minmax(60px,auto) minmax(0,1fr);font-size:13px;padding:12px;gap:6px 10px}
+.vehicle-platform>span {overflow-wrap:anywhere}
+.vehicle-platform>small {font-size:12px;line-height:1.5}
+.vehicle-platform>a {display:flex;align-items:center;min-height:36px;font-size:13px}
+.vehicle-callout {font-size:13px;line-height:1.6}
+.workbench .vehicle-details>summary {display:flex;align-items:center;min-height:44px;font-size:13px;color:#35536a}
+.workbench .vehicle-details>summary::before {content:'＋';margin-right:8px}
+.workbench .vehicle-details[open]>summary::before {content:'−'}
+.workbench .vehicle-details>summary::-webkit-details-marker {display:none}
+.vehicle-details a {display:inline-flex;align-items:center;min-height:36px;margin-right:8px}
+.marketing-brief {margin:0 0 20px;padding:22px;min-width:0}
+.marketing-brief .monitor-intro {gap:16px}
+.marketing-brief .monitor-intro>a {display:inline-flex;align-items:center;min-height:44px;flex-shrink:0;font-size:13px}
+.workbench .brief-group>summary {display:flex;align-items:center;flex-wrap:wrap;gap:6px;min-height:48px;font-size:15px;color:#294b56}
+.workbench .brief-group>summary::before {content:'＋';font-size:17px;color:#617681}
+.workbench .brief-group[open]>summary::before {content:'−'}
+.workbench .brief-group>summary::-webkit-details-marker {display:none}
+.brief-count {margin-left:auto;padding:2px 8px;font-size:13px}
+.brief-case {padding:16px 0;overflow-wrap:anywhere}
+.brief-case>strong {display:block;font-size:15px;line-height:1.5}
+.workbench .brief-case p {font-size:14px;line-height:1.6}
+.workbench .vehicle-details p {font-size:13px;line-height:1.6}
+.brief-case .vehicle-tag {margin:8px 0 2px}
+.brief-case a {min-height:36px;align-items:center;display:inline-flex}
+.brief-case small {display:block;font-size:12px}
+.workbench .brief-case details>summary {min-height:40px;display:flex;align-items:center;font-size:13px}
+.brief-proof {overflow-wrap:anywhere}
+.monitoring-evidence {scroll-margin-top:16px}
+.monitoring-evidence .scroll {max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain}
+.monitoring-evidence .scroll table {min-width:560px;overflow-wrap:anywhere}
+.monitoring-evidence .insight {flex-wrap:wrap;align-items:flex-start;overflow-wrap:anywhere}
+.monitoring-evidence .insight>div {flex:1 1 220px;min-width:0}
+.monitoring-evidence .insight>.badge {max-width:100%;flex-shrink:0}
+.workbench .monitoring-evidence>summary {min-height:48px;padding:16px;font-size:15px}
+#publication-alerts>details>summary {min-height:44px;font-size:14px}
+@media (max-width:1279px) {
+  .vehicle-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .monitor-stats {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .monitor-toolbar {grid-template-columns:minmax(0,1.3fr) minmax(0,1fr)}
+  .monitor-toolbar>span {grid-column:1/-1;padding:0}
+  .monitor-intro {flex-wrap:wrap;gap:4px}
+  .monitor-evidence-link {white-space:normal}
+}
+@media (max-width:639px) {
+  .vehicle-grid {grid-template-columns:1fr;gap:16px}
+  .monitor-intro h1 {font-size:26px;line-height:1.25}
+  .monitor-stats {gap:8px;margin-top:16px}
+  .monitor-stats>div {padding:13px;gap:6px}
+  .monitor-stats strong {font-size:26px}
+  .monitor-stats span {font-size:12px}
+  .monitor-stats small {font-size:11px}
+  .monitor-toolbar {grid-template-columns:1fr;gap:12px}
+  .monitor-toolbar>span {padding:0}
+  .workbench .monitor-tabs {display:grid;grid-template-columns:1fr 1fr;gap:6px}
+  .workbench .monitor-tabs button {font-size:13px;padding:10px 6px;gap:5px;flex-wrap:wrap}
+  .vehicle-photo {aspect-ratio:16/9}
+  .vehicle-body {padding:16px}
+  .vehicle-platform>a,.vehicle-details a,.brief-case a {min-height:44px}
+  .marketing-brief {padding:16px}
+  .marketing-brief .monitor-intro {display:block}
+  .marketing-brief h2 {font-size:21px}
+  .brief-case p {font-size:14px}
+  .workbench .monitoring-evidence>summary {font-size:14px;line-height:1.5}
+}
+@media (prefers-reduced-motion:reduce) {html {scroll-behavior:auto}}

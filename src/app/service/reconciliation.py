@@ -16,9 +16,9 @@ from app.models import (
     ListingReconciliation,
 )
 from app.scraper.base import canonical_listing_key, is_marketplace_listing_url
-from app.scraper.browser_session import run_browser_task
 from app.scraper.seller import SELLER_SOURCES, inspect_direct_link
 from app.service.analytics import local_time, money
+from app.service.cycle_recovery import inspect_with_recovery
 from app.service.dealer_discovery import DealerDiscoveryService
 from app.service.filters import _listing_family
 from app.service.offer_reconciliation import offer_review_queue
@@ -232,17 +232,19 @@ class SellerReconciliationService:
                 }
             else:
                 checked_by_source[record.source.value] += 1
-                inspection = run_browser_task(self.inspector(
+                inspection = inspect_with_recovery(self.inspector,
                     record.source, url,
                     lambda event, current_index=card_index: self.progress({
                         **event, 'purpose': 'card_detail',
                         'card_index': current_index, 'card_total': total,
                     }),
-                ))
+                    price_hint=candidate.price_hint,
+                )
                 cache[key] = inspection
             details['direct_inspection'] = inspection
             record.details = details
-            record.checked_at = datetime.now(UTC)
+            record.checked_at = (datetime.fromisoformat(inspection['recovery']['captured_at'])
+                                 if inspection.get('recovery') else datetime.now(UTC))
             code = inspection.get('status_code') or inspection.get('state') or 'unknown'
             counters[str(code)] += 1
             if inspection.get('state') == 'removed':

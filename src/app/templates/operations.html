@@ -163,7 +163,7 @@ async function refreshScanProgress(){
     const d=await r.json(),c=d.current||{};
     const total=Number(d.total_filters||0),done=Number(d.completed_filters||0);
     const percent=total?Math.min(100,Math.round(done*100/total)):0;
-    const labels={idle:'не запущена',starting:'запуск',running:'выполняется',waiting_captcha:'пройдите CAPTCHA',completed:'завершена',partial:'частично',failed:'сбой',unavailable:'недоступно'};
+    const labels={idle:'не запущена',starting:'запуск',running:'выполняется',waiting_source:'ожидаем Google Sheets',waiting_captcha:'пройдите CAPTCHA',completed:'завершена',partial:'частично',failed:'сбой',unavailable:'недоступно'};
     const badge=document.querySelector('#scan-progress-status');
     badge.textContent=labels[d.status]||d.status;
     badge.className='pill '+(d.status==='completed'?'SUCCESS':d.status==='running'?'':d.status==='idle'?'':'PARTIAL');
@@ -172,6 +172,8 @@ async function refreshScanProgress(){
     let current='Проверка не запущена';
     if(d.status==='waiting_captcha'){
       current='Пройдите CAPTCHA в открытом приватном окне Chrome. Проверка ждёт, а не пропускает объявление.';
+    }else if(d.status==='waiting_source'){
+      current='Google Sheets временно недоступен; программа повторит загрузку автоматически. Старые данные не используются.';
     }else if(d.status==='running'){
       current=`${sourceName(c.source)} · ${c.filter_name||'подготовка'}${c.page?' · страница '+c.page+'/'+(c.pages_total||'—'):''}`;
     }else if(d.status==='completed'||d.status==='partial'){

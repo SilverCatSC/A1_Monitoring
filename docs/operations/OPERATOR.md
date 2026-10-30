@@ -1,18 +1,21 @@
 # Рабочая инструкция оператора и отдела продаж
 
-Актуальность: 14.09.2026. Staged-сборка 0.14.0. Основной host — MacBook. Это
-инструкция к существующему коду, а не подтверждение успешного живого MacBook
-прогона или включённого LaunchAgent. Windows/MSI остаётся резервным handoff.
+Актуальность: 30.10.2026. Основной host — этот MacBook: ручной старт,
+видимый Chrome и ручное прохождение CAPTCHA. Расписание не включено.
+Windows/MSI остаётся резервным, не принятым окружением.
 
 ## Что проверяем
 
 1. Какие автомобили должны рекламироваться: активные строки маркетинга, включая
    автомобили без VIN и ещё не закупленные Maestra V800 / Mercedes VLE.
 2. Какие объявления фактически есть в трёх публичных каталогах продавца.
-3. На какой из первых трёх страниц заданного поиска видно каждое объявление.
+3. На какой из первых пяти страниц заданного поиска видно каждое объявление.
 4. Работает ли прямая ссылка: карточка активна, снята, продана, перенаправлена
    либо недоступна по технической причине.
-5. Соответствуют ли цена, VIN, год, наличие и НДС данным маркетинга.
+5. Соответствуют ли цена, год, пробег, комплектация, описание и НДС данным маркетинга.
+
+Объявления сопоставляются по `unique_id`. VIN используется только для связи
+данных внутри книги маркетинга. Фото не подтверждает идентичность или активность.
 
 «В пути» — состояние поставки, а «активно» — намерение рекламировать. Одно не
 заменяет другое. Отсутствующий VIN не является основанием исключить машину.
@@ -30,35 +33,34 @@
 - Не редактировать профиль служебного Chrome и не закрывать его во время обхода.
 - Открыть дашборд и отметить время предыдущего результата: старый отчёт не
   должен быть принят за новый.
-- Для запуска локальной LLM закрыть тяжёлые приложения. На Mac с 16 ГБ полный
-  режим пока способен снова вызвать высокое потребление памяти; не считать
-  паузы между заданиями освобождением памяти модели.
+- Для обычной автоматической сводки локальная LLM и этот чат не требуются.
 
 ## Запуск на этом Mac
 
-В терминале:
+Откройте **Start Monitoring.command** в корне проекта или выполните:
 
 ```bash
-cd /Users/filaret/Desktop/Monitoring
+cd /Users/filaret/Desktop/Monitoring && bash "Start Monitoring.command"
+```
+
+Это реальная проверка обеих площадок. Не запускайте второй экземпляр.
+CAPTCHA решайте в окне Chrome, открытом программой; программа ждёт без тайм-аута.
+Уведомления могут подавляться режимом Focus; состояние видно в терминале и дашборде.
+Для остановки нажмите Ctrl+C: завершённые доказательства сохраняются, но весь
+прогон не становится полным. Не завершайте произвольно все процессы Chrome.
+
+Проверить только локальную готовность без посещения площадок:
+
+```bash
 ./scripts/run_monitoring_host_macos.sh --preflight
 ```
 
-Это только безопасная проверка GUI-host, Docker и readiness: она не открывает
-Chrome, не обращается к площадкам и не создаёт cycle. Finder-ярлык «Запустить
-мониторинг.command» делает тот же preflight.
-
-После закрытия Gate 0/1 M7 и явного owner approval выполните один controlled
-cycle через защищённый host runner:
-
-```bash
-./scripts/run_monitoring_host_macos.sh --engines auto_ru,avito --pages 3
-```
-
-Он обновляет реестр Monitoring, сверяет кабинеты и ID, обновляет однозначно
-подтверждённые ссылки, затем проверяет поиск и прямые карточки. При неполной
-ID-сверке поиск выполняется только для машин с подтверждённой текущей ссылкой;
-остальные получают `review_required`, а весь цикл — `partial`. Если фид или
-отчёт ID-сверки вообще недоступны, поиск не запускается. Браузерные
+Полный запуск сначала обновляет реестр из Google Sheets, затем собирает выдачу
+по фильтрам. После поиска читает активный каталог дилера и полные карточки,
+сопоставляет `unique_id`, данные маркетинга и фиды, формирует отчёт и сводку.
+Диагностический режим не меняет ссылки в маркетинге и не отправляет сообщения.
+Неполная проверка, блокировка или пропущенная карточка отмечаются как
+непроверенные; это не доказательство неактивности. Браузерные
 проверки идут в отдельных временных приватных контекстах для Auto.ru и Avito:
 cookies сохраняются между страницами одной площадки в рамках цикла, но не
 между циклами. Интерактивная CAPTCHA всё ещё может потребовать действия
@@ -70,14 +72,13 @@ Host runner **не запускает Hermes/Ouroboros** и не выполня�
 запуска: он намеренно отказывается. Hermes/Ouroboros остаются отдельными
 офлайн-задачами над уже сохранёнными evidence и не расширяют M7 cycle.
 
-Для terminal `partial`/`failed` повтор разрешён только после тех же M7/VPN gates:
-
-```bash
-make retry-cycle CYCLE_ID=<UUID>
-```
-
-Этот target передаёт retry защищённому MacBook host runner. Не запускайте
-`python -m app.cli retry-cycle` напрямую и не используйте API как operator bypass.
+Если запуск закончился `partial`, сначала прочитайте причины в отчёте.
+Не повторяйте все проверки подряд при блокировке IP. `failed` до открытия Chrome
+обычно означает проблему локальных служб или импорта; подробности находятся
+в `HOST_RUNNER_RECORD` → `host_runner.log`. Программа делает три попытки
+скачать реестр при временной сетевой ошибке и не подменяет его старой копией.
+Диагностический runner не поддерживает `--retry-cycle`: новый запуск создаёт
+отдельную запись, исходные результаты остаются сохранены.
 
 ## Плановый запуск на MacBook — пока только контракт
 
@@ -103,9 +104,37 @@ Windows/MSI не является разрешённым live host. `local_scan_
 допустимы только установка, локальная диагностика и dashboard; см.
 [окружение](ENVIRONMENT.md) и [Windows handoff](../WINDOWS_11_INSTALL.md).
 
+## Продолжить незавершённые проверки одним действием
+
+Откройте **Continue Monitoring.command** в корне проекта. Программа сама
+выбирает последний цикл. Если не закончены только поиски Avito, выполняются
+только недостающие фильтры, а проверенные позиции автоматически добавляются к
+существующему отчёту отдельным датированным дополнением. Если прерван основной
+цикл или фиды не были получены, используется защищённое восстановление из
+допустимых контрольных точек. Они действительны до шести часов при совпадении
+настроек и кода; устаревшие доказательства не подставляются как свежие.
+
+Недостающие `unique_id` и замечания к маркетингу не вызывают повторного обхода.
+Если технические проверки уже закончены, команда сообщит, что продолжение
+не требуется. Временные сетевые ошибки Google Sheets показываются как
+«Ожидаем Google Sheets»: текущий прогон остаётся открытым и повторяет загрузку,
+после восстановления доступа сам продолжает проверку и формирует отчёт.
+Неверные заголовки, отказ в доступе и ошибки структуры требуют проверки
+источника; они не маскируются старыми данными.
+
 ## Где наблюдать и смотреть результаты
 
 Служебный Chrome виден на экране. В терминале отображаются стадии обхода.
+
+После завершения откройте ссылку `HOST_RUNNER_REPORT_URL` из терминала.
+Она также записана в `artifacts/host_runs/<run>/result.json`. Сводка и карточки
+показывают именно этот цикл. `completed` означает завершённые проверки, а не
+отсутствие замечаний к маркетингу. `partial` сохраняет результаты и ограничения.
+Не принимайте старую вкладку браузера за результат нового запуска.
+
+Автоматический отчёт не требует оценки ИИ в чате. Маркетинг исправляет размещение,
+цены и фиды; продажи подтверждают фактические характеристики. Никакие сообщения
+или исправления в Google Sheets не отправляются автоматически.
 
 | Экран | Назначение |
 | --- | --- |
@@ -204,3 +233,37 @@ VIN либо внутренний идентификатор, НДС, ожида
 только отдельную агрегированную страницу и требует свежий owner allowlist; процедура
 в [M6 Operations](../production/OPERATIONS.md). Он не делает публичными VIN,
 ссылки, карточки или внутренние замечания.
+
+### Automatic feed photos
+
+New full runs and checkpoint continuations extract gallery links for already
+resolved advert `unique_id` values, including adverts without a marketing row
+or VIN. The photo association uses a unique row in that platform's feed;
+Avito's advert number must agree when supplied. Conflicting IDs, duplicate feed
+rows and conflicting gallery fields are rejected. Price, model, VIN and expected
+marketing IDs do not establish photo or publication identity.
+
+Before publishing the report, the runner checks an allowed HTTPS gallery URL,
+HTTP response, raster signature, declared raster MIME type and minimum image dimensions.
+A PNG/JPEG/WebP signature may override an incorrect PNG/JPEG/WebP MIME label;
+that mismatch is retained as a warning. HTML, SVG, missing or non-raster MIME
+types are rejected even when an image-like prefix is present. It
+reads at most 512 KiB per image, follows no redirects, shares requests across
+adverts, and tries one backup image when needed. Successful checks and hashed
+image prefixes are cached locally for up to 24 hours. Only the configured
+A1 feed bucket and company upload images are permitted; photos never trigger
+marketplace navigation, CAPTCHA or VPN changes. Failed images remain placeholders
+unless another verified company-site photo is available, and never change advert
+activity, identity coverage or marketing findings.
+
+Photo provenance, feed hash/cells and check timestamps are retained in each new
+report's `automatic_content_checks`. This is source and media validation, not
+visual recognition or a guarantee that staff uploaded the correct car photograph.
+Saved legacy reports retain their original evidence and existing photo sources;
+a report-scoped manual photo supplement is not needed for future resolved-ID cars.
+
+Failed photo checks retain HTTP status, detected/declared media type, error reason
+and bounded response samples under `feed_photo_failures/`. Photo-only saved-report
+repairs use `feed_photo_review.json` plus its ready manifest; readback verifies the
+original report hash, original failed gallery candidates and stored media proofs.
+A rejected or tampered photo supplement never makes the base report unavailable.

@@ -12,6 +12,7 @@ from pathlib import Path
 
 from app.models import EngineType
 from app.scraper.base import canonical_listing_key
+from app.service.artifact_bundle import verify_bundle
 from app.service.automatic_content import automatic_content_review
 from app.service.catalogue_visibility import add_catalogue_visibility
 from app.service.evidence import EvidenceAccessError, read_direct_card_evidence
@@ -35,6 +36,14 @@ def check_saved_report(report_path, evidence_dir, *, snapshot_path=None, search_
         raise ValueError('invalid saved report schema')
     cards = report['observed_cards']
     problems = []
+    if report.get('artifact_bundle') is not None:
+        try:
+            if report['artifact_bundle'] != 'report_bundle.ready.json':
+                raise ValueError('invalid report bundle')
+            verify_bundle(Path(report_path).parent, report['artifact_bundle'], required=(
+                'placement_reconciliation.json', 'analytical_summary.json', 'marketing_summary.txt'))
+        except (OSError, ValueError, TypeError):
+            problems.append({'code': 'incomplete_report_bundle'})
     counts = Counter()
     seen = {}
     for index, saved in enumerate(cards):

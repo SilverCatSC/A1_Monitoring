@@ -128,3 +128,16 @@ def test_metadata_exact_id_does_not_disguise_visual_claim_as_exact(tmp_path):
     c = saved(tmp_path)
     c['card']['placement_id'] = UID
     assert resolve_content_identity(c, snapshot(), evidence_dir=tmp_path)['basis'] == 'visual_alias'
+
+
+@pytest.mark.parametrize('second_id,expected', [(UID, UID), (OTHER, None), ('', None)])
+def test_every_duplicate_description_must_independently_corroborate_id(tmp_path, second_id, expected):
+    c, s = saved(tmp_path), snapshot()
+    s.rows_by_sheet['avito-feed-new'][0]['Description'] = ''
+    s.feed_structure['avito-feed-new'] = {'field_values': {'4': {'Description': [
+        '<p>Первое описание. ID: ' + UID + '</p>',
+        '<p>Другой текст. ' + ('ID: ' + second_id if second_id else 'Нет идентификатора') + '</p>',
+    ]}}}
+    result = resolve_content_identity(c, s, evidence_dir=tmp_path)
+    assert result['unique_id'] == expected
+    assert c['card']['placement_id'] is None

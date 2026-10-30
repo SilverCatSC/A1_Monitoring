@@ -263,6 +263,32 @@ async def _probe(url: str, pages: int) -> dict:
     else:
         raise RuntimeError('Probe URL must belong to avito.ru or auto.ru')
 
+    from app.service.scan_progress import _terminal_line
+
+    last_notice = None
+
+    def progress(event):
+        nonlocal last_notice
+        line = _terminal_line({'at': datetime.now().astimezone().isoformat(), **event})
+        if line:
+            print(line, flush=True)
+        if event.get('event') in {'captcha_operator_resolved', 'navigation_operator_resolved'}:
+            last_notice = None
+        if (sys.platform == 'darwin' and os.environ.get(HOST_RUNNER_CONTEXT_ENV) == '1'
+                and event.get('event') in {'captcha_operator_required', 'navigation_operator_required'}):
+            key = (event['event'], event.get('url'), event.get('page'))
+            if key != last_notice:
+                last_notice = key
+                try:
+                    subprocess.run(['/usr/bin/osascript', '-e',
+                                    'on run argv\ndisplay notification (item 2 of argv) with title (item 1 of argv)\nend run',
+                                    'Monitoring needs your help',
+                                    'Check the monitoring Chrome window. The unfinished search is paused.'],
+                                   capture_output=True, timeout=5, check=False)
+                except (OSError, subprocess.TimeoutExpired):
+                    print('OPERATOR_NOTICE unavailable', flush=True)
+
+    adapter.progress_callback = progress
     result = await adapter.scan_filter(url, max_pages=pages)
     payload = asdict(result)
     payload['scanned_at'] = result.scanned_at.isoformat()
@@ -276,8 +302,8 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument('--engines', default='auto_ru,avito')
     parser.add_argument('--pages', type=int, default=5, choices=range(1, 11), metavar='1..10')
     parser.add_argument('--probe-url', help='Check one search URL without writing observations to the DB')
-    parser.add_argument('--search-only', choices=('avito_voyah_dream_all',),
-                        help='Run only the named canonical search through the interactive host runner')
+    parser.add_argument('--search-only',
+                        help='Comma-separated Avito canonical filter keys; search evidence only')
     parser.add_argument('--search-result', help='Private JSON output for --search-only')
     parser.add_argument(
         '--diagnostic-no-vpn', action='store_true',
@@ -293,6 +319,7 @@ def _parser() -> argparse.ArgumentParser:
         '--retry-cycle',
         help='Start one explicit retry for a completed partial/failed cycle; never combine with --watch.',
     )
+    parser.add_argument('--resume-cycle', help='Recover recent checkpointed work; retain original observation times.')
     parser.add_argument('--cdp-port', type=int, default=19223)
     parser.add_argument(
         '--captcha-wait-seconds', type=int, default=-1,
@@ -318,6 +345,8 @@ def _parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = _parser().parse_args()
+    if args.resume_cycle and (args.retry_cycle or args.probe_url or args.search_only or args.watch):
+        raise RuntimeError('resume-cycle cannot be combined with retry, probe, search-only or watch')
     if not -1 <= args.captcha_wait_seconds <= 600:
         raise RuntimeError('captcha-wait-seconds must be -1 or between 0 and 600')
     # Windows/MSI is deliberately source-only fallback material after the
@@ -331,7 +360,7 @@ def main() -> int:
     if args.search_only and (args.probe_url or args.retry_cycle or args.watch or args.placement_identity):
         raise RuntimeError('search-only cannot be combined with probe, retry, watch, or placement identity')
     if args.search_only and (args.engines != 'avito' or args.pages > 5 or not args.search_result):
-        raise RuntimeError('Voyah search-only requires --engines avito, up to five pages and --search-result')
+        raise RuntimeError('search-only requires --engines avito, up to five pages and --search-result')
     if args.search_result and not args.search_only:
         raise RuntimeError('search-result requires search-only')
     if args.diagnostic_no_vpn and args.diagnostic_routing:
@@ -351,9 +380,10 @@ def main() -> int:
     env_values = _env_file_values(PROJECT_ROOT / '.env')
     cdp_url = _configure_runtime(args, env_values)
     if args.search_only:
-        from app.service.targeted_search import save_targeted_search, targeted_filter
+        from app.scraper.browser_session import CycleBrowserSession, search_browser_session
+        from app.service.targeted_search import save_targeted_search, targeted_filter, targeted_keys
 
-        definition = targeted_filter(args.search_only)
+        keys = targeted_keys(args.search_only)
         _prepare_vpn_admission_directory()
         if args.diagnostic_routing:
             print('ROUTED_DIAGNOSTIC_ADMISSION_OK vpn=unchecked egress=unverified')
@@ -364,11 +394,23 @@ def main() -> int:
         dashboard = f'http://127.0.0.1:{int(env_values.get("APP_BIND_PORT", "8000"))}/api/v1/dashboard'
         started = _ensure_local_chrome(cdp_url, Path(args.browser_profile).expanduser().resolve(), dashboard)
         print('LOCAL_CHROME_STARTED' if started else 'LOCAL_CHROME_REUSED')
-        payload = asyncio.run(_probe(definition.url, args.pages))
-        record = save_targeted_search(args.search_only, payload, pages=args.pages,
-                                      output_path=args.search_result, evidence_dir=args.evidence_dir)
+        records = []
+        with CycleBrowserSession() as session, search_browser_session():
+            for key in keys:
+                definition = targeted_filter(key)
+                print(f'LOCAL_TARGETED_FILTER_STARTED {key}', flush=True)
+                payload = session.run(_probe(definition.url, args.pages))
+                output = (Path(args.search_result) if len(keys) == 1 else
+                          Path(args.search_result).with_name(f'{key}.json'))
+                records.append(save_targeted_search(key, payload, pages=args.pages,
+                                                    output_path=output, evidence_dir=args.evidence_dir))
+                print(f'LOCAL_TARGETED_FILTER_FINISHED {key} complete={payload["complete"]}', flush=True)
+        if len(keys) > 1:
+            with Path(args.search_result).open('x') as stream:
+                json.dump({'schema_version': 1, 'kind': 'targeted_search_batch',
+                           'records': records, 'writes_monitoring_cycle': False}, stream, ensure_ascii=False)
         print(f'LOCAL_TARGETED_SEARCH_RESULT {args.search_result}')
-        complete = record['result']['complete']
+        complete = all(record['result']['complete'] for record in records)
         print(f'LOCAL_TARGETED_SEARCH_FINISHED complete={str(complete).lower()} no_cycle_created=true')
         return 0 if complete else 2
     if args.probe_url:
@@ -433,11 +475,12 @@ def main() -> int:
                 service = MonitoringCycleService(
                     db, progress_callback=progress, before_browser=start_browser
                 )
-                result = (
-                    service.retry(args.retry_cycle)
-                    if args.retry_cycle
-                    else service.run()
-                )
+                if args.resume_cycle:
+                    result = service.resume(args.resume_cycle)
+                elif args.retry_cycle:
+                    result = service.retry(args.retry_cycle)
+                else:
+                    result = service.run()
             except Exception as exc:
                 print(f'LOCAL_CYCLE_FAILED {type(exc).__name__}: {exc}', file=sys.stderr)
                 return 1

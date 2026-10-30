@@ -1,7 +1,32 @@
-def test_cycle_imports_before_scan(monkeypatch):
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def isolated_recovery_directory(monkeypatch, tmp_path):
+    monkeypatch.setattr('app.service.cycle.settings.evidence_dir', str(tmp_path))
+
+
+def test_resume_dispatches_separately_from_full_retry(monkeypatch):
+    from unittest.mock import Mock
+
+    import app.service.cycle as cycle_module
+
+    ledger = Mock()
+    monkeypatch.setattr(cycle_module, 'CycleLedgerService', lambda _: ledger)
+    service = cycle_module.MonitoringCycleService('db')
+    service.run = Mock(return_value={'recovered': True})
+    assert service.resume('interrupted') == {'recovered': True}
+    ledger.ensure_retryable.assert_called_once_with('interrupted')
+    service.run.assert_called_once_with(resume_of_cycle_id='interrupted')
+
+
+@pytest.mark.parametrize('temporary_import_failure', [False, True])
+def test_cycle_imports_before_scan(monkeypatch, temporary_import_failure):
     import app.service.cycle as cycle_module
 
     events = []
+    read_attempts = []
+    monkeypatch.setattr('app.service.source_recovery.time.sleep', lambda _: None)
 
     class Ledger:
         def __init__(self, db):
@@ -33,6 +58,10 @@ def test_cycle_imports_before_scan(monkeypatch):
 
         def read(self):
             events.append(('read', None))
+            read_attempts.append(1)
+            if temporary_import_failure and len(read_attempts) == 1:
+                import httpx
+                raise httpx.ConnectTimeout('temporary registry outage')
             return ['row']
 
     class Importer:
@@ -101,7 +130,7 @@ def test_cycle_imports_before_scan(monkeypatch):
 
     result = cycle_module.MonitoringCycleService('db', before_browser=lambda: events.append(('chrome', None))).run()
 
-    assert [event[0] for event in events] == [
+    assert [event[0] for event in events] == (['reader', 'read'] if temporary_import_failure else []) + [
         'reader',
         'read',
         'import',
@@ -113,6 +142,10 @@ def test_cycle_imports_before_scan(monkeypatch):
         'scan',
         'direct_cards',
     ]
+    assert result['completion'].pop('recovery') == {
+        'resume_of_cycle_id': None, 'reused_search_filters': 0, 'reused_cards': 0,
+        'max_age_seconds': 21600, 'catalogues_refreshed': True, 'original_timestamps_preserved': True,
+    }
     assert result == {
         'import': {'rows_valid': 1, 'snapshot_id': 'snapshot-1'},
         'filter_assignments': {'managed_filters': 1, 'added': 2},

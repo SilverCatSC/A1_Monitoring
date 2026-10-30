@@ -1,0 +1,38 @@
+{% set brief = data.report.get('analytical_summary') %}
+{% if brief %}
+<section class="marketing-brief" id="marketing-summary" aria-labelledby="marketing-summary-title">
+  <div class="monitor-intro"><div><h2 id="marketing-summary-title">Что проверить маркетингу</h2>
+  <p>Сводка сформирована автоматически по сохранённым данным этого прогона. Подтверждения уточняют действия; исходные расхождения сохраняются.</p></div>
+  <a class="button secondary" href="/api/v1/status/cycles/{{ brief.cycle_id }}/marketing-summary">Текст для маркетинга ↗</a></div>
+  <p class="muted">Данные: <time data-monitor-time="{{ brief.observed_at_utc }}">{{ brief.observed_at_utc }}</time> · Сводка: <time data-monitor-time="{{ brief.generated_at_utc }}">{{ brief.generated_at_utc }}</time>. {{ brief.counts.issues }} вопросов к проверке (у одного автомобиля их может быть несколько) · {{ brief.counts.confirmed_cases }} с подтверждённым значением · {{ brief.counts.exceptions }} исключений.</p>
+  {% if brief.marketing_read_at_utc %}<p class="muted">Снимок таблицы маркетинга: <time data-monitor-time="{{ brief.marketing_read_at_utc }}">{{ brief.marketing_read_at_utc }}</time>. Дата снимка таблицы может отличаться от даты сохранённых карточек.</p>{% endif %}
+  {% if brief.decision_snapshot.status == 'not_configured' %}<p class="monitor-note">Сохранённые подтверждения пока не настроены. Необходимость уточнения правильных значений показана явно.</p>{% endif %}
+  {% for warning in brief.decision_snapshot.warnings %}<p class="monitor-note">{{ warning }}</p>{% endfor %}
+  {% for group in brief.groups %}
+  <details class="brief-group" data-brief-group="{{ group.key }}">
+    <summary>{{ group.title }} <span class="brief-count">{{ group.count }}</span>{% if group.priority == 3 %} · уточнение данных{% endif %}</summary>
+    {% for item in brief['items'] if item.group == group.key %}
+    <article class="brief-case">
+      <strong>{{ item.vehicle }}{% if item.price %} · {{ item.price }} ₽{% endif %}</strong>
+      <span class="vehicle-tag {{ 'difference' if item.status != 'confirmed' else 'unknown' }}">{{ {'confirmed': 'Значение подтверждено', 'ongoing': 'Замечание сохраняется', 'observed': 'Обнаружено в данных прогона'}.get(item.status) }}</span>
+      {% for detail in item.details[:2] %}<p class="brief-fact">{{ detail.text if detail is mapping else detail }}</p>{% endfor %}
+      <p>{{ item.action }}</p>
+      {% for proof in item.confirmations %}<p class="brief-proof"><strong>Подтверждено: {{ proof.value }} год.</strong> {{ proof.basis }} · {{ proof.confirmed_by }} · запись {{ proof.recorded_on }}.</p>{% endfor %}
+      <p>{% for link in item.links %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.label }} ↗</a> {% endfor %}<small>unique_id: {{ item.unique_id or 'не подтверждён' }}</small></p>
+      <details><summary>Расхождение и источники</summary>
+        {% for detail in item.details %}<p>{{ detail.text if detail is mapping else detail }}</p>{% endfor %}
+        <p>{% for cell in item.cells %}<a href="{{ cell.url }}" target="_blank" rel="noopener noreferrer">{{ cell.sheet }}!{{ cell.a1 }}</a> {% endfor %}</p>
+        <p>Ответственный за действие: {{ item.owner }}.</p>
+      </details>
+    </article>{% endfor %}
+  </details>{% endfor %}
+  {% if not brief['items'] %}<p>В проверенных данных нет вопросов для маркетинга. Ограничения покрытия указаны ниже; отсутствие замечаний не заменяет полноту проверки.</p>{% endif %}
+  <details class="brief-group"><summary>Подтверждения и исключения ({{ brief.exceptions|length }})</summary>
+    {% for item in brief.exceptions %}<article class="brief-case"><strong>{{ item.vehicle }} · {{ item.source }}</strong><p>{{ item.detail }}</p><p>{{ item.decision.basis }} · {{ item.decision.confirmed_by }} · запись {{ item.decision.recorded_on }}.</p><p>unique_id: {{ item.unique_id }} · <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Ссылка из таблицы</a></p></article>{% else %}<p>Применимых исключений в этом прогоне нет.</p>{% endfor %}
+  </details>
+  <details class="brief-group"><summary>Где вывод требует осторожности ({{ brief.limitations|length }})</summary>
+    <p>Снятие или продажа, причина блокировки и фактические характеристики не назначаются автоматически. Проверка сайта и фидов ограничена датами сохранённых источников.</p>
+    {% for item in brief.limitations %}<p><strong>{{ item.title }}</strong> · {{ item.source or '' }}: {{ item.detail }}{% if item.url %} · <a href="{{ item.url }}" target="_blank" rel="noopener noreferrer">Источник</a>{% endif %}</p>{% endfor %}
+  </details>
+</section>
+{% endif %}

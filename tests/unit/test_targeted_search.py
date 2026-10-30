@@ -6,9 +6,16 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.service.targeted_search import save_targeted_search, targeted_filter
+from app.service.targeted_search import save_targeted_search, targeted_filter, targeted_keys
 
 KEY = 'avito_voyah_dream_all'
+
+
+@pytest.mark.parametrize('value', ['', 'avito_voyah_dream_all,', 'auto_sprinter_all',
+                                  'avito_sprinter_all,avito_sprinter_all'])
+def test_targeted_keys_reject_unknown_or_duplicate_scope(value):
+    with pytest.raises(ValueError):
+        targeted_keys(value)
 
 
 def result():

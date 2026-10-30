@@ -256,6 +256,26 @@ def test_exact_id_link_is_synchronized_before_search_and_old_url_is_retained(tmp
         engine.dispose()
 
 
+def test_global_workbook_uid_conflict_blocks_automatic_link_replacement(tmp_path, monkeypatch):
+    db, engine, root = _fixture(tmp_path, monkeypatch)
+    try:
+        path = root / 'cycles/cycle-review/placement_reconciliation.json'
+        payload = json.loads(path.read_text())
+        payload['automatic_content_checks'] = {'cards': [], 'identity_conflicts': {PLACEMENT_ID: {}},
+                                                'marketing_vehicles': []}
+        path.write_text(json.dumps(payload))
+        result = AutomaticLinkSyncService(db, cycle_id='cycle-review').run(
+            {'batch_id': 'batch-review', 'checks': {}},
+            {'status': 'partial', 'report_path': 'cycles/cycle-review/placement_reconciliation.json'},
+        )
+        assert not result['updated']
+        assert any(b['reason'] == 'workbook_identity_conflict' for b in result['blocked'])
+        assert db.get(Listing, 'car').source_auto_ru == OLD
+    finally:
+        db.close()
+        engine.dispose()
+
+
 def test_automatic_link_sync_refuses_broken_evidence(tmp_path, monkeypatch):
     db, engine, root = _fixture(tmp_path, monkeypatch)
     try:

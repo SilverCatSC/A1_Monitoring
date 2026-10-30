@@ -30,6 +30,7 @@ from app.scraper.base import ListingHit, ScanResult, canonical_listing_key
 from app.scraper.browser_session import run_browser_task, search_browser_session
 from app.scraper.lazy_load import LAZY_LOAD_BLOCKED_MARKER
 from app.scraper.pacing import choose_pause
+from app.service.cycle_recovery import recovery_search
 from app.service.locks import operation_lock
 
 
@@ -159,10 +160,10 @@ class MonitorService:
                                     expectation.listing.source_auto_ru if source == EngineType.AUTO_RU
                                     else expectation.listing.source_avito))
                             }
-                            result = run_browser_task(adapter.scan_filter(
+                            result = recovery_search(key, lambda adapter=adapter, entity=entity, evidence_keys=evidence_keys: run_browser_task(adapter.scan_filter(
                                 entity.raw_url, settings.scan_pages_limit, target_keys=None,
                                 evidence_keys=evidence_keys,
-                            ))
+                            )))
                         except Exception as exc:
                             result = ScanResult(filter_id=entity.id, hits=[], page_count=0,
                                                 diagnostics={}, scanned_at=datetime.now(UTC),
@@ -286,6 +287,7 @@ class MonitorService:
         filter_id: str,
         source: EngineType,
         network_profile: str,
+        before: datetime | None = None,
     ) -> tuple[int, datetime | None]:
         rows = (
             self.db.query(ListingObservation)
@@ -311,7 +313,14 @@ class MonitorService:
             if event.source == source
             and canonical_listing_key(source, event.old_url) != canonical_listing_key(source, event.new_url)
         ), default=None)
+        seen_times = set()
         for row in rows:
+            stamp = row.observed_at.replace(tzinfo=UTC)
+            if before is not None and stamp >= before.replace(tzinfo=UTC):
+                continue
+            if stamp in seen_times:
+                continue
+            seen_times.add(stamp)
             payload = row.raw_payload or {}
             if changed_at and row.observed_at.replace(tzinfo=UTC) < changed_at.replace(tzinfo=UTC):
                 break
@@ -779,6 +788,7 @@ class MonitorService:
                             filter_entity.id,
                             source,
                             scan_run.network_profile,
+                            before=scan_result.scanned_at if scan_result.diagnostics.get('recovery') else None,
                         )
                         miss_count = previous_misses + 1
                         confirmed = miss_count >= settings.min_confirmed_absence_runs

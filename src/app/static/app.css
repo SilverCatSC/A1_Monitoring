@@ -1,4 +1,5 @@
 /* A1 interface: local assets, visible states, keyboard-first navigation. */
+.nav-mobile-menu{display:none}.app-nav{overflow-y:auto}.app-nav .nav-desktop a{min-height:44px}
 .confirmation-form{display:grid;gap:12px;max-width:720px;margin-top:20px}.confirmation-form label{display:grid;gap:5px}.confirmation-form .check{display:flex;align-items:center}.confirmation-form .check input{width:auto}.confirmation-form select{width:100%}
 .health-strip{display:flex;flex-wrap:wrap;gap:9px;align-items:center;margin:-7px 0 20px;font-size:11px;color:#617681}.health-strip a{text-decoration:none}
 .workbench .card,.workbench .grid>*,.workbench .two>*{min-width:0}.workbench .card{overflow-wrap:anywhere}.workbench .preview img{object-fit:contain}.workbench select{min-width:0}.workbench header:not(.page-heading) p{color:#617681}

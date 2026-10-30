@@ -7,6 +7,8 @@ Unknown/new finding codes remain visible under limitations until classified.
 from collections import Counter
 from urllib.parse import urlsplit
 
+from app.service.coverage import coverage_status
+
 
 def _link(value):
     if not isinstance(value, str):
@@ -108,6 +110,7 @@ def monitoring_digest(report):
                   'outside' if any(p.get('label') == '5+' for p in saved) else 'unknown'] += 1
     return {
         **buckets, 'active_counts': counts, 'positions': positions,
+        'coverage': coverage_status(report),
         'cards_with_content': len(content.get('cards', [])),
         'confirmed_ids': sum(bool(c.get('unique_id')) for c in content.get('cards', [])),
         'content_available': bool(content),

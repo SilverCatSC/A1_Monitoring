@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 import re
 from collections import Counter
 from collections.abc import Mapping
@@ -21,11 +20,14 @@ from app.models import (
     ListingReconciliation,
 )
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
-from app.scraper.browser_session import run_browser_task
 from app.scraper.seller import inspect_direct_link
+from app.service.analytical_summary import render_marketing_text, summary_for_report
 from app.service.analytics import money
+from app.service.artifact_bundle import publish_bundle
 from app.service.automatic_content import automatic_content_review
 from app.service.catalogue_visibility import add_catalogue_visibility
+from app.service.cycle_recovery import inspect_with_recovery, recovery_summary
+from app.service.feed_photos import verify_feed_photos
 from app.service.identity_review import confirmed_operator_id
 from app.service.marketing_content import add_marketing_comparison
 from app.service.marketplace_placement_reconciliation import (
@@ -41,6 +43,8 @@ from app.service.placement_identity import (
 )
 from app.service.placement_status import record_placement_status
 from app.service.publication_alerts import add_publication_alerts
+from app.service.source_recovery import source_with_recovery
+from app.service.workbook_identity import workbook_identity_conflicts
 
 
 def _card_identity_claim(inspection: dict) -> tuple[str | None, bool]:
@@ -78,7 +82,8 @@ class PlacementCycleService:
         if not selected_sources:
             return {'status': 'unavailable', 'reason': 'no selected marketplace', 'findings': 0}
         try:
-            snapshot = read_placement_feed_snapshot(source_url)
+            snapshot = source_with_recovery(lambda: read_placement_feed_snapshot(source_url),
+                                            progress=self.progress, phase='placement_feeds')
         except PlacementFeedError as exc:
             return {'status': 'unavailable', 'reason': str(exc), 'findings': 0}
 
@@ -135,7 +140,8 @@ class PlacementCycleService:
                     skipped[source.value] += 1
                     continue
                 new_checks += 1
-                inspection = run_browser_task(self.inspector(source, candidate.listing_url, self.progress))
+                inspection = inspect_with_recovery(self.inspector, source, candidate.listing_url, self.progress,
+                                                   price_hint=candidate.price_hint)
                 cached[(source, key)] = inspection
             if inspection.get('state') == 'blocked':
                 blocked.add(source.value)
@@ -211,8 +217,12 @@ class PlacementCycleService:
             'cycle_id': self.cycle_id,
             'created_at_utc': datetime.now(UTC).isoformat(),
             'feed_sha256_by_sheet': snapshot.sha256_by_sheet,
-            'feed_rows_by_sheet': {sheet: len(rows) for sheet, rows in snapshot.rows_by_sheet.items()},
+            'feed_rows_by_sheet': {sheet: sum(bool(row) for row in rows) for sheet, rows in snapshot.rows_by_sheet.items()},
             'catalogue_complete': {source.value: complete for source, complete in coverage.items()},
+            'catalogue_listing_urls': {
+                source.value: sorted({c.listing_url for c in candidates if c.source == source})
+                for source in selected_sources
+            },
             'catalogue_enumeration_complete': {
                 source.value: (any(run.source == source for run in discovery_runs)
                                and all(run.complete for run in discovery_runs if run.source == source))
@@ -232,20 +242,29 @@ class PlacementCycleService:
                     'evidence': card.inspection.get('evidence'),
                     'evidence_manifest': card.inspection.get('evidence_manifest'),
                     'card': card.inspection.get('card'),
+                    **({'recovery': card.inspection['recovery']} if card.inspection.get('recovery') else {}),
                 }
                 for source in (EngineType.AUTO_RU, EngineType.AVITO)
                 for card in opened[source]
             ],
             'findings': findings,
         }
+        if recovery_summary() is not None:
+            report['recovery'] = recovery_summary()
         add_catalogue_visibility(report, settings.evidence_dir)
         report['automatic_content_checks'] = automatic_content_review(report, settings.evidence_dir)
         add_marketing_comparison(report['automatic_content_checks'], report['observed_cards'], snapshot,
                                  evidence_dir=settings.evidence_dir, operator_confirmed_ids=operator_confirmations)
+        self.progress({'event': 'feed_photo_checks_started'})
+        verify_feed_photos(report['automatic_content_checks'], settings.evidence_dir)
+        self.progress({'event': 'feed_photo_checks_finished',
+                       'verified': len(report['automatic_content_checks']['feed_photos'])})
         self.progress({'event': 'content_review_finished', **report['automatic_content_checks']['summary']})
         alerts = add_publication_alerts(self.db, report, settings.evidence_dir)
         for alert in alerts['items']:
             self.progress({'event': 'publication_alert', **alert})
+        report['analytical_summary'] = summary_for_report(report, settings.evidence_dir)
+        self.progress({'event': 'analytical_summary_finished', **report['analytical_summary']['counts']})
         report_path = self._write_report(report)
         for record, updated in candidate_updates:
             record.candidates = updated
@@ -257,7 +276,7 @@ class PlacementCycleService:
             self.db.commit()
         self.progress({'event': 'placement_reconciliation_finished', 'findings': len(findings)})
         return {
-            'status': 'complete' if all(coverage.values()) else 'partial',
+            'status': 'complete' if all(coverage.values()) and not report['automatic_content_checks'].get('identity_conflicts') else 'partial',
             'findings': len(findings),
             'codes': dict(Counter(item['code'] for item in findings)),
             'report_path': report_path,
@@ -270,6 +289,7 @@ class PlacementCycleService:
         A mixed-script card claim additionally needs the exact, unique AvitoId
         in the same feed row. Preserve the raw claim and its validation warning.
         """
+        conflicts = workbook_identity_conflicts(snapshot)
         rows_by_source = {
             EngineType.AUTO_RU: snapshot.rows_by_sheet['autoru-feed-all'],
             EngineType.AVITO: (
@@ -325,7 +345,7 @@ class PlacementCycleService:
             for card in cards:
                 inspection = card.inspection
                 placement_id, alias = _card_identity_claim(inspection)
-                if placement_id is None:
+                if placement_id is None or placement_id in conflicts:
                     continue
                 evidence = inspection.get('evidence')
                 key = canonical_listing_key(source, card.url)
@@ -362,6 +382,8 @@ class PlacementCycleService:
                 added += 1
         urls = {EngineType.AUTO_RU: {}, EngineType.AVITO: {}}
         for identity in bound_by_id.values():
+            if identity.placement_id in conflicts:
+                continue
             listing = listing_by_id.get(identity.listing_id)
             if listing is None:
                 continue
@@ -469,10 +491,10 @@ class PlacementCycleService:
         relative = Path('cycles') / self.cycle_id / 'placement_reconciliation.json'
         absolute = Path(settings.evidence_dir).resolve() / relative
         absolute.parent.mkdir(parents=True, exist_ok=True)
-        descriptor = os.open(absolute, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
-        with os.fdopen(descriptor, 'w', encoding='utf-8') as output:
-            json.dump(report, output, ensure_ascii=False, sort_keys=True, indent=2)
-            output.write('\n')
-            output.flush()
-            os.fsync(output.fileno())
+        report['artifact_bundle'] = 'report_bundle.ready.json'
+        publish_bundle(absolute.parent, {
+            absolute.name: json.dumps(report, ensure_ascii=False, sort_keys=True, indent=2) + '\n',
+            'analytical_summary.json': json.dumps(report['analytical_summary'], ensure_ascii=False, indent=2) + '\n',
+            'marketing_summary.txt': render_marketing_text(report['analytical_summary']),
+        }, marker=report['artifact_bundle'], commit_member=absolute.name)
         return relative.as_posix()

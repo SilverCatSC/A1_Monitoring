@@ -33,6 +33,7 @@ def test_reader_accepts_only_report_for_its_cycle(tmp_path):
     assert read_cycle_placement_report(_cycle(), str(tmp_path))['cycle_id'] == 'cycle-1'
     with pytest.raises(PlacementReportError, match='report_not_available'):
         read_cycle_placement_report(MonitoringCycle(id='cycle-1', summary={}), str(tmp_path))
+
     with pytest.raises(PlacementReportError, match='report_not_available'):
         read_cycle_placement_report(
             MonitoringCycle(
@@ -45,6 +46,21 @@ def test_reader_accepts_only_report_for_its_cycle(tmp_path):
             ),
             str(tmp_path),
         )
+
+
+def test_readback_downgrades_false_absence_and_preserves_saved_report(tmp_path):
+    alerts = {'schema_version': 1, 'cycle_id': 'cycle-1', 'total': 1,
+              'baseline_cycle_by_source': {'auto_ru': None}, 'counts': {'publication_disappeared': 1},
+              'items': [{'source': 'auto_ru', 'kind': 'publication_disappeared',
+                         'title': 'Old absence', 'certainty': 'confirmed',
+                         'old_url': 'https://auto.ru/cars/used/sale/mercedes/v_klasse/1000000001-a/'}]}
+    path = _write_report(tmp_path, catalogue_enumeration_complete={'auto_ru': True},
+                         catalogue_complete={'auto_ru': False}, publication_alerts=alerts)
+    before = path.read_bytes()
+    view = read_cycle_placement_report(_cycle(), str(tmp_path))
+    assert view['publication_alerts']['counts'] == {'publication_unverified': 1}
+    assert view['coverage_reassessment']['changed_alerts'] == 1
+    assert path.read_bytes() == before
 
 
 def test_reader_rejects_wrong_cycle_and_symlink(tmp_path):
@@ -332,3 +348,44 @@ def test_targeted_alert_review_rejects_invalid_payload(tmp_path, mutation):
     cycle.summary = {**cycle.summary, 'post_run_business_review': review}
     with pytest.raises(PlacementReportError, match='invalid_publication_alert_review'):
         read_cycle_placement_report(cycle, str(tmp_path))
+
+
+def test_recovery_verified_activity_event_is_readable_without_rewriting_report(tmp_path):
+    alerts = {'schema_version': 1, 'cycle_id': 'cycle-1', 'total': 1,
+              'baseline_cycle_by_source': {'avito': None}, 'counts': {'publication_verified': 1},
+              'items': [{'source': 'avito', 'kind': 'publication_verified',
+                         'title': 'Активность публикации подтверждена', 'certainty': 'confirmed',
+                         'basis': 'previous_state_unverified',
+                         'new_url': 'https://www.avito.ru/moskva/avtomobili/car_7888035437'}]}
+    path = _write_report(tmp_path, publication_alerts=alerts)
+    before = path.read_bytes()
+    view = read_cycle_placement_report(_cycle(), str(tmp_path))
+    assert view['publication_alerts']['counts'] == {'publication_verified': 1}
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize('change', ['unknown_kind', 'wrong_source_url', 'wrong_count'])
+def test_accepting_verified_events_keeps_alert_validation_strict(tmp_path, change):
+    alerts = {'schema_version': 1, 'cycle_id': 'cycle-1', 'total': 1,
+              'baseline_cycle_by_source': {'avito': None}, 'counts': {'publication_verified': 1},
+              'items': [{'source': 'avito', 'kind': 'publication_verified', 'title': 'Verified',
+                         'new_url': 'https://www.avito.ru/moskva/avtomobili/car_7888035437'}]}
+    if change == 'unknown_kind':
+        alerts['items'][0]['kind'] = 'invented_event'
+    elif change == 'wrong_source_url':
+        alerts['items'][0]['new_url'] = 'https://example.org/vehicle'
+    else:
+        alerts['counts'] = {'publication_verified': 2}
+    _write_report(tmp_path, publication_alerts=alerts)
+    with pytest.raises(PlacementReportError, match='invalid_publication_alerts'):
+        read_cycle_placement_report(_cycle(), str(tmp_path))
+
+
+def test_bad_photo_supplement_does_not_hide_the_original_report(tmp_path):
+    path = _write_report(tmp_path)
+    original = path.read_bytes()
+    (path.parent / 'feed_photo_review.json').write_text('{}')
+    view = read_cycle_placement_report(_cycle(), str(tmp_path))
+    assert view['feed_photo_review_error'] == 'not_verified'
+    assert view['cycle_id'] == 'cycle-1'
+    assert path.read_bytes() == original

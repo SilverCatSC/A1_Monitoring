@@ -4,6 +4,49 @@
 разделяет фактически реализованный controlled retry от будущей проверки
 backup/restore и живого production-расписания.
 
+## Unattended service delivery target — 2026-10-28
+
+The owner has prioritized unattended operation after a manual start on this
+Mac while awake and signed in. On 2026-10-28 the owner explicitly chose to
+pause indefinitely for CAPTCHA rather than finish early, and declined automatic
+scheduled starts. Existing interactive execution is not service acceptance,
+and enabling the retired container scheduler does not satisfy this target.
+
+Delivery sequence:
+
+1. Operational visibility: classify blocked CAPTCHA/access separately from
+   fresh work and missing progress signals, including the card-reading phase.
+   `/api/v1/status/scans/progress` now exposes `operational_health`. It assesses
+   the recorded heartbeat only; it does not verify process liveness, report
+   integrity or marketplace coverage. Fresh wait-loop events still mean blocked.
+2. Durable browser checkpoints: implemented for completed search filters and
+   fully read active cards, published atomically after each operation. A separate
+   recovery attempt reuses matching intact checkpoints, preserving their original
+   timestamps. Real process-exit and saved-data replay tests pass. An interrupted
+   filter still restarts from its first page; per-page continuation is not yet
+   implemented. The existing full retry remains distinct from recovery.
+3. Assisted access, automatic continuation: keep unlimited CAPTCHA waiting and
+   notify the local user when CAPTCHA or page access needs attention. The host
+   runner now starts a read-only notification observer for full cycles and emits
+   a terminal notification after the scan returns. Repeated wait heartbeats do
+   not repeatedly notify. The observer releases its inherited host lock and is
+   stopped with the runner. Notifications may be suppressed by macOS permissions
+   or Focus; the dashboard remains the durable operational view. Delivery of a
+   real notification and continuation after live CAPTCHA still need validation.
+4. Manual host start: no schedule or automatic retry. Test sleep/login,
+   interrupted runs, overlapping starts, service failures and lock handling.
+   A signed-in but locked Mac still fails the existing visible-browser gate.
+5. Acceptance: manually start both sources, leave the run unattended except
+   for any CAPTCHA, and verify automatic reporting without chat interpretation;
+   then deliberately interrupt a run and demonstrate recovery without duplicated
+   or lost observations. A CAPTCHA-blocked run stays pending until resolved.
+   This is assisted access, not proof of fully autonomous marketplace access.
+
+External notifications need an agreed destination before activation. No messages
+or marketplace/workbook corrections are implied by this service target.
+Reliable unattended completion through marketplace CAPTCHA is unproven; a timer
+and a healthy local API cannot establish that capability.
+
 ## Поисковая сессия и глубина
 
 С 2026-10-06 по умолчанию проверяются до пяти страниц каждого поискового
@@ -89,6 +132,75 @@ HTTP 439 Avito при включённом ручном ожидании так�
 [ACTIVE_CATALOGUE_CYCLE_2026-10-07.md](ACTIVE_CATALOGUE_CYCLE_2026-10-07.md).
 
 ## Controlled retry
+
+### Search-only follow-up after an access block
+
+The host runner accepts a comma-separated list of canonical Avito filter keys
+with `--search-only`. It checks only those filters, shares one private search
+context for CAPTCHA state, and saves separate evidence without a database cycle,
+catalogue revisit or card reread. Unknown and repeated keys are refused.
+
+With operator waiting enabled, HTTP 403/429 without visible CAPTCHA now keeps
+the same page pending. A fresh successful main-frame document is required before
+continuation; an XHR, stale HTTP 200, or previous page cannot release the wait.
+Earlier hits and page numbering are retained. There is no timed skip or reload loop.
+
+Verified follow-ups can be bound to a saved report via
+`app.service.search_followup.save_search_followup`. The separate committed bundle
+records the original report hash and validates page screenshots, HTTP status,
+filter scope and capture time. Readback updates only dated search positions;
+original cycle status, identity, prices and source evidence remain unchanged.
+Invalid supplements are ignored with a visible evidence warning.
+
+### Checkpoint recovery after an interrupted run
+
+For runs started after the 2026-10-28 checkpoint implementation, the host runner
+accepts a separate operation (replace the UUID and retain the original engines,
+page limit and routing mode):
+
+```bash
+SELLER_PREFLIGHT_PAGES=10 CATALOGUE_LAZY_LOAD_MAX_BATCHES=10 \
+./scripts/run_monitoring_host_macos.sh \
+  --diagnostic-routing --engines auto_ru,avito --pages 5 \
+  --captcha-wait-seconds -1 --pace normal \
+  --resume-cycle <interrupted-cycle-uuid>
+```
+
+The host first terminally records abandoned ledger rows under the existing lock.
+Recovery then creates a linked new attempt; it does not overwrite the parent
+cycle, report or evidence. The registry, feeds and dealer catalogues are read
+again. Completed searches and full active-card observations can be reused only
+with intact image manifests, identical filter scope/settings/scraper code and
+capture times no more than six hours old. The six-hour bound is a recovery
+freshness limit, **not** a timeout on a running CAPTCHA wait. Changed catalogue
+prices invalidate a saved card. Blocked, unknown, removed and truncated card
+results are not reused as verified active observations.
+
+Checkpoints are under `cycles/<id>/recovery/`, each with a hash-verified completion
+marker. Results inherited by a recovery attempt are copied with their original
+provenance so another interruption does not lose them. A missing or damaged
+individual checkpoint requires a real check of that operation. A missing,
+expired or incompatible parent manifest refuses recovery before source/browser
+work, rather than silently starting a full scan. Cycles completed before the
+checkpoint implementation are not retroactively resumable.
+
+The report, marketing summary and progress log identify recovered observations.
+Replayed searches preserve their original `observed_at` and do not count as an
+additional consecutive absence. Completed filters/cards are not re-opened;
+an interrupted filter may repeat its already visited pages. A full browser
+interruption/recovery acceptance run is still required; offline tests do not
+establish current marketplace access.
+
+Read-only verification against an existing saved cycle (uses copies and the
+historical snapshot clock; no live calls, source writes or DB operations):
+
+```bash
+PYTHONPATH=src:. .venv312/bin/python scripts/check_recovery_saved.py \
+  --cycle-id <saved-cycle-uuid> --evidence-dir artifacts/evidence \
+  --output-dir artifacts/recovery_validation
+```
+
+### Fresh full retry
 
 `partial` или `failed` цикл можно повторить только через MacBook host runner:
 

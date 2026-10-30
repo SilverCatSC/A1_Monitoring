@@ -1,6 +1,6 @@
 // Read-only progress view. Starting a live scan remains an explicit local action.
 (() => {
-  const label = {idle:'Не запущена',starting:'Запуск',preparing:'Обновление реестра',reconciling:'Сверка каталога',link_sync:'Актуализация ссылок',running:'Выполняется',waiting_captcha:'Требуется действие',waiting_navigation:'Ожидаем восстановления доступа',completed:'Завершена',partial:'Частично',failed:'Сбой',unavailable:'Нет связи'};
+  const label = {idle:'Не запущена',starting:'Запуск',preparing:'Обновление реестра',reconciling:'Сверка каталога',link_sync:'Актуализация ссылок',checking_cards:'Проверка карточек',running:'Выполняется',waiting_captcha:'Требуется действие',waiting_navigation:'Ожидаем восстановления доступа',waiting_source:'Ожидаем Google Sheets',completed:'Завершена',partial:'Частично',failed:'Сбой',unavailable:'Нет связи'};
   const source = s => ({auto_ru:'Auto.ru',avito:'Avito'})[s] || '';
   const captchaWaitReason = reason => ({ip_refresh_wait: 'Сообщение об ограничении IP; ждём перед обновлением этой страницы', ip_refresh_exhausted: 'Повторы исчерпаны; ждём в той же вкладке, объявление не пропускается', profile_load_failed: 'Avito не загрузил профиль; нажмите «Обновить» в этой вкладке — проверка ждёт', redirect_pending: 'Проверка пройдена; ждём перехода Avito, вкладку не обновляйте', redirect_stalled: 'Avito не завершил переход после проверки; обновите ЭТУ ЖЕ вкладку один раз (Cmd+R)', challenge_present: 'Страница проверки ещё открыта', stabilizing: 'Проверяем восстановленную страницу', wrong_destination: 'Открыт другой адрес; вернитесь к исходной странице', manual_refresh_required: 'Проверка снята, но документ ещё отдаёт отказ — обновите ЭТУ ЖЕ вкладку (Cmd+R)', awaiting_successful_document: 'Ждём HTTP 200; если каталог уже открыт, обновите его вручную'})[reason] || 'Ждём прохождения проверки';
   const eventLine = e => {
@@ -8,6 +8,7 @@
     let message = '';
     switch(e.event) {
       case 'search_collection_started': message = 'Сначала собираем позиции в поисковой выдаче'; break;
+      case 'recovery_checkpoint_reused': message = `Восстановлено: ${e.kind === 'search' ? 'поисковый фильтр' : 'карточка'} · исходное наблюдение ${e.captured_at} · повторного открытия не было`; break;
       case 'search_collection_finished': message = 'Выдача сохранена; переходим к активным объявлениям'; break;
       case 'dealer_preflight_started': message = 'Проверяем активный каталог продавца после сбора выдачи'; break;
       case 'dealer_catalogue_started': message = `${source(e.source)} · каталог продавца · пауза ${e.wait_seconds} с`; break;
@@ -48,27 +49,33 @@
       if(!response.ok) throw new Error('HTTP ' + response.status);
       const d = await response.json(), c = d.current || {};
       const staleAfter = d.status === 'waiting_captcha' ? Math.max(90, Number(c.wait_seconds || 180) + 30) * 1000 : 180000;
-      const stale = ['running','preparing','reconciling','link_sync','waiting_captcha','waiting_navigation'].includes(d.status) && Date.now() - Date.parse(d.updated_at) > staleAfter;
+      const stale = d.operational_health ? d.operational_health.heartbeat_stale : ['starting','running','checking_cards','preparing','reconciling','link_sync','waiting_captcha','waiting_navigation','waiting_source'].includes(d.status) && (!Number.isFinite(Date.parse(d.updated_at)) || Date.now() - Date.parse(d.updated_at) > staleAfter);
       const total = Number(d.total_filters || 0), done = Number(d.completed_filters || 0);
       const percent = total ? Math.min(100,Math.round(done / total * 100)) : 0;
       document.querySelector('#scan-progress-status').textContent = stale ? 'Нет свежего сигнала' : (label[d.status] || d.status);
-      const warning = stale || ['partial','failed','unavailable','waiting_captcha','waiting_navigation'].includes(d.status);
+      const warning = stale || ['partial','failed','unavailable','waiting_captcha','waiting_navigation','waiting_source'].includes(d.status);
       document.querySelector('#scan-progress-status').className = 'badge ' + (warning ? 'technical_error' : d.status === 'completed' ? 'found' : '');
       document.querySelector('#scan-progress-bar').style.width = percent + '%';
       document.querySelector('#scan-progress-bar').style.backgroundColor = warning ? '#b58b38' : '#168a7c';
       document.querySelector('[role=progressbar]').setAttribute('aria-valuenow', String(percent));
       document.querySelector('#scan-progress-counts').textContent = `${done} из ${total} фильтров обработано · ${percent}%`;
       if(['reconciling','link_sync'].includes(d.status)) document.querySelector('#scan-progress-counts').textContent = 'Предварительный этап: поисковые фильтры ещё не проверяются';
+      if(d.status === 'checking_cards') {
+        const cards = d.direct_cards || {}, checked = Number(cards.checked || 0), cardTotal = Number(cards.total || 0);
+        document.querySelector('#scan-progress-counts').textContent = `Поиск завершён · карточек прочитано ${checked} из ${cardTotal || 'уточняется'} · итоговый отчёт ещё формируется`;
+      }
       const summary = d.summary;
       document.querySelector('#scan-progress-result').textContent = summary ? (summary.search_skipped ? 'Поиск не запущен: актуализация ссылок не завершена' : `Обнаружений: ${summary.found || 0} · непоказов: ${(summary.missed_confirmed || 0) + (summary.missed_uncertain || 0)} · технических сбоев: ${summary.technical_errors || 0} · ссылок на подтверждение: ${summary.links_need_review || 0}`) : '';
       let current = d.status === 'preparing' ? 'Получаем актуальные ссылки и состав реестра' : d.status === 'running' ? `${source(c.source)} · ${c.filter_name || 'Подготовка'}${c.page ? ' · страница ' + c.page : ''}` : 'Запустите проверку с локального компьютера';
       if(['completed','partial'].includes(d.status)) current = `Последняя проверка: ${new Date(d.updated_at).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК`;
       if(d.status === 'reconciling') current = `${source(c.source)} · сверяем каталог продавца${c.page ? ' · страница ' + c.page : ''}`;
       if(d.status === 'link_sync') current = 'Сверяем ID в карточках и фиде перед поиском';
+      if(d.status === 'checking_cards') current = `${source(c.source)} · проверяем содержание активных карточек`;
+      if(d.status === 'waiting_source') current = 'Google Sheets временно недоступен. Программа повторит загрузку автоматически; старые данные не используются';
       if(d.status === 'waiting_navigation') current = 'Страница не загружена; цикл ждёт восстановления доступа. Не закрывайте вкладку; после восстановления обновите её (Cmd+R)';
       if(d.status === 'waiting_captcha') current = c.wait_reason ? captchaWaitReason(c.wait_reason) : 'Пройдите CAPTCHA в открытом приватном окне Chrome; цикл ждёт и не пропускает проверку';
       if(d.error) current = d.error;
-      if(stale) current = 'Сигнал не обновлялся более 3 минут. Проверьте терминал и окно Chrome.';
+      if(stale) current = 'Нет достоверного свежего сигнала от проверки. Проверьте терминал и окно Chrome; отсутствие сигнала не означает, что объявления неактивны.';
       document.querySelector('#scan-progress-current').textContent = current;
       document.querySelector('#scan-progress-log').textContent = (d.events || []).map(eventLine).filter(Boolean).slice(-18).join('\n') || 'Событий пока нет.';
     } catch(e) { document.querySelector('#scan-progress-status').textContent = 'Нет связи'; document.querySelector('#scan-progress-current').textContent = 'Не удалось получить состояние. Проверьте локальное приложение.'; }

@@ -7,6 +7,7 @@ from urllib.parse import urlsplit
 
 from app.models import EngineType
 from app.scraper.base import canonical_listing_key, evidence_manifest_name
+from app.service.coverage import absence_proven as coverage_absence_proven
 from app.service.placement_identity import PlacementIdError, parse_placement_id
 
 
@@ -80,7 +81,7 @@ def publication_alerts(report, previous_by_source=None):
         for key, card in active.items():
             if uid := _uid(card, exact=True):
                 by_id[uid][key] = card
-        complete = report.get('catalogue_enumeration_complete', {}).get(source) is True
+        complete = coverage_absence_proven(report, source)
         previous = (previous_by_source or {}).get(source)
         old_cards = _cards(previous or {}, source)
         old_active = {key: c for key, c in old_cards.items() if c.get('state') == 'active'}
@@ -105,7 +106,7 @@ def publication_alerts(report, previous_by_source=None):
             uid = _uid(old)
             candidates = by_id.get(uid, {}) if uid else {}
             old_removed = current.get(key, {}).get('state') == 'removed'
-            absence_proven = complete and key not in uncertain_current
+            absence_proven = coverage_absence_proven(report, source, old['url']) and key not in uncertain_current
             if len(candidates) == 1:
                 new = next(iter(candidates.values()))
                 emit(source, 'republished' if absence_proven or old_removed else 'republication_candidate',
@@ -131,7 +132,7 @@ def publication_alerts(report, previous_by_source=None):
             old = old_cards.get(key)
             if old and old.get('state') == 'removed':
                 emit(source, 'publication_restored', 'Публикация снова активна', new=card['url'],
-                     uid=_uid(card, exact=True), evidence=card['evidence'])
+                     uid=_uid(card, exact=True), evidence=card['evidence'], basis='previous_explicit_removal')
         # An unchanged shrunken catalogue is not recovery. Carry open signals
         # explicitly instead of inventing old active cards in this cycle.
         prior_alerts = (previous or {}).get('publication_alerts', {})
@@ -173,19 +174,26 @@ def publication_alerts(report, previous_by_source=None):
             if key in active:
                 if not any(a['source'] == source and a['kind'] == 'publication_restored'
                            and a.get('new_url') == active[key]['url'] for a in alerts):
-                    emit(source, 'publication_restored', 'Публикация снова активна', new=active[key]['url'],
-                         uid=_uid(active[key], exact=True), evidence=active[key]['evidence'])
+                    was_absent = (prior.get('kind') in {'publication_disappeared', 'publication_inactive'}
+                                  and prior.get('certainty') == 'confirmed'
+                                  and (prior.get('basis') == 'explicit_removal'
+                                       or coverage_absence_proven(previous, source, old_url)))
+                    emit(source, 'publication_restored' if was_absent else 'publication_verified',
+                         'Публикация снова активна' if was_absent else 'Активность публикации подтверждена',
+                         new=active[key]['url'], uid=_uid(active[key], exact=True),
+                         evidence=active[key]['evidence'],
+                         basis='previous_confirmed_absence' if was_absent else 'previous_state_unverified')
                 continue
             candidates = by_id.get(uid, {}) if uid else {}
             if len(candidates) == 1:
                 new = next(iter(candidates.values()))
-                confirmed = (complete and key not in uncertain_current) or current.get(key, {}).get('state') == 'removed'
+                confirmed = (coverage_absence_proven(report, source, old_url) and key not in uncertain_current) or current.get(key, {}).get('state') == 'removed'
                 emit(source, 'republished' if confirmed else 'republication_candidate',
                      'Найдена новая ссылка с тем же unique_id', old=old_url, new=new['url'], uid=uid,
                      certainty='confirmed' if confirmed else 'old_state_unproven',
                      id_match_basis='exact', evidence=new['evidence'], first_detected_cycle_id=first)
                 continue
-            confirmed = complete and key not in uncertain_current
+            confirmed = coverage_absence_proven(report, source, old_url) and key not in uncertain_current
             emit(source, 'publication_disappeared' if confirmed else 'publication_unverified',
                  'Ранее исчезнувшая публикация пока не восстановлена', old=old_url, uid=uid,
                  certainty='confirmed' if confirmed else 'coverage_unproven',
@@ -196,6 +204,49 @@ def publication_alerts(report, previous_by_source=None):
             'baseline_cycle_by_source': baselines, 'total':len(alerts),
             'counts':dict(Counter(a['kind'] for a in alerts)), 'items': alerts,
             'delivery':'cycle_report_and_progress', 'source_writes':False}
+
+
+def apply_absence_caveats(report):
+    """Downgrade stale saved conclusions in memory; never rewrite source evidence."""
+    alerts = report.get('publication_alerts')
+    if not isinstance(alerts, dict):
+        return
+    changes = []
+    for item in alerts.get('items', []):
+        if item.get('kind') == 'publication_restored' and item.get('basis') not in {
+            'previous_explicit_removal', 'previous_confirmed_absence',
+        }:
+            # Archived alerts lack evidence of a prior removal. Current activity
+            # is proven, but a blocked prior visit cannot establish restoration.
+            item['coverage_reassessment'] = {'original_kind': 'publication_restored',
+                                              'original_certainty': item.get('certainty')}
+            item['kind'] = 'publication_verified'
+            item['title'] = 'Активность публикации подтверждена'
+            item['explanation'] = 'Предыдущее отсутствие не доказано; восстановление публикации не установлено.'
+            changes.append(item.get('event_id'))
+        source = item['source']
+        old = item.get('old_url')
+        if item.get('certainty') != 'confirmed' or coverage_absence_proven(report, source, old):
+            continue
+        current = _cards(report, source)
+        key = canonical_listing_key(EngineType(source), old) if old else None
+        if current.get(key, {}).get('state') == 'removed':
+            continue
+        kind = item.get('kind')
+        if kind not in {'inventory_drop', 'publication_disappeared', 'publication_inactive', 'republished'}:
+            continue
+        item['coverage_reassessment'] = {'original_kind': kind, 'original_certainty': 'confirmed'}
+        item['certainty'] = 'old_state_unproven' if kind == 'republished' else 'coverage_unproven'
+        if kind == 'republished':
+            item['kind'] = 'republication_candidate'
+        elif kind != 'inventory_drop':
+            item['kind'] = 'publication_unverified'
+            item['title'] = 'Состояние ранее активной публикации требует подтверждения'
+        item['explanation'] = 'Сохранённый вывод уточнён: полнота проверки карточек не подтверждена; отсутствие не доказано.'
+        changes.append(item.get('event_id'))
+    alerts['counts'] = dict(Counter(a['kind'] for a in alerts.get('items', [])))
+    if changes:
+        report['coverage_reassessment'] = {'changed_alerts': len(changes), 'source_evidence_unchanged': True}
 
 
 def add_publication_alerts(db, report, evidence_dir):

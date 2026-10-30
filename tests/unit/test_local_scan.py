@@ -112,7 +112,9 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
     assert local_scan.os.environ['PLACEMENT_RECONCILIATION_ENABLED'] == 'false'
 
 
-def test_voyah_search_only_calls_one_search_without_opening_database(monkeypatch, tmp_path):
+@pytest.mark.parametrize('keys', ['avito_voyah_dream_all',
+                                 'avito_sprinter_all,avito_v_class_all,avito_zeekr_9x_new'])
+def test_voyah_search_only_calls_one_search_without_opening_database(monkeypatch, tmp_path, keys):
     from app.service.targeted_search import targeted_filter
 
     calls = []
@@ -134,12 +136,35 @@ def test_voyah_search_only_calls_one_search_without_opening_database(monkeypatch
                 'CAPTCHA_OPERATOR_WAIT_SECONDS', 'VPN_OPERATIONAL_POLICY_PATH',
                 *local_scan.PACING_PROFILES['cautious']):
         monkeypatch.delenv(key, raising=False)
-    monkeypatch.setattr('sys.argv', ['local_scan.py', '--search-only', 'avito_voyah_dream_all',
+    monkeypatch.setattr('sys.argv', ['local_scan.py', '--search-only', keys,
                                     '--engines', 'avito', '--pages', '5', '--diagnostic-routing',
                                     '--search-result', str(output), '--evidence-dir', str(tmp_path / 'evidence')])
     assert local_scan.main() == 0
-    assert calls == ['host-gate', (targeted_filter('avito_voyah_dream_all').url, 5)]
-    assert json.loads(output.read_text())['result']['complete']
+    assert calls == ['host-gate', *[(targeted_filter(key).url, 5) for key in keys.split(',')]]
+    payload = json.loads(output.read_text())
+    if ',' in keys:
+        assert payload['kind'] == 'targeted_search_batch'
+        assert [r['filter_key'] for r in payload['records']] == keys.split(',')
+        assert all(r['result']['complete'] for r in payload['records'])
+    else:
+        assert payload['result']['complete']
+
+
+def test_targeted_probe_can_log_raw_adapter_events_without_timestamp(monkeypatch, capsys):
+    import asyncio
+
+    from app.scraper.base import ScanResult
+
+    class Adapter:
+        async def scan_filter(self, url, max_pages):
+            self.progress_callback({'event': 'navigation_operator_required', 'source': 'avito', 'page': 1})
+            return ScanResult(filter_id='probe', page_count=1, hits=[], diagnostics={},
+                              scanned_at=local_scan.datetime.now().astimezone(), complete=True)
+
+    monkeypatch.setattr('app.scraper.avito.AvitoAdapter', Adapter)
+    result = asyncio.run(local_scan._probe('https://www.avito.ru/moskva/avtomobili', 5))
+    assert result['complete'] is True
+    assert 'Avito' in capsys.readouterr().out
 
 
 def test_private_chrome_uses_a_separate_extension_free_endpoint():

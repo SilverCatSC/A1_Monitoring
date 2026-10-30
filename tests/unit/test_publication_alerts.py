@@ -35,6 +35,7 @@ def report(cards, complete=True, cycle='current'):
         'findings': [],
         'observed_cards': cards,
         'catalogue_enumeration_complete': {'auto_ru': complete},
+        'catalogue_complete': {'auto_ru': complete},
     }
 
 
@@ -79,6 +80,38 @@ def test_partial_catalogue_warns_but_does_not_claim_disappearance():
     result = changes([], False)
     assert result['counts'] == {'inventory_drop': 1, 'publication_unverified': 1}
     assert all(a['certainty'] == 'coverage_unproven' for a in result['items'])
+
+
+@pytest.mark.parametrize('condition', ['inspection_partial', 'skipped', 'blocked', 'missing_proof', 'listed'])
+def test_uninspected_or_listed_previous_url_cannot_disappear(condition):
+    r = report([])
+    if condition == 'inspection_partial':
+        r['catalogue_complete']['auto_ru'] = False
+    elif condition == 'skipped':
+        r['skipped_cards_by_source'] = {'auto_ru': 1}
+    elif condition == 'blocked':
+        r['blocked_sources'] = ['auto_ru']
+    elif condition == 'missing_proof':
+        r.pop('catalogue_complete')
+    else:
+        r['catalogue_listing_urls'] = {'auto_ru': [OLD]}
+    result = publication_alerts(r, {'auto_ru': report([card()], cycle='previous')})
+    assert any(a['kind'] == 'publication_unverified' for a in result['items'])
+    assert not any(a['kind'] == 'publication_disappeared' for a in result['items'])
+
+
+def test_saved_false_absence_is_downgraded_without_changing_original():
+    from app.service.publication_alerts import apply_absence_caveats
+    original = report([])
+    original['publication_alerts'] = changes([])
+    original['catalogue_complete']['auto_ru'] = False
+    before = copy.deepcopy(original)
+    view = copy.deepcopy(original)
+    apply_absence_caveats(view)
+    assert original == before
+    assert view['publication_alerts']['counts']['publication_unverified'] == 1
+    assert 'publication_disappeared' not in view['publication_alerts']['counts']
+    assert view['coverage_reassessment']['source_evidence_unchanged']
 
 
 def test_complete_catalogue_and_explicit_removed_have_different_proof():
@@ -225,6 +258,41 @@ def test_open_warning_resolves_when_same_publication_returns():
     previous['publication_alerts'] = changes([])
     result = publication_alerts(report([card()]), {'auto_ru': previous})
     assert result['counts'] == {'publication_restored': 1}
+
+
+@pytest.mark.parametrize('kind', ['publication_unverified', 'republication_candidate', 'publication_disappeared'])
+def test_unproven_prior_absence_only_confirms_current_activity(kind):
+    previous = report([], False, cycle='blocked')
+    previous['publication_alerts'] = {'items': [{
+        'kind': kind, 'source': 'auto_ru', 'old_url': OLD, 'unique_id': UID,
+        'certainty': 'coverage_unproven',
+    }]}
+    result = publication_alerts(report([card()]), {'auto_ru': previous})
+    assert result['counts'] == {'publication_verified': 1}
+    assert result['items'][0]['basis'] == 'previous_state_unverified'
+
+
+def test_saved_restoration_without_prior_proof_is_relabelled_only_in_view():
+    from app.service.publication_alerts import apply_absence_caveats
+    original = report([card()])
+    original['publication_alerts'] = {'items': [{
+        'kind': 'publication_restored', 'source': 'auto_ru', 'new_url': OLD,
+        'certainty': 'confirmed',
+    }]}
+    view = copy.deepcopy(original)
+    apply_absence_caveats(view)
+    assert original['publication_alerts']['items'][0]['kind'] == 'publication_restored'
+    assert view['publication_alerts']['counts'] == {'publication_verified': 1}
+    assert view['coverage_reassessment']['changed_alerts'] == 1
+
+
+def test_explicitly_proven_restoration_survives_saved_readback():
+    from app.service.publication_alerts import apply_absence_caveats
+    current = report([card()])
+    current['publication_alerts'] = publication_alerts(
+        current, {'auto_ru': report([card(state='removed')], False, cycle='removed')})
+    apply_absence_caveats(current)
+    assert current['publication_alerts']['counts'] == {'publication_restored': 1}
 
 
 def test_open_warning_finds_new_exact_id_url_without_old_card_in_latest_report():

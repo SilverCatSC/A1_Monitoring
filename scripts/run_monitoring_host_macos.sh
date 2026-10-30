@@ -28,6 +28,7 @@ PREFLIGHT_ONLY=0
 ENGINES_WAS_SET=0
 PAGES_WAS_SET=0
 RETRY_CYCLE_ID=''
+RESUME_CYCLE_ID=''
 WITH_PLACEMENT_ID=0
 DIAGNOSTIC_NO_VPN=0
 DIAGNOSTIC_ROUTING=0
@@ -43,6 +44,8 @@ RUN_DIRECTORY=''
 RUN_LOG_PATH=''
 CYCLE_ID=''
 SEARCH_ONLY=''
+NOTICE_PID=''
+NOTICE_STARTED_AT=''
 
 usage() {
     cat <<'EOF'
@@ -52,6 +55,7 @@ Usage: scripts/run_monitoring_host_macos.sh [--preflight]
        scripts/run_monitoring_host_macos.sh --diagnostic-no-vpn --engines auto_ru,avito --pages 5
        scripts/run_monitoring_host_macos.sh --diagnostic-routing --search-only avito_voyah_dream_all --pages 5
        scripts/run_monitoring_host_macos.sh --retry-cycle <completed-partial-or-failed-cycle-uuid>
+       scripts/run_monitoring_host_macos.sh --resume-cycle <recent-interrupted-cycle-uuid> [scan parameters]
 
 Runs one cautious monitoring cycle through the signed-in macOS user's visible
 Chrome session. It never enters recurring mode or retries a partial result.
@@ -59,6 +63,10 @@ Chrome session. It never enters recurring mode or retries a partial result.
 --retry-cycle starts one new, explicit retry through the same host, VPN and
 visible-Chrome gates. It retains only the prior cycle's provenance; it is not
 an automatic retry and cannot be combined with --preflight.
+
+--resume-cycle refreshes the registry/catalogues but reuses intact, matching
+completed search/card checkpoints up to six hours old. It creates a linked
+recovery attempt with original capture times; it is not a fresh full scan.
 
 --preflight performs no monitoring cycle: it checks the unlocked signed-in GUI
 session, holds the same host lock, starts app/db/backup, and waits for HTTP
@@ -68,8 +76,8 @@ It cannot be combined with scan parameters.
 --placement-identity is a compatibility flag; ID link synchronization now runs
 before search in every full cycle.
 
---search-only avito_voyah_dream_all runs only the Voyah Dream search, up to five
-pages. It saves host_runs/<run>/search_result.json, skips catalogue/card scans
+--search-only <canonical-key[,canonical-key...]> runs only selected Avito searches,
+up to five pages. It saves host_runs/<run>/search_result.json, skips catalogue/card scans
 and database cycle creation, and retains the GUI, kernel lock and routing gates.
 
 --pace selects fast, normal or cautious (default). Fast reduces programmed
@@ -183,6 +191,11 @@ parse_arguments() {
                 RETRY_CYCLE_ID="$2"
                 shift 2
                 ;;
+            --resume-cycle)
+                [[ $# -ge 2 && -z "$RESUME_CYCLE_ID" ]] || { usage >&2; exit 64; }
+                RESUME_CYCLE_ID="$2"
+                shift 2
+                ;;
             --help|-h)
                 usage
                 exit 0
@@ -198,8 +211,21 @@ parse_arguments() {
         auto_ru,avito|auto_ru|avito) ;;
         *) safe_message 'HOST_RUNNER_REFUSED reason=invalid_engines'; exit 64 ;;
     esac
+    if [[ -n "$RESUME_CYCLE_ID" ]] && { [[ -n "$RETRY_CYCLE_ID" || -n "$SEARCH_ONLY" || "$PREFLIGHT_ONLY" -eq 1 ]] || \
+        [[ ! "$RESUME_CYCLE_ID" =~ ^[[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12}$ ]]; }; then
+        safe_message 'HOST_RUNNER_REFUSED reason=invalid_or_conflicting_resume_cycle'
+        exit 64
+    fi
     if [[ -n "$SEARCH_ONLY" ]]; then
-        [[ "$SEARCH_ONLY" == 'avito_voyah_dream_all' ]] || { safe_message 'HOST_RUNNER_REFUSED reason=unknown_targeted_filter'; exit 64; }
+        local targeted_key
+        local targeted_keys
+        IFS=',' read -r -a targeted_keys <<< "$SEARCH_ONLY"
+        for targeted_key in "${targeted_keys[@]}"; do
+            case "$targeted_key" in
+                avito_voyah_dream_all|avito_sprinter_all|avito_v_class_all|avito_zeekr_9x_new|avito_range_rover_new|avito_hongqi_hq9_new|avito_maybach_s_new|avito_maextro_s800_new) ;;
+                *) safe_message 'HOST_RUNNER_REFUSED reason=unknown_targeted_filter'; exit 64 ;;
+            esac
+        done
         if [[ "$ENGINES_WAS_SET" -eq 0 ]]; then ENGINES='avito'; fi
         [[ "$ENGINES" == 'avito' && -z "$RETRY_CYCLE_ID" && "$WITH_PLACEMENT_ID" -eq 0 ]] || {
             safe_message 'HOST_RUNNER_REFUSED reason=conflicting_targeted_search_parameters'; exit 64;
@@ -398,6 +424,9 @@ write_status() {
             fi
             if [[ -n "$SEARCH_ONLY" ]]; then
                 printf '"cycle_mode":"search_only",'
+            elif [[ -n "$RESUME_CYCLE_ID" ]]; then
+                printf '"cycle_mode":"checkpoint_recovery",'
+                printf '"resume_of_cycle_id":"%s",' "$RESUME_CYCLE_ID"
             elif [[ -n "$RETRY_CYCLE_ID" ]]; then
                 printf '"cycle_mode":"controlled_retry",'
             else
@@ -427,6 +456,10 @@ write_status() {
 cleanup() {
     local exit_code="$?" terminal_state
     trap - EXIT
+    if [[ -n "$NOTICE_PID" ]]; then
+        kill "$NOTICE_PID" 2>/dev/null || true
+        wait "$NOTICE_PID" 2>/dev/null || true
+    fi
     set +e
     if [[ -n "$RUN_DIRECTORY" ]]; then
         printf '%s\n' "$exit_code" >"$RUN_DIRECTORY/exit_code.txt"
@@ -599,16 +632,33 @@ main() {
     if [[ -n "$RETRY_CYCLE_ID" ]]; then
         scan_args+=(--retry-cycle "$RETRY_CYCLE_ID")
     fi
+    if [[ -n "$RESUME_CYCLE_ID" ]]; then
+        scan_args+=(--resume-cycle "$RESUME_CYCLE_ID")
+    fi
     if [[ "$DIAGNOSTIC_NO_VPN" -eq 1 ]]; then
         scan_args+=(--diagnostic-no-vpn)
     elif [[ "$DIAGNOSTIC_ROUTING" -eq 1 ]]; then
         scan_args+=(--diagnostic-routing)
+    fi
+    # Read-only local notices do not drive the browser or change its wait policy.
+    # Search-only diagnostics have no cycle progress record and are excluded.
+    if [[ -z "$SEARCH_ONLY" ]]; then
+        NOTICE_STARTED_AT="$(utc_timestamp)"
+        PYTHONPATH="$ROOT_DIR/src" "$PYTHON" "$ROOT_DIR/scripts/notify_monitoring_macos.py" \
+            --evidence-dir "$ARTIFACTS_DIR/evidence" --started-at "$NOTICE_STARTED_AT" \
+            --parent-pid "$$" >>"$RUN_LOG_PATH" 2>&1 &
+        NOTICE_PID=$!
     fi
     if A1_MONITORING_HOST_RUNNER_CONTEXT=1 \
         run_quietly "$ROOT_DIR/scripts/local_scan.sh" "${scan_args[@]}"; then
         SCAN_EXIT_CODE=0
     else
         SCAN_EXIT_CODE=$?
+    fi
+    if [[ -n "$NOTICE_STARTED_AT" ]]; then
+        PYTHONPATH="$ROOT_DIR/src" run_quietly "$PYTHON" "$ROOT_DIR/scripts/notify_monitoring_macos.py" \
+            --evidence-dir "$ARTIFACTS_DIR/evidence" --started-at "$NOTICE_STARTED_AT" \
+            --parent-pid "$$" --once || safe_message 'OPERATOR_NOTICE unavailable'
     fi
     if [[ -n "$SEARCH_ONLY" ]]; then
         if [[ -f "$RUN_DIRECTORY/search_result.json" ]]; then
@@ -634,6 +684,17 @@ main() {
     CYCLE_ID="$(/usr/bin/sed -nE 's/^LOCAL_CYCLE_ID ([[:xdigit:]]{8}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{4}-[[:xdigit:]]{12})$/\1/p' "$RUN_LOG_PATH" | /usr/bin/tail -n 1)"
     if [[ -n "$CYCLE_ID" ]]; then
         safe_message "HOST_RUNNER_CYCLE_ID $CYCLE_ID"
+        if [[ "$SCAN_EXIT_CODE" -eq 0 || "$SCAN_EXIT_CODE" -eq 2 ]] \
+            && [[ -f "$ROOT_DIR/scripts/monitoring_result.py" ]]; then
+            local report_message
+            if report_message="$(PYTHONPATH="$ROOT_DIR/src:$ROOT_DIR" "$PYTHON" \
+                "$ROOT_DIR/scripts/monitoring_result.py" --cycle-id "$CYCLE_ID" \
+                --run-directory "$RUN_DIRECTORY" --exit-code "$SCAN_EXIT_CODE" 2>>"$RUN_LOG_PATH")"; then
+                safe_message "$report_message"
+            else
+                safe_message 'HOST_RUNNER_REPORT_LINK unavailable_check_run_log'
+            fi
+        fi
     fi
 
     if [[ "$SCAN_EXIT_CODE" -eq 0 ]]; then

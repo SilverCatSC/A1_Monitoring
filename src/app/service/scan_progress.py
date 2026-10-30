@@ -52,6 +52,13 @@ class ScanProgressTracker:
             self.state['publication_alerts'] = alerts[-500:]
         elif name == 'source_refresh_failed':
             self.state.update(status='failed', error=event.get('error'))
+        elif name == 'source_recovery_waiting':
+            if self.state.get('status') != 'waiting_source':
+                self.state['before_source_status'] = self.state.get('status', 'preparing')
+            self.state.update(status='waiting_source', source_recovery=event)
+        elif name == 'source_recovery_resolved':
+            self.state['status'] = self.state.pop('before_source_status', 'preparing')
+            self.state['source_recovery'] = {**event, 'resolved': True}
         elif name == 'search_collection_started':
             self.state.update(status='running', current={}, completed_filters=0,
                               total_filters=int(event.get('total_filters') or 0))
@@ -189,6 +196,11 @@ def _terminal_line(event: dict[str, Any]) -> str:
         str(event.get('source') or ''), str(event.get('source') or '')
     )
     name = str(event.get('event') or '')
+    if name == 'source_recovery_waiting':
+        return (f'[{stamp}] GOOGLE SHEETS · временная ошибка загрузки; повтор через '
+                f'{event["retry_seconds"]} с. Проверка ожидает; старые данные не используются.')
+    if name == 'source_recovery_resolved':
+        return f'[{stamp}] GOOGLE SHEETS · доступ восстановлен; продолжаем текущую проверку'
     if name == 'publication_alert':
         detail = (f" · было {event['previous_count']}, обнаружено {event['observed_count']}"
                   if event.get('kind') == 'inventory_drop' else

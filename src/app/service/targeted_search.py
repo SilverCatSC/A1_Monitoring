@@ -16,7 +16,14 @@ from app.scraper.result_scope import avito_model_search_scope_problem
 from app.service.filters import CANONICAL_FILTERS
 from app.service.placement_identity import placement_id_from_description
 
-TARGETED_FILTER_KEYS = ('avito_voyah_dream_all',)
+TARGETED_FILTER_KEYS = tuple(item.key for item in CANONICAL_FILTERS if item.source == EngineType.AVITO)
+
+
+def targeted_keys(value):
+    keys = tuple(value.split(','))
+    if not keys or len(keys) != len(set(keys)) or any(k not in TARGETED_FILTER_KEYS for k in keys):
+        raise ValueError('unsupported or repeated targeted search filter')
+    return keys
 
 
 def targeted_filter(key):
@@ -28,7 +35,7 @@ def targeted_filter(key):
 def save_targeted_search(key, result, *, pages, output_path, evidence_dir):
     definition = targeted_filter(key)
     if not 1 <= pages <= 5:
-        raise ValueError('Voyah search depth must be between one and five pages')
+        raise ValueError('targeted search depth must be between one and five pages')
     # A redirect to a broader result set cannot establish a model's position.
     diagnostics = result.get('diagnostics') or {}
     scope_errors = []

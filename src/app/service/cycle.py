@@ -11,6 +11,7 @@ from app.scraper.browser_session import CycleBrowserSession
 from app.service.automatic_link_sync import AutomaticLinkSyncService
 from app.service.completion import summarize_cycle_completion
 from app.service.cycle_ledger import CycleLedgerService
+from app.service.cycle_recovery import RecoveryJournal, mark_recovery_catalogues_refreshed, recovery_context
 from app.service.evidence import cleanup_evidence
 from app.service.filters import FilterRegistryService
 from app.service.host_runner_context import (
@@ -26,6 +27,7 @@ from app.service.monitor import (
 )
 from app.service.placement_cycle import PlacementCycleService
 from app.service.reconciliation import SellerReconciliationService
+from app.service.source_recovery import source_with_recovery
 from app.service.vpn_admission import (
     VPNAdmissionError,
     require_no_vpn_diagnostic_admission,
@@ -127,7 +129,9 @@ class MonitoringCycleService:
         self.progress = progress_callback or (lambda event: None)
         self.before_browser = before_browser
 
-    def run(self, *, retry_of_cycle_id: str | None = None) -> dict:
+    def run(self, *, retry_of_cycle_id: str | None = None, resume_of_cycle_id: str | None = None) -> dict:
+        if retry_of_cycle_id and resume_of_cycle_id:
+            raise CycleConfigurationError('retry and resume are different operations')
         require_macos_primary_monitoring_profile()
         if settings.network_profile not in SCAN_ALLOWED_NETWORK_PROFILES:
             raise ScanConfigurationError(f'scan requires a trusted local profile; current={settings.network_profile}')
@@ -138,14 +142,17 @@ class MonitoringCycleService:
         with cycle_lock(self.db):
             ledger = CycleLedgerService(self.db)
             cycle = (
-                ledger.start(retry_of_cycle_id=retry_of_cycle_id)
-                if retry_of_cycle_id
+                ledger.start(retry_of_cycle_id=retry_of_cycle_id or resume_of_cycle_id)
+                if retry_of_cycle_id or resume_of_cycle_id
                 else ledger.start()
             )
             self.progress({'event': 'cycle_registered', 'cycle_id': cycle.id})
             try:
-                with CycleBrowserSession():
+                journal = RecoveryJournal(settings.evidence_dir, cycle.id,
+                                          parent_id=resume_of_cycle_id, progress=self.progress)
+                with recovery_context(journal), CycleBrowserSession():
                     result = self._run(cycle.id, ledger)
+                result['completion']['recovery'] = journal.summary()
                 cycle_summary = ledger.complete(cycle.id, result['completion'])
             except (Exception, KeyboardInterrupt) as exc:
                 ledger.fail(cycle.id, f'{type(exc).__name__}: {exc}')
@@ -177,13 +184,26 @@ class MonitoringCycleService:
         CycleLedgerService(self.db).ensure_retryable(cycle_id)
         return self.run(retry_of_cycle_id=cycle_id)
 
+    def resume(self, cycle_id: str) -> dict:
+        """Continue recent checkpointed work in an explicitly linked new attempt.
+
+        The parent report is immutable. Refresh the registry and seller catalogue;
+        reuse matching complete searches/cards with their original capture times.
+        Missing checkpoints and unfinished operations require real checks.
+        """
+        CycleLedgerService(self.db).ensure_retryable(cycle_id)
+        return self.run(resume_of_cycle_id=cycle_id)
+
     def _run(self, cycle_id: str, ledger: CycleLedgerService):
         evidence_removed = cleanup_evidence(
             settings.evidence_dir, settings.report_retention_days
         )
         self.progress({'event': 'source_refresh_started'})
         try:
-            refreshed = refresh_monitoring_source(self.db, cycle_id=cycle_id)
+            refreshed = source_with_recovery(
+                lambda: refresh_monitoring_source(self.db, cycle_id=cycle_id),
+                progress=self.progress, phase='registry',
+            )
         except Exception as exc:
             self.progress({'event': 'source_refresh_failed', 'error': f'{type(exc).__name__}: {exc}'})
             raise
@@ -196,6 +216,7 @@ class MonitoringCycleService:
             self.db, progress_callback=self.progress, cycle_id=cycle_id
         )
         preflight = reconciliation.run()
+        mark_recovery_catalogues_refreshed()
         placement = None
         link_sync = None
         if settings.placement_reconciliation_enabled:

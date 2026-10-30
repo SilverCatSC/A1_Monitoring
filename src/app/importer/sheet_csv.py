@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import io
+import logging
+import time
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -10,6 +12,34 @@ import pandas as pd
 from app.contracts import SourceRecord, canonicalize_headers, map_row
 
 from .base import SourceReader
+
+logger = logging.getLogger(__name__)
+
+
+def _download_sheet(source: str) -> httpx.Response:
+    """Retry transient export failures without importing a stale registry."""
+    for attempt in range(1, 4):
+        try:
+            response = httpx.get(source, timeout=30, follow_redirects=True)
+            response.raise_for_status()
+            return response
+        except (httpx.TransportError, httpx.HTTPStatusError) as exc:
+            if isinstance(exc, httpx.HTTPStatusError) and exc.response.status_code not in {
+                429, 500, 502, 503, 504,
+            }:
+                raise
+            if attempt == 3:
+                raise RuntimeError(
+                    'Google Sheets registry unavailable after 3 attempts '
+                    f'({type(exc).__name__}). Check Google access and VPN routing; '
+                    'marketplace checks have not started. No stale registry was used.'
+                ) from exc
+            delay = attempt * 3
+            logger.warning(
+                'Google Sheets registry download failed (%s); retry %d/3 in %ds',
+                type(exc).__name__, attempt + 1, delay,
+            )
+            time.sleep(delay)
 
 
 class CsvOrXlsxReader(SourceReader):
@@ -31,8 +61,7 @@ class CsvOrXlsxReader(SourceReader):
             parsed = urlparse(self.source)
             if parsed.hostname != 'docs.google.com' or '/spreadsheets/' not in parsed.path:
                 raise ValueError('Remote import is allowed only from docs.google.com/spreadsheets')
-            response = httpx.get(self.source, timeout=30, follow_redirects=True)
-            response.raise_for_status()
+            response = _download_sheet(self.source)
             content_type = response.headers.get('content-type', '')
             if 'text/csv' not in content_type and 'application/octet-stream' not in content_type:
                 raise ValueError(f'Expected CSV export, received {content_type or "unknown content type"}')

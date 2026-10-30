@@ -1,6 +1,7 @@
 {% extends 'base.html' %}
-{% set active_page = 'reconciliation' %}
+{% set active_page = 'placement-identity' %}
 {% block title %}Мониторинг автомобилей{% endblock %}
+{% block body_class %}monitoring-workspace{% endblock %}
 {% block content %}
 {% if not data.cycle %}
 <section class="panel empty">Циклов мониторинга пока нет. Живые объявления не проверены.</section>
@@ -17,6 +18,17 @@
 {% set script_notices = data.review|selectattr('finding.code', 'equalto', 'mixed_script_id')|list %}
 {% include 'monitoring_dashboard.html' %}
 <details class="monitoring-evidence" id="monitoring-evidence"><summary>Полнота проверки, исходные замечания и доказательства</summary>
+{% if report.recovery and report.recovery.resume_of_cycle_id %}
+<section class="panel">
+  <h2>Продолжение прерванной проверки</h2>
+  <p>Повторно использовано поисковых фильтров: {{ report.recovery.reused_search_filters }};
+     карточек: {{ report.recovery.reused_cards }}. Каталоги проверены заново; их полнота указана отдельно.</p>
+  <p class="helper">Исходные даты наблюдений сохранены. Это восстановление проверки, а не новый полный обход площадок.</p>
+  {% for card in report.observed_cards if card.recovery %}
+  <p>{{ card.source }} · {{ card.recovery.captured_at }} · <a href="{{ card.url }}" target="_blank" rel="noopener noreferrer">Карточка</a></p>
+  {% endfor %}
+</section>
+{% endif %}
 <section class="panel">
   <div class="section-head"><div>
     <h2>Цикл {{ data.cycle.id }}</h2>
@@ -125,9 +137,9 @@ VPN оставлен включённым, запросов Avito — {{ content
 <p class="helper">{{ card.identity_note }} {{ card.description_note }}</p>
 {% if card.get('identity_resolution') %}<p class="helper">Исходное значение в тексте: {{ card.identity_resolution.raw_claim or 'не найдено' }}.
 Основание ID: {{ {'exact': 'точное чтение', 'visual_alias': 'похожие кириллические буквы, подтверждено актуальным фидом', 'operator_confirmed': 'ранее явное подтверждение владельца', 'description_exact': 'точное чтение полного описания'}.get(card.identity_resolution.basis, card.identity_resolution.status) }}.</p>{% endif %}
-<table><thead><tr><th>Поле</th><th>Сохранённая карточка</th><th>Сравнение</th><th>Результат</th></tr></thead><tbody>
+<div class="scroll" tabindex="0" role="region" aria-label="Таблица сравнения данных; доступна горизонтальная прокрутка"><table><thead><tr><th>Поле</th><th>Сохранённая карточка</th><th>Сравнение</th><th>Результат</th></tr></thead><tbody>
 {% for field in card.fields %}<tr><td>{{ field.label }}</td><td>{{ field.observed }}</td><td>{{ field.reference }}</td><td>{{ field.verdict }}</td></tr>{% endfor %}
-</tbody></table>
+</tbody></table></div>
 {% for finding in card.findings %}<p><strong>{{ finding.title }}</strong>: {{ finding.detail }} {{ finding.action }}</p>{% endfor %}
 <p class="helper">Источники: {{ card.source_cells|join('; ') }}</p>
 {% if card.get('marketing_binding') %}

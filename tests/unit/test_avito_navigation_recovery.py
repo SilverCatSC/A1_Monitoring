@@ -12,7 +12,7 @@ from app.scraper.navigation_recovery import wait_for_navigation_recovery
 from app.service.scan_progress import ScanProgressTracker
 
 
-@pytest.mark.parametrize('failure', ['timeout', 'closed_context', 'connect_failure'])
+@pytest.mark.parametrize('failure', ['timeout', 'closed_context', 'connect_failure', 'http429', 'http403'])
 def test_avito_resumes_same_page_and_keeps_previous_hits(tmp_path, monkeypatch, failure):
     for key in ('scan_page_pause_min_seconds', 'scan_page_pause_max_seconds',
                 'avito_page_delay_seconds'):
@@ -27,11 +27,18 @@ def test_avito_resumes_same_page_and_keeps_previous_hits(tmp_path, monkeypatch, 
             pages = []
             faulted = False
             connect_failed = False
+            denial_pending = False
             required = asyncio.Event()
 
             async def route_page(route):
+                nonlocal denial_pending
                 number = int(parse_qs(urlsplit(route.request.url).query).get('p', ['1'])[0])
                 documents.append(number)
+                if denial_pending:
+                    denial_pending = False
+                    await route.fulfill(status=int(failure[4:]), content_type='text/html',
+                                        body='<h1>Request temporarily unavailable</h1>')
+                    return
                 await route.fulfill(content_type='text/html', body=(
                     f'<div data-marker="catalog-serp">{card("avito", number)}</div>'
                     f'<div data-marker="pagination-button"><span class="item_current-x" '
@@ -47,11 +54,14 @@ def test_avito_resumes_same_page_and_keeps_previous_hits(tmp_path, monkeypatch, 
                     return getattr(self.page, name)
 
                 async def goto(self, url, **kwargs):
-                    nonlocal faulted
+                    nonlocal faulted, denial_pending
                     number = int(parse_qs(urlsplit(url).query).get('p', ['1'])[0])
                     gotos.append(number)
                     if number == 2 and not faulted and failure != 'connect_failure':
                         faulted = True
+                        if failure in {'http429', 'http403'}:
+                            denial_pending = True
+                            return await self.page.goto(url, **kwargs)
                         if failure == 'closed_context':
                             await self.page.context.close()
                             raise RuntimeError('Target page, context or browser has been closed')
@@ -87,6 +97,10 @@ def test_avito_resumes_same_page_and_keeps_previous_hits(tmp_path, monkeypatch, 
                 if failure == 'timeout':
                     assert documents == [1]  # no automatic reloads while waiting
                     await pages[0].goto('https://www.avito.ru/moskva/avtomobili?p=2')
+                elif failure in {'http429', 'http403'}:
+                    assert documents == [1, 2]  # Denial has not advanced/skipped the filter.
+                    assert gotos == [1, 2]  # No automatic reload while waiting for help.
+                    await pages[0].goto('https://www.avito.ru/moskva/avtomobili?p=2')
 
             task = asyncio.create_task(operator())
             adapter = AvitoAdapter()
@@ -101,7 +115,7 @@ def test_avito_resumes_same_page_and_keeps_previous_hits(tmp_path, monkeypatch, 
                 await browser.close()
 
     result = asyncio.run(exercise())
-    assert documents == [1, 2, 3]
+    assert documents == ([1, 2, 2, 3] if failure in {'http429', 'http403'} else [1, 2, 3])
     assert gotos == ([1, 2, 2, 3] if failure == 'closed_context' else [1, 2, 3])
     assert result.complete and result.error is None
     assert result.page_count == 3

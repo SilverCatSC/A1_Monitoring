@@ -1,72 +1,130 @@
 {% set monitor = data.monitoring %}{% set fleet = data.vehicles %}
-<link rel="stylesheet" href="/static/monitoring.css">
+<link rel="stylesheet" href="/static/monitoring.css?v={{ ui_asset_revision|default('1') }}">
+<link rel="stylesheet" href="/static/monitoring-theme.css?v={{ ui_asset_revision|default('1') }}">
+<header class="workspace-bar page-heading">
+  <div class="workspace-identity"><span class="workspace-mark">A1</span><span>Рабочее пространство<small>Мониторинг объявлений</small></span></div>
+  <nav class="workspace-navigation" aria-label="Быстрые переходы"><a href="#business-review" aria-current="page">Мониторинг</a><a href="/api/v1/dashboard/history">История</a><a href="/api/v1/dashboard/settings">Настройки</a></nav>
+  <span class="workspace-snapshot"><span aria-hidden="true"></span>Сохранённый прогон</span>
+</header>
 <section class="monitor-overview" id="business-review">
-  <div class="monitor-intro"><div><span class="eyebrow">A1 · МОНИТОРИНГ ОБЪЯВЛЕНИЙ</span><h1>Что происходит с нашими автомобилями</h1>
-  <p class="muted">Состояние на <time data-monitor-time="{{ monitor.created_at }}">{{ monitor.created_at[:19]|replace("T", " ") }} UTC</time>. Исправления размещения выполняет маркетинг; характеристики и условия продажи подтверждает отдел продаж.</p></div>
-  <a class="button secondary" href="#monitoring-evidence">Подробности проверки</a></div>
-  <div class="monitor-stats">
-    <div><span>Требуют внимания</span><strong>{{ fleet.attention }}</strong><small>строк автомобилей с сигналами</small></div>
-    <div><span>Неактивные публикации</span><strong>{{ fleet.inactive }}</strong><small>в таблице актуально и есть ссылка</small></div>
-    <div><span>Auto.ru / Avito</span><strong>{{ monitor.active_counts.get('auto_ru', 0) }} / {{ monitor.active_counts.get('avito', 0) }}</strong><small>прочитано активных объявлений</small></div>
-    <div><span>unique_id подтверждён</span><strong>{{ monitor.confirmed_ids }} / {{ monitor.cards_with_content }}</strong><small>по сохранённым карточкам</small></div>
+  <div class="monitor-intro"><div><span class="eyebrow">A1 · КОНТРОЛЬ РАЗМЕЩЕНИЙ</span><h1>Мониторинг автомобилей</h1>
+  <p class="muted">Проверка · <time data-monitor-time="{{ monitor.created_at }}" data-monitor-short>{{ monitor.created_at[:19]|replace("T", " ") }} UTC</time></p>
+  <div class="coverage-status" role="note" aria-label="Полнота сохранённой проверки">
+    <p><strong>Сохранённая проверка</strong>{% if data.report.recovery and data.report.recovery.resume_of_cycle_id %} · продолжение{% endif %} · {{ {'partial': 'частичный цикл', 'completed': 'цикл завершён', 'failed': 'ошибка цикла', 'running': 'цикл выполняется'}.get(data.cycle.status, data.cycle.status) }}</p>
+    {% for coverage in monitor.coverage %}<p class="coverage-source {{ coverage.status }}"><strong>{{ coverage.name }}</strong> — {% if not coverage.selected %}не проверялось{% else %}каталог: {{ coverage.catalogue }}; карточки и unique_id: {{ 'полностью' if coverage.complete else 'не полностью' }}{% endif %}</p>{% endfor %}
+    {% set partial_sources = monitor.coverage|selectattr('status', 'equalto', 'partial')|map(attribute='name')|join(', ') %}
+    {% if partial_sources %}<p class="coverage-warning">Проверка неполная ({{ partial_sources }}): пробелы не доказывают исчезновение.</p>{% endif %}
   </div>
-  <p class="monitor-note">«5+» — объявление активно, но не найдено в первых пяти страницах заданного поиска. «Неактивно» — публикация не обнаружена в полностью прочитанном активном каталоге. Причина не установлена; продажа автомобиля не подтверждена.</p>
+  {% if data.report.recovery and data.report.recovery.resume_of_cycle_id %}<p class="monitor-recovery-note">Продолжение проверки<span class="monitor-recovery-long"> · исходные даты наблюдений сохранены</span></p>{% endif %}
+  {% if data.report.search_followup %}<p>Точечно завершено поисковых фильтров: {{ data.report.search_followup.completed_filters }} · <time data-local-time datetime="{{ data.report.search_followup.created_at_utc }}">{{ data.report.search_followup.created_at_utc }}</time>. Позиции обновлены; исходный статус цикла сохранён.</p>{% endif %}
+  {% if data.report.search_followup_error %}<p>Дополнительная проверка поиска не прошла проверку доказательств; её позиции не применены.</p>{% endif %}</div>
+  <a class="monitor-evidence-link" href="#monitoring-evidence">Полнота и доказательства ↗</a></div>
+  {% set active_auto = monitor.active_counts.get('auto_ru', 0) %}
+  {% set active_avito = monitor.active_counts.get('avito', 0) %}
+  {% set active_total = active_auto + active_avito %}
+  {% set identity_ratio = monitor.confirmed_ids / monitor.cards_with_content if monitor.cards_with_content else 0 %}
+  <div class="phone-overview" aria-label="Краткая сводка проверки" hidden>
+    <button type="button" data-monitor-action="all"><strong>{{ active_total }}</strong><span>Активных объявлений</span><small>Auto.ru {{ active_auto }} · Avito {{ active_avito }}</small></button>
+    <button type="button" data-monitor-action="attention"><strong>{{ fleet.attention }}</strong><span>Записей с сигналами</span><small>Показать автомобили →</small></button>
+    <button type="button" data-monitor-action="inactive"><strong>{{ fleet.inactive }}</strong><span>Неактивных публикаций</span><small>По сохранённому каталогу</small></button>
+    <button type="button" data-monitor-action="identity"><strong>{{ monitor.confirmed_ids }}<small> / {{ monitor.cards_with_content }}</small></strong><span>unique_id подтверждены</span><small>Проверить связи →</small></button>
+  </div>
+  <details class="overview-breakdown" open><summary>Подробнее о проверке</summary>
+  <div class="monitor-bento">
+    <article class="summary-cell inventory-cell"><div class="cell-heading"><span>Прочитано активных объявлений</span><span class="cell-symbol" aria-hidden="true">↗</span></div>
+      <div class="inventory-total"><strong>{{ active_total }}</strong><span>на двух площадках</span></div>
+      <div class="inventory-split"><div><span><i class="platform-dot auto" aria-hidden="true"></i>Auto.ru</span><strong>{{ active_auto }}</strong></div><div><span><i class="platform-dot avito" aria-hidden="true"></i>Avito</span><strong>{{ active_avito }}</strong></div></div>
+      <div class="inventory-track" role="img" aria-label="В сохранённом прогоне: Auto.ru {{ active_auto }}, Avito {{ active_avito }}"><span style="width:{{ active_auto / active_total * 100 if active_total else 0 }}%"></span><span style="width:{{ active_avito / active_total * 100 if active_total else 0 }}%"></span></div>
+      <small>Данные этого прогона, не общее число машин в наличии</small>
+    </article>
+    <article class="summary-cell attention-cell"><div class="cell-heading"><span>Требует внимания</span><span class="cell-symbol" aria-hidden="true">!</span></div>
+      <div class="attention-numbers"><div><strong>{{ fleet.attention }}</strong><span>записей с сигналами</span></div><div><strong>{{ fleet.inactive }}</strong><span>неактивных публикаций</span></div></div>
+      <button class="cell-action" type="button" data-monitor-action="attention">Показать автомобили <span aria-hidden="true">↗</span></button>
+      <small>Размещение проверяет маркетинг; причина отсутствия не установлена</small>
+    </article>
+    <article class="summary-cell identity-cell"><div class="cell-heading"><span>Сопоставление по unique_id</span><span class="cell-symbol" aria-hidden="true">✓</span></div>
+      <div class="identity-visual"><svg viewBox="0 0 120 120" role="img" aria-label="Подтверждено {{ monitor.confirmed_ids }} из {{ monitor.cards_with_content }} карточек"><circle class="identity-track" cx="60" cy="60" r="48"/><circle class="identity-progress" cx="60" cy="60" r="48" stroke-dasharray="{{ identity_ratio * 301.593 }} 301.593"/><text x="60" y="58" text-anchor="middle">{{ monitor.confirmed_ids }}</text><text class="identity-total-label" x="60" y="78" text-anchor="middle">из {{ monitor.cards_with_content }}</text></svg><div><strong>{{ monitor.cards_with_content - monitor.confirmed_ids }}</strong><span>карточек без подтверждённой связи</span></div></div>
+      <button class="cell-action" type="button" data-monitor-action="identity">Разобрать идентификаторы <span aria-hidden="true">↗</span></button>
+    </article>
+  </div>
+  <details class="monitor-help"><summary>Как читать статусы и кто исправляет ошибки</summary><p class="monitor-note">«5+» — объявление активно, но не найдено в первых пяти страницах заданного поиска. «Неактивно» — публикация не обнаружена в полностью прочитанном активном каталоге. Причина не установлена; продажа автомобиля не подтверждена. «Не проверено» — данных недостаточно. Исправления выполняет маркетинг; характеристики и условия продажи подтверждает отдел продаж.</p><a href="#monitoring-evidence">Полнота и доказательства проверки ↗</a></details>
+  </details>
   {% if not fleet.metadata_available %}<p class="monitor-note">Для этого отчёта нет сохранённой сводки строк маркетинга. VIN, ожидание размещения и фотографии фида не подставляются автоматически.</p>{% endif %}
-  <div class="monitor-toolbar"><label>Найти автомобиль <input type="search" id="vehicle-search" placeholder="Модель, VIN, unique_id, ответственный"></label>
-    <label>Показать <select id="vehicle-filter"><option value="all">Все автомобили</option><option value="attention">Требуют внимания</option><option value="inactive">Есть неактивная публикация</option><option value="incomplete">Недостаточно данных</option><option value="ok">Без выявленных расхождений</option><option value="unplanned">Без ссылок на размещение</option></select></label>
-    <span id="vehicle-count" aria-live="polite">{{ fleet.vehicles|length }} записей</span></div>
 </section>
+<div class="monitor-tabs" role="tablist" aria-label="Представление отчёта" hidden>
+  <button id="tab-vehicles" type="button" role="tab" aria-controls="vehicle-panel" aria-selected="true"><span class="tab-label">Автомобили</span> <span class="tab-count">{{ fleet.vehicles|length }}</span></button>
+  <button id="tab-marketing" type="button" role="tab" aria-controls="marketing-panel" aria-selected="false" tabindex="-1"><span class="tab-label">Задачи маркетинга</span>{% if data.report.get('analytical_summary') %} <span class="tab-count">{{ data.report.analytical_summary.counts.issues }}</span>{% endif %}</button>
+</div>
+<section id="vehicle-panel" aria-label="Автомобили">
+  <h2 class="monitor-section-title">Автомобили</h2>
+  {% if data.report.feed_photo_review_info %}<p class="helper">Фото уточнены по сохранённым ссылкам: {{ data.report.feed_photo_review_info.repaired_publications }} публикаций. Обнаружена неверная MIME-метка изображений; даты, ID и результаты проверки объявлений не изменены.</p>{% endif %}
+  {% if data.report.feed_photo_review_error %}<p class="helper">Уточнение фото не прошло проверку целостности. Показаны исходные проверенные изображения.</p>{% endif %}
+  <div class="monitor-toolbar"><label>Найти автомобиль <input type="search" id="vehicle-search" placeholder="Модель, VIN, unique_id"></label>
+    <label>Показать <select id="vehicle-filter" aria-label="Показать автомобили"><option value="all">Все автомобили</option><option value="attention">Требуют внимания</option><option value="inactive">Есть неактивная публикация</option><option value="incomplete">Недостаточно данных</option><option value="ok">Без выявленных расхождений</option><option value="exception">Известное исключение</option><option value="unplanned">Без ссылок на размещение</option></select></label>
+    <span id="vehicle-count" aria-live="polite">{{ fleet.vehicles|length }} записей</span></div>
 <div class="vehicle-grid">
 {% for car in fleet.vehicles %}
 <article class="vehicle-tile" data-status="{{ car.status }}" data-inactive="{{ 'yes' if car.platforms|selectattr('state', 'equalto', 'inactive')|list else 'no' }}" data-incomplete="{{ 'yes' if car.incomplete else 'no' }}" data-search="{{ car.search_text }}">
   <div class="vehicle-photo">
-    {% if car.image %}<img src="{{ car.image }}" alt="{{ car.title }} — фото из фида" loading="lazy" referrerpolicy="no-referrer"><span>Фото из фида</span>
-    {% elif car.evidence_image %}<img class="evidence-preview" src="{{ car.evidence_image }}" alt="Сохранённый снимок объявления {{ car.title }}" loading="lazy"><span>Снимок объявления</span>
+    {% if car.image %}<img src="{{ car.image }}" alt="{{ car.title }} — {{ car.image_source or 'фото из фида' }}" loading="lazy" referrerpolicy="no-referrer"><span>{{ car.image_source or 'Фото из фида' }}</span>
     {% else %}<div class="vehicle-placeholder">Фото не сохранено</div>{% endif %}
+    <div class="vehicle-cover-status"><span class="vehicle-status {{ car.status }}">{{ {'attention': 'Требует внимания', 'incomplete': 'Есть непроверенные данные', 'ok': 'Расхождений не выявлено', 'exception': 'Известное исключение', 'unplanned': 'Размещение не указано в таблице'}.get(car.status) }}</span></div>
   </div>
   <div class="vehicle-body">
-    <div class="vehicle-status {{ car.status }}">{{ {'attention': 'Требует внимания', 'incomplete': 'Есть непроверенные данные', 'ok': 'Расхождений не выявлено', 'unplanned': 'Размещение не указано в таблице'}.get(car.status) }}</div>
+    <h2>{{ car.title }}</h2>
+    <p class="vehicle-year">Год: <strong>{{ car.year or 'не указан' }}</strong></p>
+    <p class="vehicle-vin">VIN <strong>{{ car.vin or 'Не подтверждён в таблице' }}</strong></p>
+    <div class="vehicle-platforms">
+    {% for platform in car.platforms %}
+      <div class="vehicle-platform {{ platform.state }}"><strong>{{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }}</strong><span title="{{ platform.label }}">{{ 'Активно' if platform.state == 'active' else 'У партнёра' if platform.known_exception else 'Неактивно' if platform.state == 'inactive' else 'Связь не подтверждена' if platform.state == 'unknown' and platform.url and platform.label.startswith('Ссылка активна') else 'Не проверено' if platform.state == 'unknown' else 'Ошибка ссылки' if platform.state == 'invalid_link' else 'Нет ссылки' if car.marketing_row else 'Нет данных' }}</span>
+      {% if platform.state == 'active' %}<b>{{ platform.position or 'Позиция не установлена' }}</b>{% endif %}
+      {% if platform.state == 'active' %}<small class="platform-price">{{ platform.price }}</small>{% else %}<small>Цена не подтверждена</small>{% endif %}
+      {% if platform.url and platform.state == 'active' %}<a href="{{ platform.url }}" target="_blank" rel="noopener noreferrer">Открыть ↗</a>{% endif %}</div>
+    {% endfor %}</div>
+    <details class="vehicle-details"><summary>Подробнее{% if car.issues %} · замечания: {{ car.issues|length }}{% elif car.actionable_inactive %} · проверить размещение{% elif car.incomplete %} · есть вопросы к данным{% endif %}</summary>
+      <p class="vehicle-price">{{ car.price_display }}</p><p class="vehicle-origin">{{ 'Данные таблицы маркетинга' if car.marketing_row else 'Данные объявления · связь с таблицей не подтверждена' }}</p>
     <div class="vehicle-tags" aria-label="Ярлыки размещения">
     {% for platform in car.platforms %}
       <span class="vehicle-tag {{ platform.state }}" title="{{ platform.label }}{% if platform.position %} · {{ platform.position }}{% endif %}">
         {{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }} ·
         {% if platform.state == 'active' %}Активно{% if platform.position == '5+' %} · 5+{% elif platform.position.startswith('Стр.') %} · {{ platform.position }}{% endif %}
-        {% elif platform.state == 'inactive' %}Неактивно
+        {% elif platform.state == 'inactive' %}{{ 'Размещение у партнёра' if platform.known_exception else 'Неактивно' }}
         {% elif platform.state == 'unknown' %}{{ 'Связь не подтверждена' if platform.url and platform.label.startswith('Ссылка активна') else 'Не проверено' }}
+        {% elif platform.state == 'invalid_link' %}Ошибка ссылки
         {% else %}{{ 'Нет ссылки' if car.marketing_row else 'Нет данных' }}{% endif %}
       </span>
     {% endfor %}
     {% if car.issues|selectattr('is_difference')|list %}<span class="vehicle-tag difference">Есть расхождения</span>{% endif %}
     {% if car.incomplete %}<span class="vehicle-tag unknown">Недостаточно данных</span>{% endif %}
     </div>
-    <h2>{{ car.title }}</h2><p class="vehicle-price">{{ car.price_display }}</p>
-    <p class="vehicle-origin">{{ 'Данные таблицы маркетинга' if car.marketing_row else 'Данные объявления · связь с таблицей не подтверждена' }}</p>
     <dl class="vehicle-facts"><div><dt>Год</dt><dd>{{ car.year or 'Нет данных' }}</dd></div><div><dt>Пробег</dt><dd>{{ car.mileage or 'Нет данных' }}</dd></div><div><dt>Владельцы</dt><dd>{{ car.owners or 'Нет данных' }}</dd></div><div><dt>Ответственный</dt><dd>{{ car.responsible or 'Не указан' }}</dd></div></dl>
-    <p class="vehicle-vin">VIN <strong>{{ car.vin or 'Не подтверждён в таблице' }}</strong></p>
     <p class="vehicle-origin">Маркетинг: {{ car.marketing_status }}</p>
-    <div class="vehicle-platforms">
-    {% for platform in car.platforms %}
-      <div class="vehicle-platform {{ platform.state }}"><strong>{{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }}</strong><span>{{ platform.label }}</span>
-      {% if platform.position %}<b>{{ platform.position }}</b>{% endif %}
-      {% if platform.state == 'active' %}<small>{{ platform.price }} · {{ platform.year }} · {{ platform.mileage }}</small>{% endif %}
-      {% if platform.url %}<a href="{{ platform.url }}" target="_blank" rel="noopener noreferrer">{{ 'Объявление ↗' if platform.state == 'active' else 'Ссылка из таблицы ↗' }}</a>{% endif %}</div>
-    {% endfor %}</div>
-    {% if car.platforms|selectattr('state', 'equalto', 'inactive')|list %}<p class="vehicle-callout"><strong>Маркетингу и продажам:</strong> в таблице автомобиль актуален и указана ссылка, но публикация отсутствует в активном каталоге. Требуется проверить размещение. Перевыкладка без прочитанного unique_id не исключена.</p>{% endif %}
+    {% if car.actionable_inactive or (car.actionable_inactive is undefined and car.platforms|selectattr('state', 'equalto', 'inactive')|list) %}<p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>{% endif %}
+    {% for exception in car.placement_exceptions|default([]) %}<p class="vehicle-callout"><strong>Известное исключение: {{ exception.decision.partner }}.</strong> {{ exception.detail }} Основание: {{ exception.decision.basis }}</p>{% endfor %}
     {% if car.issues %}<p class="vehicle-issue-summary">Расхождения: {{ car.issues|selectattr('is_difference')|list|length }} · Вопросы к данным: {{ car.issues|rejectattr('is_difference')|list|length }}</p>{% endif %}
-    <details class="vehicle-details"><summary>Замечания и источники{% if car.issues %} ({{ car.issues|length }}){% endif %}</summary>
+
       <p>unique_id: <strong>{{ car.unique_id or 'не подтверждён' }}</strong>. VIN используется только для связи строк внутри таблицы.</p>
+      {% for confirmation in car.display_confirmations|default([]) %}<p class="vehicle-callout">{{ 'Объединено по точной ссылке маркетинга.' if confirmation.kind|default('') == 'saved_marketing_link' else 'Один автомобиль: подтверждено владельцем отчёта.' }} {{ confirmation.basis }} На {{ 'Auto.ru' if confirmation.source == 'auto_ru' else 'Avito' }} unique_id не опубликован; объединение только для отображения автомобиля.</p>{% endfor %}
+      {% if car.evidence_image %}<p><a href="{{ car.evidence_image }}" target="_blank" rel="noopener noreferrer">Сохранённый снимок объявления ↗</a> — доказательство проверки, не фотография автомобиля.</p>{% endif %}
+      {% if car.image_source_url %}<p><a href="{{ car.image_source_url }}" target="_blank" rel="noopener noreferrer">{{ car.image_source or 'Источник фото: A1auto.ru' }} ↗</a>{% if car.image_captured_at %} · сохранено <time data-monitor-time="{{ car.image_captured_at }}">{{ car.image_captured_at }}</time>{% endif %}. Иллюстрация, не доказательство активности объявления.</p>{% endif %}
+      {% for platform in car.platforms if platform.url and platform.state != 'active' %}<p><a href="{{ platform.url }}" target="_blank" rel="noopener noreferrer">{{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }} · ссылка из таблицы ↗</a></p>{% endfor %}
       {% if car.sheet_url %}<p><a href="{{ car.sheet_url }}" target="_blank" rel="noopener noreferrer">Строка {{ car.marketing_row }} в маркетинге ↗</a></p>{% endif %}
-      {% for issue in car.issues %}<div class="vehicle-issue"><strong>{{ 'Auto.ru' if issue.source == 'auto_ru' else 'Avito' }} · {{ issue.title }}</strong><p>{{ issue.detail }}</p><p>{{ 'Продажам подтвердить значение; маркетингу согласовать источники и публикацию.' if issue.is_difference else 'Недостаточно данных для окончательного вывода. Проверить исходные данные или полноту чтения.' }}</p><p class="muted">{{ issue.action }}</p>
+      {% for issue in car.issues %}<div class="vehicle-issue"><strong>{{ 'Auto.ru' if issue.source == 'auto_ru' else 'Avito' }} · {{ issue.title }}</strong><p>{{ issue.detail }}</p>{% if issue.confirmation %}<p>Подтверждено: {{ issue.confirmation.value }} год. {{ issue.confirmation.basis }}</p>{% else %}<p>{{ 'Продажам подтвердить значение; маркетингу согласовать источники и публикацию.' if issue.is_difference else 'Недостаточно данных для окончательного вывода. Проверить исходные данные или полноту чтения.' }}</p>{% endif %}<p class="muted">{{ issue.action }}</p>
       <details><summary>Ячейки источника</summary>{% for ref in issue.cells %}<a href="{{ ref.url }}" target="_blank" rel="noopener noreferrer">{{ ref.sheet }}!{{ ref.a1 }}</a> {% endfor %}</details></div>{% endfor %}
-      {% for platform in car.platforms if platform.state == 'active' %}<p class="muted">{{ platform.source }}: владельцы — {{ platform.owners }}; снимок {{ platform.captured_at or 'дата не установлена' }} (UTC).</p>{% endfor %}
+      {% for platform in car.platforms if platform.state == 'active' %}<p class="muted">{{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }}: {{ platform.price }} · {{ platform.year }} · {{ platform.mileage }}; владельцы — {{ platform.owners }}; снимок {{ platform.captured_at or 'дата не установлена' }} (UTC).</p>{% endfor %}
     </details>
   </div>
 </article>
 {% endfor %}
 </div>
 <p id="vehicle-empty" hidden>По выбранным условиям автомобилей нет.</p>
+<div class="vehicle-pagination" hidden><p id="vehicle-page-status" aria-live="polite"></p><div><button type="button" id="vehicle-more">Показать ещё</button><button type="button" id="vehicle-show-all">Показать все</button></div></div>
+</section>
+<section id="marketing-panel" aria-label="Задачи маркетинга">
+{% include 'analytical_summary.html' %}
+</section>
 <section class="panel" id="publication-alerts"><details><summary>История изменений публикаций и сводные сигналы ({{ monitor.placement|length + monitor.events|length }})</summary>
 <p>Ниже также видны прежние открытые сигналы. Они не складываются со счётчиком новых исчезновений.</p>
 {% for item in monitor.placement + monitor.events %}<div class="insight"><div><strong>{{ item.source }} · {{ item.title }}</strong><p>{{ item.status }} · {{ item.unique_id or 'Сводка каталога' }}</p><p>{{ item.detail }}</p><p>{{ item.action }}</p>{% for link in item.links %}<a href="{{ link.url }}" target="_blank" rel="noopener noreferrer">{{ link.label }}</a> {% endfor %}</div></div>{% endfor %}
 </details></section>
-<script src="/static/monitoring.js" defer></script>
+<script src="/static/monitoring.js?v={{ ui_asset_revision|default('1') }}" defer></script>

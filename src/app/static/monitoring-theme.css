@@ -1,0 +1,409 @@
+/* Light workspace: floating navigation, functional bento cells, compact tickets.
+   Layout and interaction are original; no third-party design assets are used. */
+@font-face {font-family:Inter;src:url('/static/fonts/InterVariable.woff2') format('woff2');font-style:normal;font-weight:100 900;font-display:swap}
+body.workbench.monitoring-workspace {
+  --ink:#242b3a;--muted:#697286;--line:#e3e7ee;--paper:#fff;--bg:#eceff4;
+  --accent:#3455a3;--blue:#3455a3;--green:#28624f;color-scheme:light;
+  background:#eceff4;color:var(--ink);line-height:1.6;font-family:Inter,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+.monitoring-workspace main {
+  margin:18px 18px 18px 104px;padding:24px 28px;min-height:calc(100dvh - 36px);
+  border:1px solid #fff;border-radius:32px;background:#f8f9fc;box-shadow:0 12px 40px #34415a06;
+}
+.monitoring-workspace .app-nav {inset:18px auto 18px 16px;width:70px;padding:14px 8px;background:#fff;border:1px solid #e0e5ed;border-radius:27px;overflow-y:auto}
+.monitoring-workspace .app-brand {margin:0 auto 26px;gap:0;justify-content:center}
+.monitoring-workspace .brand-symbol {display:grid;place-items:center;width:42px;height:42px;border:0;border-radius:50%;background:#25354f;color:#fff;font-size:18px;letter-spacing:-1px}
+.monitoring-workspace .app-nav nav {gap:7px}
+.monitoring-workspace .app-nav nav a {justify-content:center;min-height:44px;padding:10px;color:#68758d;border-radius:15px}
+.monitoring-workspace .app-nav nav a:hover {background:#eef2f9;color:#263e72}
+.monitoring-workspace .app-nav nav a[aria-current] {background:#e3eafb;color:#284f9c;box-shadow:none}
+.monitoring-workspace .nav-foot {padding:16px 0 0;text-align:center;color:#617681;font-size:0}
+.monitoring-workspace .status-dot {background:#89a59a;margin:0}
+.monitoring-workspace .nav-foot small {display:none}
+.monitoring-workspace .workspace-bar {display:flex;align-items:center;justify-content:space-between;gap:16px;padding:11px 14px;margin:0 0 28px;border:1px solid #e5e9f1;border-radius:22px;background:#fffffff2;box-shadow:0 4px 18px #34415a06;z-index:12}
+.workspace-identity {display:flex;gap:10px;align-items:center;font-size:12px;font-weight:600;min-width:0}
+.workspace-identity small {display:block;font-size:11px;color:#7b8393;font-weight:400}
+.workspace-mark {display:grid;place-items:center;flex-shrink:0;width:33px;height:33px;border-radius:11px;background:#edf0f6;color:#4d5b76;font-weight:700}
+.workspace-navigation {display:flex;align-items:center;gap:3px;padding:4px;background:#f0f2f6;border-radius:24px}
+.monitoring-workspace .workspace-navigation a {display:flex;align-items:center;justify-content:center;min-height:40px;padding:8px 17px;border-radius:20px;font-size:12px;text-decoration:none;color:#6b7487;white-space:nowrap}
+.monitoring-workspace .workspace-navigation a[aria-current] {background:#fff;color:#283b62;box-shadow:0 2px 5px #283b6210}
+.workspace-snapshot {display:flex;gap:7px;align-items:center;font-size:11px;white-space:nowrap;color:#697489}
+.workspace-snapshot>span {width:6px;height:6px;border-radius:50%;background:#9badc6}
+.monitoring-workspace .monitor-intro {align-items:center;gap:16px}
+.monitoring-workspace h1 {font-weight:600;letter-spacing:-1px;font-size:30px;color:#252d3c;margin-bottom:8px}
+.monitoring-workspace .eyebrow {color:#8892a6;font-size:10px;letter-spacing:1.8px}
+.monitoring-workspace .monitor-intro .muted {font-size:13px;color:#6c768b}
+.monitoring-workspace .monitor-recovery-note {font-size:11px;color:#7c8597}
+.monitoring-workspace .monitor-evidence-link {display:inline-flex;min-height:42px;border:1px solid #e0e5ef;padding:8px 15px;border-radius:24px;background:#fff;color:#64738d;text-decoration:none;font-size:12px}
+.monitor-bento {display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:16px;margin:22px 0 10px}
+.summary-cell {display:flex;flex-direction:column;gap:14px;min-width:0;border:1px solid #e4e8ef;border-radius:27px;padding:20px;background:#fff;box-shadow:0 3px 10px #34415a04}
+.cell-heading {display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:12px;color:#657087}
+.cell-symbol {display:grid;place-items:center;flex-shrink:0;width:29px;height:29px;border-radius:50%;border:1px solid #e4e9f1;color:#76839d;background:#fff;font-size:16px}
+.inventory-total {display:flex;gap:12px;align-items:baseline}
+.inventory-total>strong {font-size:44px;font-weight:500;line-height:1.15;letter-spacing:-2px;color:#273b64}
+.inventory-total>span {font-size:12px;color:#919aaa}
+.inventory-split {display:flex;gap:20px;margin-top:auto}
+.inventory-split>div {display:grid;gap:4px;flex:1}
+.inventory-split span {display:flex;gap:6px;align-items:center;font-size:12px;color:#788297}
+.inventory-split strong {font-size:22px;font-weight:500;line-height:1.2;color:#3f4e6b}
+.platform-dot {width:6px;height:6px;border-radius:50%;display:inline-block}
+.platform-dot.auto {background:#5778bc}.platform-dot.avito {background:#bdcbea}
+.inventory-track {display:flex;gap:4px;width:100%;height:7px;margin-top:1px;border-radius:8px;overflow:hidden}
+.inventory-track>span {background:#5778bc;border-radius:8px}.inventory-track>span+span {background:#bdcbea}
+.summary-cell>small {font-size:11px;line-height:1.45;color:#768296}
+.attention-cell {background:#fbf6ed;border-color:#eee6d8}
+.attention-cell .cell-symbol {background:#fffaf3;border-color:#e9dfce;color:#a58b65}
+.attention-numbers {display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:auto 0}
+.attention-numbers>div {min-width:0;display:grid;gap:6px}
+.attention-numbers strong {font-size:38px;line-height:1.2;font-weight:500;letter-spacing:-1.2px;color:#5c503f}
+.attention-numbers span {font-size:11px;line-height:1.5;color:#8a7a65}
+.monitoring-workspace .cell-action {display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:40px;padding:8px 12px;background:#fff;border:1px solid #e2e5ed;border-radius:20px;color:#546581;font-size:12px;font-weight:500;text-align:left}
+.attention-cell .cell-action {border-color:#e8dfd1;color:#776145}
+.identity-cell {background:#f0f3fa;border-color:#dfe6f3}
+.identity-cell .cell-symbol {border-color:#d9e2f0;color:#7d91b3}
+.identity-visual {display:flex;gap:16px;align-items:center;flex:1;min-width:0}
+.identity-visual svg {width:116px;height:116px;flex-shrink:0;overflow:visible}
+.identity-track,.identity-progress {fill:none;stroke:#e0e6f1;stroke-width:7}
+.identity-progress {stroke:#728bb7;stroke-linecap:round;transform:rotate(-90deg);transform-origin:60px 60px}
+.identity-visual text {fill:#425a82;font-size:29px;font-family:inherit;font-weight:500}
+.identity-visual .identity-total-label {fill:#8796b0;font-size:12px;font-weight:400}
+.identity-visual>div {display:grid;gap:4px;min-width:0}
+.identity-visual>div>strong {font-size:26px;font-weight:500;color:#61799e;line-height:1.2}
+.identity-visual>div>span {font-size:11px;color:#8190a9;line-height:1.5}
+.monitoring-workspace .monitor-help>summary {font-size:12px;color:#7c8698;min-height:40px}
+.monitoring-workspace .monitor-tabs {display:flex;width:fit-content;max-width:100%;gap:3px;background:#e9edf4;border:1px solid #e4e8f0;padding:4px;border-radius:25px;margin:18px 0 20px}
+.monitoring-workspace .monitor-tabs button {display:flex;align-items:center;justify-content:center;gap:8px;min-height:44px;border:0;border-radius:21px;background:transparent;color:#7b869b;font-size:13px;padding:9px 17px;font-weight:500}
+.monitoring-workspace .monitor-tabs button[aria-selected="true"] {background:#fff;color:#31476c;box-shadow:0 2px 6px #2c426616}
+.monitoring-workspace .monitor-tabs button span {background:#e0e6f0;color:inherit;border-radius:20px;font-size:11px;padding:1px 7px}
+.monitoring-workspace .monitor-tabs[hidden] {display:none}
+.monitoring-workspace .monitor-toolbar {gap:12px;padding:13px 15px;margin:0 0 20px;border:1px solid #e7ebf2;border-radius:20px;background:#ffffffed;backdrop-filter:blur(12px);z-index:9}
+.monitoring-workspace .monitor-toolbar label {color:#7b879a;font-size:11px;gap:5px}
+.monitoring-workspace .monitor-toolbar input,.monitoring-workspace .monitor-toolbar select {border:1px solid #e1e6ef;background:#f8f9fc;border-radius:13px;color:#42516c;font-size:16px;padding:9px 12px;min-height:44px}
+.monitoring-workspace .monitor-toolbar input::placeholder {color:#9aa4b4;opacity:1}
+.monitoring-workspace .monitor-toolbar>span {color:#8691a4;font-size:11px}
+.monitoring-workspace :focus-visible {outline:3px solid #90a9da;outline-offset:3px}
+.monitoring-workspace .vehicle-grid {gap:18px;align-items:start}
+.monitoring-workspace .vehicle-tile {border:1px solid #e4e9f0;border-radius:27px;padding:7px;background:#fff;box-shadow:0 2px 5px #34415a03;transition:transform .2s ease,box-shadow .2s ease,border-color .2s ease;animation:vehicle-enter .2s ease-out}
+.monitoring-workspace .vehicle-photo {border-radius:21px;background:#f0f3f8;position:relative;aspect-ratio:16/10}
+.monitoring-workspace .vehicle-photo img {transition:transform .3s ease}
+.monitoring-workspace .vehicle-photo>span {background:#fffffff2;color:#7b8596;border:1px solid #ffffffaa;border-radius:7px;font-size:10px;padding:3px 7px}
+.vehicle-cover-status {position:absolute;top:10px;left:10px;right:10px;pointer-events:none}
+.monitoring-workspace .vehicle-cover-status .vehicle-status {font-size:10px;background:#fffffff2;color:#69768d;box-shadow:0 2px 8px #1f29370c;border:1px solid #ffffff99;padding:5px 8px;border-radius:9px;max-width:100%}
+.monitoring-workspace .vehicle-cover-status .vehicle-status.attention {color:#8a663b;background:#fff5e6f5}
+.monitoring-workspace .vehicle-cover-status .vehicle-status.incomplete {background:#edf1f9f5;color:#6b7d9e}
+.monitoring-workspace .vehicle-body {padding:14px 12px 10px}
+.monitoring-workspace .vehicle-body h2 {font-size:17px;line-height:1.4;margin:1px 0 5px;font-weight:600;color:#39465d}
+.monitoring-workspace .vehicle-price {font-size:25px;font-weight:550;letter-spacing:-.7px;line-height:1.35;color:#293d61;margin:6px 0 3px}
+.monitoring-workspace .vehicle-origin {font-size:10px;color:#919baa;margin:4px 0 9px}
+.monitoring-workspace .vehicle-tags {gap:4px;margin:10px 0 12px}
+.monitoring-workspace .vehicle-tag {font-size:10px;padding:4px 6px;border-radius:7px}
+.monitoring-workspace .vehicle-tag.active {background:#edf5f1;color:#537f6e}
+.monitoring-workspace .vehicle-tag.inactive {background:#fbefec;color:#a37061}
+.monitoring-workspace .vehicle-tag.unknown {background:#f7f1e6;color:#9a8358}
+.monitoring-workspace .vehicle-tag.difference {background:#f9f0e8;color:#a17c54}
+.monitoring-workspace .vehicle-facts {grid-template-columns:1fr 1fr;gap:10px 14px;margin:14px 0}
+.monitoring-workspace .vehicle-facts dt {font-size:11px;color:#949dac}
+.monitoring-workspace .vehicle-facts dd {font-size:13px;color:#55637b;margin-top:1px}
+.monitoring-workspace .vehicle-vin {color:#949dac;font-size:10px;margin-bottom:7px}
+.monitoring-workspace .vehicle-vin strong {color:#71819b;font-size:11px}
+.monitoring-workspace .vehicle-platforms {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:12px}
+.monitoring-workspace .vehicle-platform {display:flex;flex-direction:column;gap:6px;padding:11px 10px;border:1px solid #e5eaf1;background:#f8fafd;border-radius:16px;color:#73849e;min-width:0}
+.monitoring-workspace .vehicle-platform>strong {font-size:12px;color:#61779b}
+.monitoring-workspace .vehicle-platform>span {font-size:11px;text-align:left;line-height:1.45}
+.monitoring-workspace .vehicle-platform>b {font-size:12px;font-weight:500;color:#5a718f}
+.monitoring-workspace .vehicle-platform>small {font-size:10px;line-height:1.6;color:#92a0b6}
+.monitoring-workspace .vehicle-platform>a {margin-top:auto;display:inline-flex;align-items:center;min-height:36px;font-size:11px;color:#647fa9}
+.monitoring-workspace .vehicle-platform.inactive {background:#fcf6f2;border-color:#eee2d9;color:#ad8b73}
+.monitoring-workspace .vehicle-platform.inactive>strong {color:#9c7c65}
+.monitoring-workspace .vehicle-platform.unknown {background:#faf8f0;border-color:#ece6d3;color:#9d8e63}
+.monitoring-workspace .vehicle-callout {font-size:11px;line-height:1.6;color:#9b876d;border-color:#dac5ac;margin-top:13px}
+.monitoring-workspace .vehicle-issue-summary {font-size:11px;color:#9b876d}
+.monitoring-workspace .vehicle-details {border-color:#edf0f5;margin-top:12px;padding-top:6px;color:#8693a8}
+.monitoring-workspace .vehicle-details>summary {font-size:12px;color:#7b8da8}
+.monitoring-workspace .vehicle-issue {border-color:#e7edf4}
+.monitoring-workspace .vehicle-placeholder {color:#9ba5b4;min-height:160px}
+.monitoring-workspace .marketing-brief {border:1px solid #e4e9f1;background:#fff;border-radius:27px;padding:24px;box-shadow:0 3px 10px #34415a04}
+.monitoring-workspace .marketing-brief h2 {font-size:22px;color:#3d4b63}
+.monitoring-workspace .marketing-brief .monitor-intro p,.monitoring-workspace .marketing-brief>.muted {font-size:12px;color:#8a96a9}
+.monitoring-workspace .marketing-brief .monitor-intro>a {background:#f2f5fb;border:1px solid #e0e7f2;border-radius:24px;padding:8px 14px;color:#6c84ad;text-decoration:none;font-size:12px}
+.monitoring-workspace .brief-group {border-color:#edf0f5;padding:8px 0}
+.monitoring-workspace .brief-group>summary {color:#657995;font-size:14px;padding:8px 4px;border-radius:12px;transition:background .15s}
+.monitoring-workspace .brief-group>summary:hover {background:#f7f9fc}
+.monitoring-workspace .brief-count {background:#edf2fa;color:#7f95b7;border-radius:20px;font-weight:500}
+.monitoring-workspace .brief-case {padding:18px 6px;border-color:#edf1f6}
+.monitoring-workspace .brief-case>strong {font-weight:550;color:#506484;font-size:15px}
+.monitoring-workspace .brief-case p {color:#7f8da3;font-size:13px;line-height:1.7}
+.monitoring-workspace .brief-case small {color:#9aa8ba;font-size:11px}
+.monitoring-workspace .brief-case details>summary {color:#8398b8}
+.monitoring-workspace .brief-proof {border-color:#aac3af;background:#f1f7f1;color:#709078!important;border-radius:0 12px 12px 0}
+.monitoring-workspace .monitoring-evidence,.monitoring-workspace #publication-alerts {border:1px solid #e5eaf2;border-radius:20px;background:#fdfdff;color:#75869f}
+.monitoring-workspace .monitoring-evidence>summary,.monitoring-workspace #publication-alerts summary {color:#8293ad;font-size:13px}
+.monitoring-workspace .panel {background:#fff;border-color:#e5eaf2;border-radius:20px}
+.monitoring-workspace .app-footer {color:#98a4b7;font-size:10px}
+.monitoring-workspace .vehicle-pagination {display:flex;flex-direction:column;align-items:center;gap:8px;margin:26px 0 30px;text-align:center}
+.monitoring-workspace .vehicle-pagination[hidden] {display:none}
+.vehicle-pagination p {font-size:12px;color:#8592a7}
+.vehicle-pagination>div {display:flex;gap:8px;flex-wrap:wrap;justify-content:center}
+.monitoring-workspace .vehicle-pagination button {min-height:44px;border:1px solid #dbe4f1;border-radius:24px;padding:10px 22px;background:#fff;color:#6d85ab;font-size:12px;font-weight:500;transition:box-shadow .18s,transform .18s}
+.monitoring-workspace .vehicle-pagination #vehicle-show-all {background:transparent;border-color:transparent;color:#929fb4}
+.monitoring-workspace .report-view-enter {animation:panel-enter .18s ease-out}
+.monitoring-workspace .vehicle-tile,.monitoring-workspace .brief-group,.monitoring-workspace .monitor-toolbar {scroll-margin-top:170px}
+/* Keep supporting data readable on the light surfaces. */
+.monitoring-workspace .vehicle-origin,.monitoring-workspace .vehicle-facts dt,.monitoring-workspace .vehicle-vin,.monitoring-workspace .vehicle-platform>small,.monitoring-workspace .vehicle-details,.monitoring-workspace .vehicle-details>summary,.monitoring-workspace .marketing-brief .monitor-intro p,.monitoring-workspace .marketing-brief>.muted,.monitoring-workspace .brief-case p,.monitoring-workspace .brief-case small {color:#657187}
+.monitoring-workspace .vehicle-tag.active {color:#32664f}
+.monitoring-workspace .vehicle-tag.inactive {color:#934f3d}
+.monitoring-workspace .vehicle-tag.unknown,.monitoring-workspace .vehicle-tag.difference {color:#856231}
+.monitoring-workspace .vehicle-callout,.monitoring-workspace .vehicle-issue-summary {color:#846340}
+@keyframes panel-enter {from {opacity:.55;transform:translateY(5px)} to {opacity:1;transform:translateY(0)}}
+@keyframes vehicle-enter {from {opacity:.5;transform:translateY(7px)} to {opacity:1;transform:translateY(0)}}
+@media (hover:hover) and (pointer:fine) {
+  .monitoring-workspace .vehicle-tile:hover {transform:translateY(-2px);border-color:#ccd9ed;box-shadow:0 12px 25px #4a638512}
+  .monitoring-workspace .vehicle-tile:hover .vehicle-photo img {transform:scale(1.025)}
+  .monitoring-workspace .cell-action:hover,.monitoring-workspace .vehicle-pagination button:hover {box-shadow:0 4px 12px #4a638512;transform:translateY(-1px)}
+}
+@media (min-width:961px) {
+  .monitoring-workspace .app-nav .nav-text,.monitoring-workspace .app-nav .nav-label,.monitoring-workspace .app-brand>span:not(.brand-symbol) {display:none}
+  .monitoring-workspace .workspace-bar {position:sticky;top:16px;backdrop-filter:blur(14px)}
+  .monitoring-workspace .monitor-toolbar {position:sticky;top:100px}
+  .monitoring-workspace .skip-link {left:116px}
+}
+@media (max-width:1199px) {
+  .monitor-bento {grid-template-columns:1.1fr 1fr;gap:12px}
+  .identity-cell {grid-column:1/-1;display:grid;grid-template-columns:1fr 1.3fr 1fr;align-items:center;gap:18px}
+  .identity-visual svg {width:86px;height:86px}
+  .identity-cell .cell-heading {font-size:12px}
+  .workspace-snapshot {display:none}
+}
+@media (max-width:960px) {
+  .monitoring-workspace .cell-action {min-height:44px}
+  .monitoring-workspace .vehicle-tile,.monitoring-workspace .brief-group,.monitoring-workspace .monitor-toolbar {scroll-margin-top:16px}
+  .monitoring-workspace .app-nav {position:relative;inset:auto;width:auto;margin:12px 12px 0;padding:12px 16px;border-radius:22px;overflow:visible}
+  .monitoring-workspace .app-brand {margin:0;justify-content:flex-start;gap:10px;color:#455877}
+  .monitoring-workspace .brand-symbol {width:36px;height:36px;font-size:16px}
+  .monitoring-workspace .app-brand small {color:#9aa5b6}
+  .monitoring-workspace .nav-mobile-menu>summary {top:12px;right:16px;background:#f4f6fb;border-color:#e0e6f1;color:#7b8da9;min-height:44px;border-radius:15px}
+  .monitoring-workspace main {margin:12px;padding:20px;border-radius:27px;min-height:0}
+  .monitoring-workspace .workspace-bar {padding:10px 12px;margin-bottom:22px;gap:10px;flex-wrap:wrap;position:relative;top:auto}
+  .workspace-identity {display:none}
+  .workspace-navigation {width:100%}
+  .monitoring-workspace .workspace-navigation a {flex:1;min-height:44px;padding:7px;font-size:12px}
+}
+@media (max-width:639px) {
+  .monitoring-workspace main {padding:15px;margin:10px;border-radius:24px}
+  .monitoring-workspace .workspace-bar {padding:5px;border-radius:20px;margin-bottom:20px}
+  .monitoring-workspace h1 {font-size:25px;line-height:1.2}
+  .monitoring-workspace .monitor-intro .muted {font-size:12px}
+  .monitoring-workspace .monitor-recovery-long {display:none}
+  .monitoring-workspace .monitor-evidence-link {display:none}
+  .monitor-bento {grid-template-columns:1fr 1fr;gap:10px;margin-top:18px}
+  .summary-cell {padding:14px;border-radius:22px;gap:10px}
+  .inventory-cell {grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px 16px}
+  .inventory-cell .cell-heading {grid-column:1/-1}
+  .inventory-total {align-self:center;gap:8px;flex-wrap:wrap}
+  .inventory-total>strong {font-size:38px}
+  .inventory-total>span {font-size:10px}
+  .inventory-split {gap:14px;margin:0}
+  .inventory-split strong {font-size:21px}
+  .inventory-track {grid-column:1/-1;height:6px}
+  .inventory-cell>small {grid-column:1/-1;font-size:10px}
+  .attention-cell {grid-column:1/-1}
+  .attention-numbers {grid-template-columns:1fr 1fr;gap:12px}
+  .attention-numbers strong {font-size:30px}
+  .identity-cell {grid-column:1/-1;display:grid;grid-template-columns:1fr 1.1fr;gap:8px 14px}
+  .identity-cell .cell-heading {grid-column:1}
+  .identity-visual {grid-column:2;grid-row:1/3;gap:8px}
+  .identity-visual svg {width:76px;height:76px}
+  .identity-visual>div>strong {font-size:20px}
+  .identity-visual>div>span {font-size:10px}
+  .identity-cell .cell-action {grid-column:1;font-size:11px;min-height:44px;padding:7px 10px}
+  .cell-heading {font-size:11px}
+  .cell-symbol {display:none}
+  .summary-cell>small {font-size:10px}
+  .monitoring-workspace .cell-action {min-height:44px}
+  .monitoring-workspace .monitor-tabs {display:grid;grid-template-columns:1fr 1fr;width:100%;border-radius:22px}
+  .monitoring-workspace .monitor-tabs button {font-size:12px;gap:4px;padding:9px 5px}
+  .monitoring-workspace .monitor-toolbar {padding:12px;grid-template-columns:minmax(0,1fr) auto;border-radius:18px;gap:10px}
+  .monitoring-workspace .monitor-toolbar label:first-child {grid-column:1/-1}
+  .monitoring-workspace .monitor-toolbar>span {grid-column:2;grid-row:2;font-size:10px}
+  .monitoring-workspace .vehicle-platform>a {min-height:44px}
+  .monitoring-workspace .vehicle-tile {border-radius:24px}
+  .monitoring-workspace .marketing-brief {padding:17px;border-radius:22px}
+}
+@media (max-width:380px) {
+  .identity-cell {display:flex;flex-direction:column;align-items:stretch}
+  .identity-visual {width:100%;gap:14px}
+  .identity-visual>div {min-width:0;flex:1}
+}
+/* Phone reading scale: preserve the composition, give operational text room. */
+@media (max-width:639px) {
+  body.workbench.monitoring-workspace {font-size:16px;line-height:1.6}
+  .monitoring-workspace .workspace-navigation a {font-size:14px;min-height:48px}
+  .monitoring-workspace .monitor-intro .muted,
+  .monitoring-workspace .monitor-recovery-note {font-size:14px}
+  .monitoring-workspace .cell-heading {font-size:15px}
+  .inventory-total>span,.inventory-split span {font-size:14px}
+  .monitoring-workspace .summary-cell>small {font-size:14px;line-height:1.55}
+  .attention-numbers span {font-size:14px;line-height:1.5}
+  .identity-cell {display:flex;flex-direction:column;align-items:stretch}
+  .identity-visual {width:100%;gap:16px}
+  .identity-visual>div {min-width:0;flex:1}
+  .identity-visual>div>span {font-size:14px;line-height:1.5}
+  .monitoring-workspace .cell-action {font-size:15px;min-height:48px;padding:10px 14px}
+  .monitoring-workspace .monitor-help>summary {font-size:14px;line-height:1.5}
+  .monitoring-workspace .monitor-help p {font-size:15px}
+  .monitoring-workspace .monitor-tabs button {font-size:15px;min-height:48px;flex-wrap:wrap}
+  .monitoring-workspace .monitor-tabs button span {font-size:13px}
+  .monitoring-workspace .monitor-toolbar {grid-template-columns:minmax(0,1fr)}
+  .monitoring-workspace .monitor-toolbar label {font-size:14px}
+  .monitoring-workspace .monitor-toolbar label:first-child,
+  .monitoring-workspace .monitor-toolbar>span {grid-column:1;grid-row:auto}
+  .monitoring-workspace .monitor-toolbar>span {font-size:14px;text-align:left}
+  .monitoring-workspace .monitor-toolbar input,.monitoring-workspace .monitor-toolbar select {min-height:48px;font-size:16px}
+  .monitoring-workspace .vehicle-body {padding:16px 14px 12px}
+  .monitoring-workspace .vehicle-body h2 {font-size:20px;line-height:1.35}
+  .monitoring-workspace .vehicle-price {font-size:28px}
+  .monitoring-workspace .vehicle-origin {font-size:14px;line-height:1.5}
+  .monitoring-workspace .vehicle-tag {font-size:13px;line-height:1.5;padding:5px 7px}
+  .monitoring-workspace .vehicle-cover-status .vehicle-status {font-size:13px}
+  .monitoring-workspace .vehicle-photo>span {font-size:12px}
+  .monitoring-workspace .vehicle-facts dt {font-size:14px}
+  .monitoring-workspace .vehicle-facts dd {font-size:16px}
+  .monitoring-workspace .vehicle-vin,.monitoring-workspace .vehicle-vin strong {font-size:13px;overflow-wrap:anywhere}
+  .monitoring-workspace .vehicle-platform>strong {font-size:15px}
+  .monitoring-workspace .vehicle-platform>span,.monitoring-workspace .vehicle-platform>b,
+  .monitoring-workspace .vehicle-platform>small {font-size:14px;overflow-wrap:anywhere}
+  .monitoring-workspace .vehicle-platform>a {font-size:14px;min-height:48px}
+  .monitoring-workspace .vehicle-callout,.monitoring-workspace .vehicle-issue-summary,
+  .monitoring-workspace .vehicle-details>summary {font-size:15px}
+  .monitoring-workspace .vehicle-details p,.monitoring-workspace .vehicle-issue {font-size:14px}
+  .monitoring-workspace .marketing-brief .monitor-intro p,
+  .monitoring-workspace .marketing-brief>.muted,.monitoring-workspace .brief-case p,
+  .monitoring-workspace .brief-case small {font-size:15px}
+  .monitoring-workspace .marketing-brief .monitor-intro>a,
+  .monitoring-workspace .brief-group>summary {font-size:16px}
+  .monitoring-workspace .brief-case>strong {font-size:17px}
+  .monitoring-workspace .monitoring-evidence>summary,
+  .monitoring-workspace #publication-alerts summary {font-size:15px}
+  .monitoring-workspace .vehicle-pagination p {font-size:14px}
+  .monitoring-workspace .vehicle-pagination button {font-size:15px;min-height:48px}
+  .monitoring-workspace .app-footer {font-size:13px}
+}
+@media (prefers-reduced-motion:reduce) {
+  .monitoring-workspace *, .monitoring-workspace *::before,.monitoring-workspace *::after {animation:none!important;transition:none!important;scroll-behavior:auto!important}
+}
+/* Responsive audit: compact phone overview, deliberate tablet/laptop breakpoints. */
+.monitoring-workspace .monitor-tabs .tab-label {font-size:inherit;padding:0;background:transparent;min-width:0;border-radius:0}
+.monitoring-workspace .summary-cell {gap:10px;padding:18px}
+.monitoring-workspace .workspace-bar {margin-bottom:20px}
+.monitoring-workspace .identity-visual svg {width:100px;height:100px}
+.monitoring-workspace .overview-breakdown {border:0;padding:0;margin:0}
+.overview-breakdown>summary,.phone-overview {display:none}
+.monitoring-workspace .vehicle-grid {grid-template-columns:repeat(3,minmax(0,1fr))}
+.monitoring-workspace .vehicle-photo {aspect-ratio:16/10;max-height:260px}
+.monitoring-workspace .vehicle-photo.image-unavailable {min-height:160px}
+.monitoring-workspace .vehicle-platform .platform-price {font-size:13px;color:#465b7b;line-height:1.5}
+.monitoring-workspace .monitor-toolbar {grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) auto}
+.monitoring-workspace .monitor-toolbar>span {padding-bottom:0;align-self:center;white-space:normal}
+.monitoring-workspace .monitor-toolbar input::placeholder {color:#6c7890}
+.monitoring-workspace .monitor-tabs button {color:#52617b}
+.monitoring-workspace .workspace-navigation a {color:#566279}
+.monitoring-workspace .vehicle-platform {color:#536681}
+.monitoring-workspace .vehicle-platform>strong {color:#4e6488}
+.monitoring-workspace .vehicle-platform>a {color:#426291}
+.monitoring-workspace .vehicle-platform.inactive,.monitoring-workspace .vehicle-platform.inactive>strong {color:#805b42}
+.monitoring-workspace .vehicle-platform.unknown,.monitoring-workspace .vehicle-platform.unknown>strong {color:#78632c}
+.monitoring-workspace .vehicle-cover-status .vehicle-status.incomplete {color:#4f6486}
+@media (min-width:640px) {
+  .monitoring-workspace .vehicle-origin,.monitoring-workspace .vehicle-vin,
+  .monitoring-workspace .vehicle-platform>small,.monitoring-workspace .vehicle-issue-summary {font-size:12px}
+}
+.monitoring-workspace .monitor-recovery-note,.monitoring-workspace .cell-heading,
+.monitoring-workspace .summary-cell>small,.monitoring-workspace .attention-numbers span,
+.monitoring-workspace .identity-visual>div>span {color:#637087}
+@media (min-width:961px) and (hover:hover) and (pointer:fine) {
+  .monitoring-workspace .app-nav:hover,.monitoring-workspace .app-nav:focus-within {width:220px;z-index:30;box-shadow:8px 0 28px #34415a12}
+  .monitoring-workspace .app-nav:hover .nav-text,.monitoring-workspace .app-nav:focus-within .nav-text {display:inline;font-size:14px}
+  .monitoring-workspace .app-nav:hover nav a,.monitoring-workspace .app-nav:focus-within nav a {justify-content:flex-start;gap:12px}
+}
+@media (min-width:1800px) {
+  .monitoring-workspace main {max-width:1600px;margin-right:auto}
+}
+@media (min-width:640px) and (max-width:1199px) {
+  .monitoring-workspace .vehicle-grid {grid-template-columns:repeat(2,minmax(0,1fr))}
+  .monitoring-workspace .monitor-toolbar {grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+  .monitoring-workspace .monitor-toolbar>span {grid-column:1/-1;text-align:left;font-size:13px}
+  .monitoring-workspace .monitor-intro {flex-wrap:wrap}
+  .monitoring-workspace .monitor-intro>div {flex:1 1 380px}
+  .monitoring-workspace .marketing-brief .monitor-intro>a {flex-shrink:1;white-space:normal}
+  .monitoring-workspace .vehicle-body h2 {font-size:19px}
+  .monitoring-workspace .vehicle-facts dd {font-size:15px}
+  .monitoring-workspace .vehicle-facts dt,.monitoring-workspace .vehicle-origin {font-size:13px}
+}
+@media (max-width:639px) {
+  .monitoring-workspace .summary-cell {padding:14px}
+  .monitoring-workspace .monitor-tabs button {display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px;align-items:center}
+  .monitoring-workspace .monitor-tabs .tab-count {align-self:center}
+  .monitoring-workspace .identity-visual svg {width:76px;height:76px}
+  .monitoring-workspace .workspace-bar {display:none}
+  .monitoring-workspace .phone-overview:not([hidden]) {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;margin:18px 0 10px}
+  .monitoring-workspace .phone-overview button {display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:5px;min-width:0;min-height:130px;border:1px solid #e0e6f0;border-radius:20px;padding:14px 12px;background:#fff;color:#344b71;text-align:left;white-space:normal;overflow-wrap:anywhere}
+  .phone-overview button:nth-child(2),.phone-overview button:nth-child(3) {background:#fbf6ed}
+  .phone-overview strong {font-size:30px;font-weight:550;line-height:1.2}
+  .phone-overview strong small {font-size:17px;font-weight:400}
+  .phone-overview span {font-size:14px;line-height:1.4}
+  .phone-overview button>small {font-size:12px;line-height:1.5;color:#637087}
+  .monitoring-workspace .overview-breakdown>summary {display:flex;align-items:center;min-height:48px;font-size:14px;color:#4e658b;cursor:pointer}
+  .monitoring-workspace .overview-breakdown>summary::after {content:'＋';margin-left:auto}
+  .monitoring-workspace .overview-breakdown[open]>summary::after {content:'−'}
+  .overview-breakdown>summary::-webkit-details-marker {display:none}
+  .monitoring-workspace .overview-breakdown .monitor-bento {margin-top:8px}
+  .monitoring-workspace .vehicle-grid {grid-template-columns:minmax(0,1fr)}
+  .monitoring-workspace .monitor-toolbar {grid-template-columns:minmax(0,1fr)}
+  .monitoring-workspace .vehicle-platform .platform-price {font-size:14px}
+  .monitoring-workspace .vehicle-body {padding:14px 12px 10px}
+  .monitoring-workspace .vehicle-photo {max-height:230px}
+}
+@media (max-width:359px) {
+  .monitoring-workspace .vehicle-platforms {grid-template-columns:minmax(0,1fr)}
+  .monitoring-workspace .vehicle-platform {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:5px 10px}
+  .monitoring-workspace .vehicle-platform>span {text-align:right}
+  .monitoring-workspace .vehicle-platform>a {grid-column:1/-1}
+}
+.monitoring-workspace .vehicle-body>.vehicle-vin {font-size:13px;margin:8px 0 12px}
+.monitoring-workspace .vehicle-year {font-size:14px;color:#637087;margin:4px 0 6px;line-height:1.5}
+.monitoring-workspace .vehicle-year strong {font-weight:500;color:#42516c}
+@media (max-width:639px) {
+  .monitoring-workspace .vehicle-year {font-size:16px}
+}
+.monitoring-workspace .vehicle-body>.vehicle-vin strong {font-size:13px}
+.monitoring-workspace .vehicle-platform .platform-price {font-size:16px;font-weight:600;color:#344b71}
+.monitoring-workspace .vehicle-details>summary {justify-content:space-between;gap:8px;min-height:48px;border-radius:12px;background:#f5f7fb;padding:9px 12px;line-height:1.5}
+.monitoring-workspace .vehicle-details>summary::before {display:none}
+.monitoring-workspace .vehicle-details>summary::after {content:'＋';flex-shrink:0}
+.monitoring-workspace .vehicle-details[open]>summary::after {content:'−'}
+@media (min-width:640px) and (max-width:1199px) {
+  .monitoring-workspace .workspace-bar {display:none}
+  .monitoring-workspace .phone-overview:not([hidden]) {display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 10px}
+  .monitoring-workspace .phone-overview button {display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;gap:6px;min-width:0;min-height:140px;border:1px solid #e0e6f0;border-radius:20px;padding:14px 12px;background:#fff;color:#344b71;text-align:left;white-space:normal;overflow-wrap:anywhere}
+  .monitoring-workspace .overview-breakdown>summary {display:flex;align-items:center;justify-content:space-between;min-height:48px;font-size:14px;color:#4e658b;cursor:pointer}
+  .overview-breakdown>summary::after {content:'＋'}
+  .overview-breakdown[open]>summary::after {content:'−'}
+  .phone-overview strong {font-size:30px;font-weight:550;line-height:1.2}
+  .phone-overview strong small {font-size:17px;font-weight:400}
+  .phone-overview span {font-size:14px;line-height:1.4;font-weight:500}
+  .phone-overview button>small {font-size:12px;line-height:1.5;color:#637087;font-weight:400}
+}
+
+@media (max-width:639px) {
+  .monitoring-workspace .monitor-recovery-note {display:none}
+}
+
+/* Coverage is part of the report, not optional technical evidence. */
+.monitoring-workspace .coverage-status {margin:12px 0 6px;padding:12px 14px;border:1px solid #dce4ef;border-radius:14px;background:#fff;font-size:13px;line-height:1.55;overflow-wrap:anywhere}
+.monitoring-workspace .coverage-status p {margin:4px 0;color:#4d5d76;font-size:inherit}
+.monitoring-workspace .coverage-status .coverage-source.partial,.monitoring-workspace .coverage-status .coverage-warning {color:#795328}
+.monitoring-workspace .coverage-status .coverage-source.not_checked {color:#5b687d}
+.monitoring-workspace .coverage-status .coverage-warning {border-top:1px solid #ece4d9;padding-top:8px}
+@media (max-width:639px) {
+  .monitoring-workspace .coverage-status {font-size:14px;padding:12px}
+}

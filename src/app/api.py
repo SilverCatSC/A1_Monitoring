@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse, PlainTextResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy import text
 from sqlalchemy.orm import Session
@@ -50,8 +51,10 @@ from app.schemas import (
     TriggerScanResponse,
 )
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
+from app.service.analytical_summary import render_marketing_text
 from app.service.analytics import STATES, activity_context, analytics_context
 from app.service.catalogue_visibility import add_catalogue_visibility
+from app.service.company_site_photos import read_company_photo_index
 from app.service.company_site_report import company_site_audit_context
 from app.service.cycle import (
     CycleConfigurationError,
@@ -97,12 +100,17 @@ from app.service.report import (
     weekend_summary,
 )
 from app.service.republication_review import exact_candidate_proof_url, exact_republication_candidate
+from app.service.scan_health import assess_scan_health
 from app.service.scan_progress import read_scan_progress
 from app.service.vehicle_dashboard import vehicle_dashboard
 
 router = APIRouter()
 templates = Jinja2Templates(directory=Path(__file__).parent / 'templates')
 templates.env.globals['monitoring_search_pages'] = lambda: settings.scan_pages_limit
+templates.env.globals['ui_asset_revision'] = hashlib.sha256(b''.join(
+    path.read_bytes() for path in sorted((Path(__file__).parent / 'static').glob('*'))
+    if path.is_file() and path.suffix in {'.css', '.js'}
+)).hexdigest()[:12]
 PLACEMENT_REVIEW_LABELS = {
     'republication_candidate': ('Возможная перевыкладка', 'Сверьте снимок новой карточки и подтвердите ссылку у оператора.'),
     'mixed_script_id': ('Кириллица в полученном тексте карточки', 'ID фида и текст страницы различаются. Связь подтверждена; это не доказывает ошибку в таблице или исходном описании.'),
@@ -235,6 +243,21 @@ def monitoring_cycle_placement_report(
         raise HTTPException(status_code=code, detail='placement report unavailable') from exc
 
 
+@router.get('/status/cycles/{cycle_id}/marketing-summary', response_class=PlainTextResponse)
+def monitoring_cycle_marketing_summary(
+    cycle_id: str, request: Request, db: Session = Depends(get_db),
+):
+    require_roles(request, 'admin', 'operator', 'marketing', 'sales_director')
+    cycle = db.get(MonitoringCycle, cycle_id)
+    if cycle is None:
+        raise HTTPException(status_code=404, detail='monitoring cycle not found')
+    try:
+        report = read_cycle_placement_report(cycle, settings.evidence_dir)
+    except PlacementReportError as exc:
+        raise HTTPException(status_code=409, detail='placement report unavailable') from exc
+    return PlainTextResponse(render_marketing_text(report['analytical_summary']))
+
+
 @router.get('/status/cycles/{cycle_id}/placement-evidence/{index}')
 def monitoring_cycle_placement_evidence(
     cycle_id: str, index: int, request: Request, db: Session = Depends(get_db),
@@ -294,7 +317,8 @@ def recover_open_monitoring_cycles(request: Request, db: Session = Depends(get_d
 
 @router.get('/status/scans/progress')
 def current_scan_progress():
-    return read_scan_progress(settings.evidence_dir)
+    progress = read_scan_progress(settings.evidence_dir)
+    return {**progress, 'operational_health': assess_scan_health(progress)}
 
 
 @router.get('/dashboard', response_class=HTMLResponse)
@@ -402,7 +426,11 @@ def placement_identity_html(
                 })
             data['report'] = report
             data['monitoring'] = monitoring_digest(report)
-            data['vehicles'] = vehicle_dashboard(report)
+            from app.service.vehicle_display_review import load_display_bindings, load_display_photos
+            data['vehicles'] = vehicle_dashboard(
+                report, photo_index=read_company_photo_index(settings.evidence_dir),
+                display_bindings=load_display_bindings(settings.evidence_dir, report),
+                display_photos=load_display_photos(settings.evidence_dir, report))
     return templates.TemplateResponse(
         request=request, name='placement_identity.html', context={'data': data},
     )

@@ -12,7 +12,13 @@ from pathlib import Path
 
 from app.models import EngineType, MonitoringCycle
 from app.scraper.base import canonical_listing_key, is_marketplace_listing_url
+from app.service.analytical_summary import summary_for_report
+from app.service.artifact_bundle import verify_bundle
 from app.service.content_review import read_content_review
+from app.service.evidence import EvidenceAccessError
+from app.service.feed_photo_review import apply_feed_photo_review
+from app.service.publication_alerts import apply_absence_caveats
+from app.service.search_followup import apply_search_followup
 from app.service.targeted_search import add_reviewed_targeted_positions
 
 MAX_REPORT_BYTES = 4 * 1024 * 1024
@@ -29,7 +35,7 @@ def _publication_alerts_valid(alerts, cycle_id):
         if (not isinstance(item, dict) or item.get('source') not in alerts['baseline_cycle_by_source']
                 or item.get('kind') not in {'inventory_drop', 'republished', 'republication_candidate',
                     'duplicate_unique_id', 'publication_disappeared', 'publication_inactive',
-                    'publication_unverified', 'publication_restored'}
+                    'publication_unverified', 'publication_restored', 'publication_verified'}
                 or not isinstance(item.get('title'), str) or len(item['title']) > 4000):
             return False
         source = EngineType(item['source'])
@@ -86,6 +92,15 @@ def read_cycle_placement_report(cycle: MonitoringCycle, evidence_dir: str) -> di
             or not isinstance(report.get('findings'), list)
             or not isinstance(report.get('observed_cards'), list)):
         raise PlacementReportError('invalid_report_schema')
+    if report.get('artifact_bundle') is not None:
+        try:
+            if report['artifact_bundle'] != 'report_bundle.ready.json':
+                raise ValueError('invalid report bundle')
+            verify_bundle(target.parent, report['artifact_bundle'], required=(
+                original.name if expected == reviewed else target.name,
+                'analytical_summary.json', 'marketing_summary.txt'))
+        except (OSError, ValueError, TypeError) as exc:
+            raise PlacementReportError('incomplete_report_bundle') from exc
     if expected == reviewed:
         original_file = root / original
         review = report.get('identity_review', {})
@@ -171,4 +186,14 @@ def read_cycle_placement_report(cycle: MonitoringCycle, evidence_dir: str) -> di
         content = read_content_review(report, evidence_dir)
         if content is not None:
             report['content_review'] = content
+    try:
+        apply_search_followup(report, evidence_dir, original_raw=raw)
+    except (OSError, ValueError, KeyError, TypeError, EvidenceAccessError):
+        report['search_followup_error'] = 'not_verified'
+    try:
+        apply_feed_photo_review(report, evidence_dir, original_raw=raw)
+    except (OSError, ValueError, KeyError, TypeError, AttributeError):
+        report['feed_photo_review_error'] = 'not_verified'
+    apply_absence_caveats(report)
+    report['analytical_summary'] = summary_for_report(report, evidence_dir, mode='saved_report_readback')
     return report

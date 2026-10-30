@@ -2,10 +2,40 @@ import asyncio
 import base64
 
 import httpx
+import pytest
 
 from app.config import settings
 from app.db import get_db
 from app.main import app
+
+
+@pytest.mark.parametrize('headers,expected', [
+    ({'Origin': 'https://unrelated.example'}, 403),
+    ({'Origin': 'null'}, 403),
+    ({'Origin': 'http://test:9999'}, 403),
+    ({'Origin': 'http://test:bad'}, 403),
+    ({'Sec-Fetch-Site': 'cross-site'}, 403),
+    ({'Origin': 'http://test', 'Sec-Fetch-Site': 'cross-site'}, 403),
+    ({'Origin': 'http://test'}, 404),
+    ({'Origin': 'http://test:80'}, 404),
+    ({'Sec-Fetch-Site': 'same-origin'}, 404),
+    ({}, 404),
+])
+def test_browser_origin_guard_prevents_mutations_but_keeps_local_cli(monkeypatch, headers, expected):
+    monkeypatch.setattr(settings, 'auth_enabled', True)
+    monkeypatch.setattr(settings, 'admin_username', 'operator')
+    monkeypatch.setattr(settings, 'admin_password', 'long-random-password')
+
+    async def verify():
+        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='http://test') as client:
+            credentials = {'Authorization': _basic('operator', 'long-random-password')}
+            for method in ('POST', 'PATCH', 'DELETE'):
+                response = await client.request(method, '/__no_side_effects__', headers={**credentials, **headers})
+                assert response.status_code == expected
+            # Reading reports is unaffected by the mutation guard.
+            assert (await client.get('/api/v1/health', headers=headers)).status_code == 200
+
+    asyncio.run(verify())
 
 
 def _basic(username: str, password: str) -> str:

@@ -114,13 +114,13 @@ def test_avito_scan_continues_after_manual_gate_in_same_page(tmp_path, monkeypat
                 original_wait = AvitoAdapter._wait_for_recovered_results
                 injected = False
 
-                async def wait_with_new_gate(adapter, current_page, number):
+                async def wait_with_new_gate(adapter, current_page, number, **kwargs):
                     nonlocal injected
                     if not injected:
                         injected = True
                         await current_page.goto(URL)
                         return await current_page.content()
-                    return await original_wait(adapter, current_page, number)
+                    return await original_wait(adapter, current_page, number, **kwargs)
 
                 monkeypatch.setattr(AvitoAdapter, '_wait_for_recovered_results', wait_with_new_gate)
 

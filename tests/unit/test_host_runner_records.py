@@ -116,6 +116,35 @@ def test_busy_lock_cannot_look_like_a_successful_scan(tmp_path):
     assert (tmp_path / 'exit_code.txt').read_text().strip() == '75'
 
 
+def test_resume_forwarded_to_scanner_and_recorded_as_recovery_not_retry(tmp_path):
+    driver = isolated_runner(tmp_path, exit_code=0)
+    scanner = tmp_path / 'scripts/local_scan.sh'
+    scanner.write_text(scanner.read_text().replace('printf "PRIVATE_SCAN_DETAIL\\n"',
+                                                 'printf "PRIVATE_SCAN_DETAIL\\n"\nprintf "%s\\n" "$@"'))
+    result = subprocess.run(['bash', str(driver), '--diagnostic-routing', '--resume-cycle', FIXTURE_CYCLE],
+                            capture_output=True, text=True)
+    assert result.returncode == 0
+    record = next((tmp_path / 'artifacts/host_runs').iterdir())
+    assert '--resume-cycle\n' + FIXTURE_CYCLE in (record / 'host_runner.log').read_text()
+    status = json.loads((record / 'status.json').read_text())
+    assert status['cycle_mode'] == 'checkpoint_recovery'
+    assert status['resume_of_cycle_id'] == FIXTURE_CYCLE
+
+
+@pytest.mark.parametrize('args', [
+    ['--resume-cycle', '../bad'],
+    ['--resume-cycle', FIXTURE_CYCLE, '--retry-cycle', FIXTURE_CYCLE],
+    ['--resume-cycle', FIXTURE_CYCLE, '--preflight'],
+])
+def test_invalid_resume_refuses_before_services_or_scan(tmp_path, args):
+    driver = isolated_runner(tmp_path)
+    result = subprocess.run(['bash', str(driver), *args], capture_output=True, text=True)
+    assert result.returncode == 64
+    record = next((tmp_path / 'artifacts/host_runs').iterdir())
+    assert 'PRIVATE_SCAN_DETAIL' not in (record / 'host_runner.log').read_text()
+    assert 'LOCAL_FIXTURE_SERVICE_DETAIL' not in (record / 'host_runner.log').read_text()
+
+
 def test_targeted_runner_skips_recovery_and_passes_only_one_filter(tmp_path):
     driver = isolated_runner(tmp_path, exit_code=0)
     (tmp_path / 'scripts/recover_open_cycles.py').write_text('raise RuntimeError("recovery must not run")\n')

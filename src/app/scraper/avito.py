@@ -69,7 +69,8 @@ class AvitoAdapter:
             except Exception:
                 pass
 
-    async def _wait_for_recovered_results(self, page, page_number):
+    async def _wait_for_recovered_results(self, page, page_number, *, seller_catalogue=False,
+                                          catalogue_boundary_url=None):
         """Wait for the redirected list, without treating a timer as absence."""
         await page.mouse.wheel(0, 1600)
         await asyncio.sleep(settings.avito_page_delay_seconds)
@@ -78,14 +79,27 @@ class AvitoAdapter:
         loop = asyncio.get_running_loop()
         while True:
             html = await read_page_content(page)
-            hits = self._extract(html, page_number)
-            state, _ = classify_result_page(html, len(hits))
+            body = catalogue_html(html) if seller_catalogue else html
+            hits = self._extract(body, page_number)
+            state, _ = classify_result_page(body, len(hits))
             if state in {'empty', 'blocked'}:
                 return html
             signature = tuple(hit.external_id or hit.url for hit in hits)
-            if state == 'results' and signature == previous:
+            ready = state == 'results'
+            # A dealer preview may intentionally contain no advert DOM cards.
+            # Let the normal, boundary-checked Show all path expand it before
+            # requiring result cards. A counter alone never proves coverage.
+            if (seller_catalogue and catalogue_boundary_url
+                    and seller_page_matches(catalogue_boundary_url, page.url)
+                    and avito_active_catalogue_url(page.url)):
+                show_all = avito_catalogue_show_all_url(html, page.url)
+                counters = seller_catalogue_counters(html, page.url) or {}
+                if show_all and isinstance(counters.get('active'), int):
+                    signature = ('dealer_preview', show_all, counters['active'])
+                    ready = True
+            if ready and signature == previous:
                 return html
-            previous = signature if state == 'results' else None
+            previous = signature if ready else None
             if loop.time() >= next_notice:
                 self._progress('page_wait', page=page_number,
                                wait_reason='post_captcha_rendering', wait_seconds=1)
@@ -187,6 +201,17 @@ class AvitoAdapter:
                                 wait_until='domcontentloaded',
                             )
                         http_status = response.status if response is not None else None
+                        if http_status in {403, 429} and operator_wait_seconds(self.source.value):
+                            # Rate-limit pages may contain no recognisable CAPTCHA.
+                            # Keep this page/filter pending instead of marking the
+                            # entire remaining source as abandoned. Recovery requires
+                            # a fresh main document, never an XHR or stale HTTP 200.
+                            page, response = await wait_for_navigation_recovery(
+                                page, url=url, reopen=reopen, progress=self.progress_callback,
+                                page_number=page_number, request_timeout=self.request_timeout,
+                                document_watcher=document,
+                            )
+                            http_status = response.status if response is not None else None
                         diagnostics[f'page_{page_number}_http_status'] = http_status or 0
                         if http_status is None or http_status < 400:
                             await page.mouse.wheel(0, 1600)
@@ -235,7 +260,9 @@ class AvitoAdapter:
                             page.on('response', recovered_document)
                             try:
                                 while True:
-                                    html = await self._wait_for_recovered_results(page, page_number)
+                                    html = await self._wait_for_recovered_results(
+                                        page, page_number, seller_catalogue=seller_catalogue,
+                                        catalogue_boundary_url=catalogue_boundary_url)
                                     response = latest_response
                                     repeated = await refresh_explicit_captcha(
                                         page, response, html, progress=self.progress_callback,
