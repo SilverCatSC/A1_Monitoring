@@ -2,13 +2,13 @@
 
 import hashlib
 import json
-import re
 from pathlib import Path
 from urllib.parse import urlsplit
 from uuid import UUID
 
 from app.models import EngineType
 from app.scraper.base import canonical_listing_key
+from app.service.feed_photos import usable_feed_gallery
 
 
 def _read_review(evidence_dir, report):
@@ -67,7 +67,13 @@ def load_display_photos(evidence_dir, report):
             row = rows[0]
             if canonical_listing_key(EngineType.AVITO, entry['url']) != 'avito:' + row.get('AvitoId', ''):
                 continue
-            images = re.findall(r'https://[^\s<>"|]+', row.get('ImageUrls') or '')
+            rows_in_sheet = snapshot['rows_by_sheet'].get(entry['feed_sheet'], [])
+            if row not in rows_in_sheet:
+                continue
+            row_number = rows_in_sheet.index(row) + snapshot.get('first_data_rows', {}).get(entry['feed_sheet'], 4)
+            values = snapshot.get('feed_structure', {}).get(entry['feed_sheet'], {}).get(
+                'field_values', {}).get(str(row_number), {}).get('ImageUrls', [row.get('ImageUrls') or ''])
+            images = usable_feed_gallery(values)
             image = urlsplit(entry['image_url'])
             if (entry['image_url'] not in images or image.hostname != 'storage.yandexcloud.net'
                     or not image.path.startswith('/a1autofeed/') or image.username or image.password

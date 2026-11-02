@@ -50,6 +50,17 @@ def test_exact_published_id_extracts_photo_without_marketing_row_or_vin(source):
     assert (review, observed, snapshot) == before
 
 
+@pytest.mark.parametrize('other', ['', 'http://avito.ru/autoload/1/items-to-feed/images?imageSlug=/image/1/example',
+                                  'https://unapproved.example/photo.jpg'])
+def test_repeated_feed_blocks_keep_one_approved_gallery(other):
+    review, observed, snapshot = fixture()
+    snapshot.rows_by_sheet['avito-feed-used'][0]['ImageUrls'] = ''
+    snapshot.feed_structure['avito-feed-used'] = {
+        'field_values': {'4': {'ImageUrls': [other, PNG_IMAGE]}}}
+    photos = feed_photo_candidates(review, observed, snapshot)
+    assert len(photos) == 1 and photos[0]['gallery_urls'] == [PNG_IMAGE]
+
+
 @pytest.mark.parametrize('problem', ['missing_id', 'expected_id_only', 'duplicate_feed', 'other_source_only',
                                      'platform_mismatch', 'platform_shared', 'conflict', 'ambiguous_gallery'])
 def test_no_photo_identity_inference_or_ambiguous_feed_choice(problem):

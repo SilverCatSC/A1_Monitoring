@@ -42,6 +42,21 @@ def safe_feed_photo_url(url):
         return False
 
 
+def usable_feed_gallery(values):
+    """Ignore unusable transport links, but never choose between public galleries.
+
+    Repeated feed blocks may contain Avito's HTTP autoload proxy in one block
+    and the original HTTPS images in another. Only approved image origins are
+    display candidates; two different approved galleries remain ambiguous.
+    """
+    galleries = [list(dict.fromkeys(url for url in re.findall(r'https://[^\s<>"|]+', text or '')
+                                   if safe_feed_photo_url(url))) for text in values]
+    galleries = [gallery for gallery in galleries if gallery]
+    if not galleries or any(gallery != galleries[0] for gallery in galleries[1:]):
+        return []
+    return galleries[0]
+
+
 def feed_photo_candidates(review, observed_cards, snapshot):
     """Exact source-specific UID row only; marketing rows and VIN are unnecessary."""
     conflicts = set(workbook_identity_conflicts(snapshot)) | report_identity_conflicts(review)
@@ -79,10 +94,7 @@ def feed_photo_candidates(review, observed_cards, snapshot):
                     or len(owners) > 1 or (owners and owners[0].get('Id', '').strip() != uid)):
                 continue
         values = snapshot.field_values(sheet, number, image_field, row.get(image_field) or '')
-        galleries = [list(dict.fromkeys(re.findall(r'https://[^\s<>"|]+', text or ''))) for text in values]
-        if not galleries or any(gallery != galleries[0] for gallery in galleries[1:]):
-            continue
-        images = [image for image in galleries[0] if safe_feed_photo_url(image)]
+        images = usable_feed_gallery(values)
         if not images:
             continue
         columns = list(row)
