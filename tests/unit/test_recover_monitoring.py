@@ -2,6 +2,7 @@ import hashlib
 import json
 import sys
 
+import pytest
 from test_search_followup import fixture
 
 from scripts.recover_monitoring import execute_recovery, latest_run, recovery_plan
@@ -9,9 +10,9 @@ from scripts.recover_monitoring import execute_recovery, latest_run, recovery_pl
 CID = 'be539954-0799-4961-8057-a636be7b6ad7'
 
 
-def project(tmp_path):
+def project(tmp_path, source='avito'):
     root = tmp_path / 'project'
-    evidence, base, report, batch = fixture(root / 'artifacts')
+    evidence, base, report, batch = fixture(root / 'artifacts', source)
     renamed = base.with_name(CID)
     base.rename(renamed)
     base = renamed
@@ -33,12 +34,13 @@ def project(tmp_path):
     return root, base, batch
 
 
-def test_one_action_runs_only_missing_search_and_automatically_updates_report(tmp_path, capsys):
-    root, base, batch = project(tmp_path)
+@pytest.mark.parametrize('source,key', [('avito', 'avito_sprinter_all'), ('auto_ru', 'auto_range_rover_new')])
+def test_one_action_runs_only_missing_search_and_automatically_updates_report(tmp_path, capsys, source, key):
+    root, base, batch = project(tmp_path, source)
     plan = recovery_plan(root, latest_run(root))
     assert plan['kind'] == 'search_only'
-    assert plan['filter_keys'] == ['avito_sprinter_all']
-    assert plan['arguments'][plan['arguments'].index('--engines') + 1] == 'avito'
+    assert plan['filter_keys'] == [key]
+    assert plan['arguments'][plan['arguments'].index('--engines') + 1] == source
     assert '--resume-cycle' not in plan['arguments']
     before = (base / 'placement_reconciliation.json').read_bytes()
     # A fixture child replaces live Chrome. Real publication/validation code runs.

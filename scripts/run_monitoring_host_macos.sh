@@ -76,7 +76,7 @@ It cannot be combined with scan parameters.
 --placement-identity is a compatibility flag; ID link synchronization now runs
 before search in every full cycle.
 
---search-only <canonical-key[,canonical-key...]> runs only selected Avito searches,
+--search-only <canonical-key[,canonical-key...]> runs selected Avito searches or Auto.ru Range Rover,
 up to five pages. It saves host_runs/<run>/search_result.json, skips catalogue/card scans
 and database cycle creation, and retains the GUI, kernel lock and routing gates.
 
@@ -222,12 +222,15 @@ parse_arguments() {
         IFS=',' read -r -a targeted_keys <<< "$SEARCH_ONLY"
         for targeted_key in "${targeted_keys[@]}"; do
             case "$targeted_key" in
-                avito_voyah_dream_all|avito_sprinter_all|avito_v_class_all|avito_zeekr_9x_new|avito_range_rover_new|avito_hongqi_hq9_new|avito_maybach_s_new|avito_maextro_s800_new) ;;
+                avito_voyah_dream_all|avito_sprinter_all|avito_v_class_all|avito_zeekr_9x_new|avito_range_rover_new|avito_hongqi_hq9_new|avito_maybach_s_new|avito_maextro_s800_new|auto_range_rover_new) ;;
                 *) safe_message 'HOST_RUNNER_REFUSED reason=unknown_targeted_filter'; exit 64 ;;
             esac
         done
-        if [[ "$ENGINES_WAS_SET" -eq 0 ]]; then ENGINES='avito'; fi
-        [[ "$ENGINES" == 'avito' && -z "$RETRY_CYCLE_ID" && "$WITH_PLACEMENT_ID" -eq 0 ]] || {
+        local targeted_engine='avito'
+        if [[ "$SEARCH_ONLY" == 'auto_range_rover_new' ]]; then targeted_engine='auto_ru'; fi
+        if [[ "$ENGINES_WAS_SET" -eq 0 ]]; then ENGINES="$targeted_engine"; fi
+        [[ "$ENGINES" == "$targeted_engine" && -z "$RETRY_CYCLE_ID" && "$WITH_PLACEMENT_ID" -eq 0 ]] \
+            && { [[ "$SEARCH_ONLY" != *auto_* ]] || [[ "$SEARCH_ONLY" == 'auto_range_rover_new' ]]; } || {
             safe_message 'HOST_RUNNER_REFUSED reason=conflicting_targeted_search_parameters'; exit 64;
         }
     fi

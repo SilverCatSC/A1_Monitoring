@@ -10,25 +10,26 @@ from app.service.search_followup import apply_search_followup, save_search_follo
 from app.service.targeted_search import targeted_filter
 
 
-def fixture(tmp_path):
+def fixture(tmp_path, source='avito'):
     root = tmp_path / 'evidence'
     base = root / 'cycles/cycle'
     base.mkdir(parents=True)
-    definition = targeted_filter('avito_sprinter_all')
-    url = 'https://www.avito.ru/moskva/avtomobili/mercedes-benz_sprinter_1234567890'
+    definition = targeted_filter('avito_sprinter_all' if source == 'avito' else 'auto_range_rover_new')
+    url = ('https://www.avito.ru/moskva/avtomobili/mercedes-benz_sprinter_1234567890' if source == 'avito'
+           else 'https://auto.ru/cars/new/group/land_rover/range_rover/23093220/23093400/1111111111-abcdef12/')
     report = {'cycle_id': 'cycle', 'created_at_utc': '2026-10-30T08:00:00+00:00',
-              'findings': [], 'observed_cards': [{'source': 'avito', 'url': url, 'state': 'active',
+              'findings': [], 'observed_cards': [{'source': source, 'url': url, 'state': 'active',
                   'unique_id': 'MBSP011220262209260037', 'card': {'price': 41500000},
                   'search_positions': [{'label': 'Поиск не завершён'}]}]}
     raw = json.dumps(report).encode()
     (base / 'placement_reconciliation.json').write_bytes(raw)
-    entry = {'source': 'avito', 'filter_id': 'sprinter', 'url': definition.url, 'pages_limit': 5,
+    entry = {'source': source, 'filter_id': 'filter', 'url': definition.url, 'pages_limit': 5,
              'version': 1, 'result': {'complete': False, 'hits': [], 'page_count': 0}}
     (base / 'search_collection.json').write_text(json.dumps({'cycle_id': 'cycle', 'results': [entry]}))
     image = root / 'search.png'
     image.write_bytes(b'fixture screenshot')
     stamp = '2026-10-30T09:00:00+00:00'
-    manifest = {'schema_version': EVIDENCE_SCHEMA_VERSION, 'source': 'avito', 'purpose': 'search_page',
+    manifest = {'schema_version': EVIDENCE_SCHEMA_VERSION, 'source': source, 'purpose': 'search_page',
                 'page_number': 1, 'screenshot_file': image.name, 'screenshot_bytes': image.stat().st_size,
                 'screenshot_sha256': hashlib.sha256(image.read_bytes()).hexdigest(), 'captured_at': stamp,
                 'requested_url_sha256': hashlib.sha256(definition.url.encode()).hexdigest(),
@@ -38,7 +39,7 @@ def fixture(tmp_path):
               'scanned_at': stamp, 'hits': [{'url': url, 'page_number': 1, 'position': 7}],
               'diagnostics': {'page_1_evidence': image.name, 'page_1_http_status': 200,
                               'page_1_final_url': definition.url}}
-    record = {'kind': 'targeted_search', 'filter_key': definition.key, 'source': 'avito',
+    record = {'kind': 'targeted_search', 'filter_key': definition.key, 'source': source,
               'url': definition.url, 'pages_limit': 5, 'scope_errors': [],
               'writes_monitoring_cycle': False, 'created_at_utc': stamp, 'result': result}
     batch = tmp_path / 'batch.json'
@@ -47,8 +48,9 @@ def fixture(tmp_path):
     return root, base, report, batch
 
 
-def test_followup_updates_positions_without_altering_identity_or_original_files(tmp_path):
-    root, base, report, batch = fixture(tmp_path)
+@pytest.mark.parametrize('source', ['avito', 'auto_ru'])
+def test_followup_updates_positions_without_altering_identity_or_original_files(tmp_path, source):
+    root, base, report, batch = fixture(tmp_path, source)
     before = {p.name: p.read_bytes() for p in base.iterdir()}
     view = save_search_followup(base / 'placement_reconciliation.json', batch, root)
     assert all((base / name).read_bytes() == raw for name, raw in before.items())
@@ -64,6 +66,32 @@ def test_followup_updates_positions_without_altering_identity_or_original_files(
     # The HTML route projects the original collection again after reading.
     add_catalogue_visibility(readback, root)
     assert readback == view
+
+
+@pytest.mark.parametrize('change', ['radius', 'catalog', 'destination', 'source'])
+def test_autoru_followup_rejects_changed_scope_or_wrong_platform(tmp_path, change):
+    root, base, _, batch = fixture(tmp_path, 'auto_ru')
+    value = json.loads(batch.read_text())
+    record = value['records'][0]
+    if change == 'source':
+        record['source'] = 'avito'
+    else:
+        final = record['url']
+        if change == 'radius':
+            final = final.replace('geo_radius=0', 'geo_radius=100')
+        elif change == 'catalog':
+            final = final.replace('tech_param%3D23789468', 'tech_param%3D999')
+        else:
+            final = final.replace('/23093220-23093279/', '/')
+        record['result']['diagnostics']['page_1_final_url'] = final
+        manifest_path = root / evidence_manifest_name('search.png')
+        manifest = json.loads(manifest_path.read_text())
+        manifest['final_url_sha256'] = hashlib.sha256(final.encode()).hexdigest()
+        manifest_path.write_text(json.dumps(manifest))
+    batch.write_text(json.dumps(value))
+    with pytest.raises(ValueError):
+        save_search_followup(base / 'placement_reconciliation.json', batch, root)
+    assert not (base / 'search_followup/ready.json').exists()
 
 
 @pytest.mark.parametrize('damage', ['base_hash', 'screenshot', 'already_complete', 'wrong_radius', 'incomplete'])

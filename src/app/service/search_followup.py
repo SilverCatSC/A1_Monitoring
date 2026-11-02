@@ -7,12 +7,11 @@ import json
 from datetime import datetime
 from pathlib import Path
 
-from app.scraper.result_scope import avito_model_search_scope_problem
 from app.service.artifact_bundle import publish_bundle, verify_bundle
 from app.service.catalogue_visibility import add_catalogue_visibility
 from app.service.evidence import read_evidence_manifest
 from app.service.filters import normalize_search_url
-from app.service.targeted_search import targeted_filter
+from app.service.targeted_search import targeted_filter, targeted_scope_problem
 
 
 def _read(path, root):
@@ -43,7 +42,7 @@ def apply_search_followup(report, root, *, original_raw=None, payload=None):
     if collection.get('cycle_id') != report['cycle_id']:
         raise ValueError('search collection belongs to another cycle')
     records = payload.get('records')
-    if not isinstance(records, list) or not records or len(records) > 8:
+    if not isinstance(records, list) or not records or len(records) > 9:
         raise ValueError('invalid targeted batch')
     seen = set()
     for record in records:
@@ -53,7 +52,7 @@ def apply_search_followup(report, root, *, original_raw=None, payload=None):
         seen.add(record['filter_key'])
         result = record['result']
         count, limit = result['page_count'], record['pages_limit']
-        if (record.get('kind') != 'targeted_search' or record.get('source') != 'avito'
+        if (record.get('kind') != 'targeted_search' or record.get('source') != definition.source.value
                 or record.get('writes_monitoring_cycle') is not False or record.get('scope_errors') != []
                 or record['url'] != definition.url or result.get('complete') is not True or result.get('error')
                 or type(count) is not int or type(limit) is not int or not 1 <= count <= limit <= 5
@@ -63,7 +62,7 @@ def apply_search_followup(report, root, *, original_raw=None, payload=None):
         original = datetime.fromisoformat(report['created_at_utc'])
         if captured.tzinfo is None or captured < original:
             raise ValueError('follow-up predates the report')
-        matches = [e for e in collection['results'] if e['source'] == 'avito'
+        matches = [e for e in collection['results'] if e['source'] == definition.source.value
                    and normalize_search_url(e['url']) == normalize_search_url(record['url'])]
         if len(matches) != 1 or matches[0]['result']['complete'] or matches[0]['pages_limit'] != limit:
             raise ValueError('follow-up must replace only a missing search')
@@ -71,12 +70,12 @@ def apply_search_followup(report, root, *, original_raw=None, payload=None):
         for page in range(1, count + 1):
             manifest = read_evidence_manifest(diagnostics.get(f'page_{page}_evidence'), str(root))
             final = diagnostics.get(f'page_{page}_final_url', '')
-            if (manifest.get('source') != 'avito' or manifest.get('purpose') != 'search_page'
+            if (manifest.get('source') != definition.source.value or manifest.get('purpose') != 'search_page'
                     or manifest.get('page_number') != page or manifest.get('http_status') != 200
                     or diagnostics.get(f'page_{page}_http_status') != 200
                     or manifest.get('requested_url_sha256') != hashlib.sha256(record['url'].encode()).hexdigest()
                     or manifest.get('final_url_sha256') != hashlib.sha256(final.encode()).hexdigest()
-                    or avito_model_search_scope_problem(record['url'], final)):
+                    or targeted_scope_problem(definition, final)):
                 raise ValueError('follow-up page evidence is not verified')
         if any(type(hit.get('page_number')) is not int or not 1 <= hit['page_number'] <= count
                or type(hit.get('position')) is not int or hit['position'] < 1 for hit in result['hits']):
@@ -84,8 +83,9 @@ def apply_search_followup(report, root, *, original_raw=None, payload=None):
         matches[0]['result'] = result
     working = copy.deepcopy(report)
     add_catalogue_visibility(working, root, collection=collection)
+    sources = {record['source'] for record in records}
     for current, revised in zip(report['observed_cards'], working['observed_cards'], strict=True):
-        if current['source'] == 'avito':
+        if current['source'] in sources:
             current['original_search_positions'] = copy.deepcopy(current.get('search_positions', []))
             current['search_positions'] = revised.get('search_positions', [])
             for position in current['search_positions']:

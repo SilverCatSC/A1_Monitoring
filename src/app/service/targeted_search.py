@@ -8,6 +8,7 @@ import os
 import re
 from datetime import UTC, datetime
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 from uuid import uuid4
 
 from app.models import EngineType
@@ -16,7 +17,23 @@ from app.scraper.result_scope import avito_model_search_scope_problem
 from app.service.filters import CANONICAL_FILTERS
 from app.service.placement_identity import placement_id_from_description
 
-TARGETED_FILTER_KEYS = tuple(item.key for item in CANONICAL_FILTERS if item.source == EngineType.AVITO)
+TARGETED_FILTER_KEYS = tuple(item.key for item in CANONICAL_FILTERS
+                            if item.source == EngineType.AVITO or item.key == 'auto_range_rover_new')
+
+
+def targeted_scope_problem(definition, final_url):
+    if definition.source == EngineType.AVITO:
+        return avito_model_search_scope_problem(definition.url, final_url)
+    before, after = urlsplit(definition.url), urlsplit(final_url)
+    if (after.scheme != 'https' or after.hostname not in {'auto.ru', 'www.auto.ru'}
+            or after.username or after.password or after.port):
+        return 'unexpected_destination'
+    if before.path.rstrip('/') != after.path.rstrip('/'):
+        return 'model_filter_lost'
+    expected, actual = parse_qs(before.query), parse_qs(after.query)
+    if any(actual.get(key) != value for key, value in expected.items() if key not in {'page', 'output_type'}):
+        return 'search_filter_lost'
+    return None
 
 
 def targeted_keys(value):
@@ -43,8 +60,7 @@ def save_targeted_search(key, result, *, pages, output_path, evidence_dir):
                  if (match := re.fullmatch(r'page_(\d+)_final_url', key))}
     attempted.update(range(1, int(result.get('page_count', 0)) + 1))
     for page in sorted(attempted):
-        if avito_model_search_scope_problem(
-                definition.url, str(diagnostics.get(f'page_{page}_final_url') or '')):
+        if targeted_scope_problem(definition, str(diagnostics.get(f'page_{page}_final_url') or '')):
             scope_errors.append(f'page_{page}_filter_scope_unverified')
     if result.get('complete') and not result.get('page_count'):
         scope_errors.append('no_search_page_verified')

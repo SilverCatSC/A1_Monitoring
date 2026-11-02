@@ -359,8 +359,11 @@ def main() -> int:
         raise RuntimeError('retry-cycle cannot be combined with probe-url')
     if args.search_only and (args.probe_url or args.retry_cycle or args.watch or args.placement_identity):
         raise RuntimeError('search-only cannot be combined with probe, retry, watch, or placement identity')
-    if args.search_only and (args.engines != 'avito' or args.pages > 5 or not args.search_result):
-        raise RuntimeError('search-only requires --engines avito, up to five pages and --search-result')
+    if args.search_only:
+        from app.service.targeted_search import targeted_filter, targeted_keys
+        sources = {targeted_filter(key).source.value for key in targeted_keys(args.search_only)}
+        if sources != {args.engines} or args.pages > 5 or not args.search_result:
+            raise RuntimeError('search-only requires one matching engine, up to five pages and --search-result')
     if args.search_result and not args.search_only:
         raise RuntimeError('search-result requires search-only')
     if args.diagnostic_no_vpn and args.diagnostic_routing:

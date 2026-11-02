@@ -145,7 +145,8 @@ def test_invalid_resume_refuses_before_services_or_scan(tmp_path, args):
     assert 'LOCAL_FIXTURE_SERVICE_DETAIL' not in (record / 'host_runner.log').read_text()
 
 
-def test_targeted_runner_skips_recovery_and_passes_only_one_filter(tmp_path):
+@pytest.mark.parametrize('key,engine', [('avito_voyah_dream_all', 'avito'), ('auto_range_rover_new', 'auto_ru')])
+def test_targeted_runner_skips_recovery_and_passes_only_one_filter(tmp_path, key, engine):
     driver = isolated_runner(tmp_path, exit_code=0)
     (tmp_path / 'scripts/recover_open_cycles.py').write_text('raise RuntimeError("recovery must not run")\n')
     capture = tmp_path / 'child_args.json'
@@ -157,11 +158,11 @@ def test_targeted_runner_skips_recovery_and_passes_only_one_filter(tmp_path):
         + f'Path({str(capture)!r}).write_text(json.dumps(sys.argv[1:]))\n'
         + 'Path(sys.argv[sys.argv.index("--search-result")+1]).write_text("{}")\n')
     result = subprocess.run(['bash', str(driver), '--diagnostic-routing', '--search-only',
-                             'avito_voyah_dream_all', '--pages', '5'], capture_output=True, text=True)
+                             key, '--pages', '5'], capture_output=True, text=True)
     assert result.returncode == 0
     arguments = json.loads(capture.read_text())
-    assert arguments[arguments.index('--search-only') + 1] == 'avito_voyah_dream_all'
-    assert arguments[arguments.index('--engines') + 1] == 'avito'
+    assert arguments[arguments.index('--search-only') + 1] == key
+    assert arguments[arguments.index('--engines') + 1] == engine
     assert '--retry-cycle' not in arguments
     record = next((tmp_path / 'artifacts/host_runs').iterdir())
     status = json.loads((record / 'status.json').read_text())

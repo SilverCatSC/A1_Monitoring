@@ -23,8 +23,7 @@ def add_catalogue_visibility(report, evidence_dir, *, collection=None):
     if collection.get('cycle_id') != report['cycle_id']:
         return report
     for card in report['observed_cards']:
-        if (report.get('search_followup') and card.get('source') == 'avito'
-                and 'original_search_positions' in card):
+        if report.get('search_followup') and 'original_search_positions' in card:
             # Dashboard readback also projects the historical search collection.
             # Do not overwrite a validated, dated supplement with that old gap.
             continue

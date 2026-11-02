@@ -113,7 +113,8 @@ def test_local_scan_defaults_to_cautious_pacing(monkeypatch, tmp_path):
 
 
 @pytest.mark.parametrize('keys', ['avito_voyah_dream_all',
-                                 'avito_sprinter_all,avito_v_class_all,avito_zeekr_9x_new'])
+                                 'avito_sprinter_all,avito_v_class_all,avito_zeekr_9x_new',
+                                 'auto_range_rover_new'])
 def test_voyah_search_only_calls_one_search_without_opening_database(monkeypatch, tmp_path, keys):
     from app.service.targeted_search import targeted_filter
 
@@ -137,7 +138,8 @@ def test_voyah_search_only_calls_one_search_without_opening_database(monkeypatch
                 *local_scan.PACING_PROFILES['cautious']):
         monkeypatch.delenv(key, raising=False)
     monkeypatch.setattr('sys.argv', ['local_scan.py', '--search-only', keys,
-                                    '--engines', 'avito', '--pages', '5', '--diagnostic-routing',
+                                    '--engines', targeted_filter(keys.split(',')[0]).source.value,
+                                    '--pages', '5', '--diagnostic-routing',
                                     '--search-result', str(output), '--evidence-dir', str(tmp_path / 'evidence')])
     assert local_scan.main() == 0
     assert calls == ['host-gate', *[(targeted_filter(key).url, 5) for key in keys.split(',')]]

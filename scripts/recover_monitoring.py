@@ -54,7 +54,9 @@ def recovery_plan(root, run):
                and normalize_search_url(e['url']) not in resolved]
     incomplete_cards = (report.get('blocked_sources') or any(report.get('skipped_cards_by_source', {}).values())
                         or any(v is not True for v in report.get('catalogue_enumeration_complete', {}).values()))
-    if incomplete_cards or any(e['source'] != 'avito' for e in missing):
+    supported = {normalize_search_url(targeted_filter(key).url) for key in TARGETED_FILTER_KEYS}
+    if incomplete_cards or any(normalize_search_url(e['url']) not in supported for e in missing) \
+            or len({e['source'] for e in missing}) > 1:
         return {'kind': 'resume', 'cycle_id': identity, 'arguments': common + ['--resume-cycle', identity]}
     keys = []
     for entry in missing:
@@ -66,7 +68,7 @@ def recovery_plan(root, run):
     if not keys:
         return {'kind': 'nothing', 'cycle_id': identity, 'arguments': []}
     return {'kind': 'search_only', 'cycle_id': identity, 'filter_keys': keys,
-            'arguments': ([network] if network else []) + ['--engines', 'avito', '--search-only', ','.join(keys),
+            'arguments': ([network] if network else []) + ['--engines', missing[0]['source'], '--search-only', ','.join(keys),
                           '--pages', str(run.get('pages', 5)), '--captcha-wait-seconds', '-1',
                           '--pace', run.get('pace', 'normal')]}
 
