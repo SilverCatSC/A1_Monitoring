@@ -76,6 +76,8 @@ def execute_recovery(root, *, runner=None):
     plan = recovery_plan(root, latest_run(root))
     if plan['kind'] == 'nothing':
         print('RECOVERY_NOT_NEEDED All technical checks in this report are already finished. Data findings remain in the report.')
+        from scripts.publish_shared_dashboard import announce_publication
+        announce_publication(root, plan['cycle_id'])
         return 0
     print('RECOVERY_PLAN ' + json.dumps(plan), flush=True)
     command = runner or [str(root / 'scripts/run_monitoring_host_macos.sh')]
@@ -110,6 +112,8 @@ def execute_recovery(root, *, runner=None):
     port = int(env_values(root).get('APP_BIND_PORT', '8000'))
     print(f'RECOVERY_REPORT_UPDATED http://127.0.0.1:{port}/api/v1/dashboard/placement-identity'
           f'?cycle_id={plan["cycle_id"]}#marketing-summary', flush=True)
+    from scripts.publish_shared_dashboard import announce_publication
+    announce_publication(root, plan['cycle_id'], batch.parent)
     return 0
 
 

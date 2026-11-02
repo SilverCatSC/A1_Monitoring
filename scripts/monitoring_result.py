@@ -57,6 +57,8 @@ def main():
     result = publish_result(root, Path(args.run_directory), args.cycle_id, args.exit_code)
     if result.get('report_url'):
         print('HOST_RUNNER_REPORT_URL ' + result['report_url'])
+        from scripts.publish_shared_dashboard import announce_publication
+        announce_publication(root, args.cycle_id, Path(args.run_directory))
     else:
         print('HOST_RUNNER_REPORT_UNAVAILABLE report_not_generated')
         print('HOST_RUNNER_STATUS_URL ' + result['status_url'])

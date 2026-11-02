@@ -33,7 +33,17 @@ def public_url(value: str, *, image: bool = False) -> bool:
     return parsed.hostname in LINK_HOSTS
 
 
-def project_html(html: str) -> tuple[str, str]:
+def scan_time(html: str) -> str:
+    source = BeautifulSoup(html, 'html.parser')
+    time = source.select_one('#business-review [data-monitor-time]')
+    value = time.get('data-monitor-time', '') if time else ''
+    parsed = datetime.fromisoformat(value.replace('Z', '+00:00'))
+    if parsed.tzinfo is None:
+        raise ValueError('Scan time must include a timezone')
+    return parsed.astimezone(UTC).isoformat()
+
+
+def project_html(html: str, *, checks: list[str] | None = None) -> tuple[str, str]:
     source = BeautifulSoup(html, 'html.parser')
     report_link = source.select_one('a[href$="/placement-report"]')
     match = re.fullmatch(r'/api/v1/status/cycles/([0-9a-f-]{36})/placement-report',
@@ -60,6 +70,18 @@ def project_html(html: str) -> tuple[str, str]:
                            'Он не обновляется в реальном времени. Даты наблюдений и ограничения указаны ниже. '
                            'Непроверенное объявление не считается неактивным.</p>', 'html.parser')
     page.main.extend(list(header.contents))
+    timestamp = source.select_one('#business-review [data-monitor-time]')
+    if timestamp:
+        status = page.new_tag('section', attrs={'class': 'coverage-status', 'id': 'publication-status',
+                                               'role': 'note', 'aria-label': 'Дата и полнота проверки'})
+        label = page.new_tag('p')
+        label.string = 'Дата проверки (UTC): ' + scan_time(html).replace('T', ' ').replace('+00:00', '')
+        status.append(label)
+        for text in checks or []:
+            item = page.new_tag('p')
+            item.string = text
+            status.append(item)
+        page.main.append(status)
     for selector in SECTIONS:
         page.main.append(source.select_one(selector).extract())
     # No raw evidence, workbook links/cell coordinates, internal JSON or operational controls.
@@ -91,19 +113,26 @@ def project_html(html: str) -> tuple[str, str]:
     for comment in page.find_all(string=lambda value: isinstance(value, Comment)):
         comment.extract()
     footer = page.new_tag('footer', attrs={'class': 'app-footer'})
-    footer.string = f'А1 АВТО · Снимок проверки {cycle_id} · Публикуется вручную после мониторинга.'
+    footer.string = f'А1 АВТО · Снимок проверки {cycle_id} · Обновляется после завершения мониторинга.'
     page.main.append(footer)
     page.body.append(page.new_tag('script', src='static/monitoring.js', defer=''))
     return str(page), cycle_id
 
 
-def export(base_url: str, output: Path) -> dict:
+def export(base_url: str, output: Path, *, cycle_id: str | None = None,
+           checks: list[str] | None = None) -> dict:
     # Local dashboard is the only request. No scan, mutation or remote workbook fetch.
     if urlsplit(base_url).hostname not in {'127.0.0.1', 'localhost'}:
         raise ValueError('Export requires the local monitoring app')
-    with urlopen(base_url.rstrip('/') + '/api/v1/dashboard/placement-identity', timeout=60) as response:
+    if cycle_id and not re.fullmatch(r'[0-9a-f-]{36}', cycle_id):
+        raise ValueError('Invalid cycle identifier')
+    query = '?cycle_id=' + cycle_id if cycle_id else ''
+    with urlopen(base_url.rstrip('/') + '/api/v1/dashboard/placement-identity' + query, timeout=60) as response:
         raw = response.read().decode('utf-8')
-    html, cycle_id = project_html(raw)
+    html, actual_id = project_html(raw, checks=checks)
+    if cycle_id and cycle_id != actual_id:
+        raise ValueError('Rendered report belongs to another cycle')
+    cycle_id = actual_id
     if output.exists():
         raise ValueError('Use a new output directory; existing snapshots are never overwritten')
     output.mkdir(parents=True)
@@ -127,6 +156,7 @@ def export(base_url: str, output: Path) -> dict:
     (output / 'index.html').write_text(html, encoding='utf-8')
     (output / '.nojekyll').touch()
     manifest = {'schema_version': 1, 'scope': 'public-vehicle-dashboard', 'cycle_id': cycle_id,
+                'scan_at_utc': scan_time(raw), 'incomplete_checks': checks or [],
                 'published_at_utc': datetime.now(UTC).isoformat(), 'read_only': True,
                 'contains_vehicle_details': True, 'live_updates': False,
                 'files': {str(p.relative_to(output)): hashlib.sha256(p.read_bytes()).hexdigest()
