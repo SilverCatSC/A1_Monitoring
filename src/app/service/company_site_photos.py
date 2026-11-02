@@ -91,3 +91,47 @@ def apply_company_photo(tile, index):
     tile['image_source'] = 'Фото с A1auto.ru'
     tile['image_source_url'] = entry['page_url']
     tile['image_captured_at'] = entry.get('captured_at_utc')
+
+
+def apply_marketing_illustration(tile, index, cycle_id):
+    """Reviewed model illustrations; never proof of advert identity or stock.
+
+    Future rows must retain the explicit marketing media link. Older snapshots
+    can only use a separately reviewed target in that exact cycle. No title,
+    price or VIN matching is used to assign an illustration.
+    """
+    from app.service.feed_photos import safe_feed_photo_url
+
+    if tile.get('image'):
+        return
+    sources = set(tile.get('photo_source_urls') or [])
+    if tile.get('website_url'):
+        sources.add(tile['website_url'])
+    matches = []
+    for entry in index.get('illustrations', []):
+        if not isinstance(entry, dict) or entry.get('basis') != 'reviewed_marketing_material':
+            continue
+        if not safe_feed_photo_url(entry.get('image_url')):
+            continue
+        source = entry.get('source_url')
+        try:
+            parsed = urlsplit(source or '')
+            allowed = safe_page_url(source) or (
+                parsed.scheme == 'https' and parsed.hostname == 'disk.yandex.ru'
+                and parsed.path.startswith('/d/') and not parsed.username
+                and not parsed.password and parsed.port in {None, 443})
+        except ValueError:
+            allowed = False
+        if not allowed:
+            continue
+        reviewed = any(t.get('cycle_id') == cycle_id and t.get('key') == tile.get('key')
+                       for t in entry.get('reviewed_targets', []) if isinstance(t, dict))
+        if (source and source in sources) or reviewed:
+            matches.append(entry)
+    if len(matches) != 1:
+        return
+    entry = matches[0]
+    tile.update(image=entry['image_url'], image_source='Иллюстрация модели',
+                image_source_url=entry.get('source_url'),
+                image_captured_at=entry.get('captured_at_utc'),
+                image_note='Иллюстрация модели на заказ, не фото подтверждённого экземпляра в наличии.')

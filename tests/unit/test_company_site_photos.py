@@ -79,3 +79,33 @@ def test_missing_and_invalid_photo_index_fail_closed(tmp_path):
     target.write_text(json.dumps(index()))
     p.symlink_to(target)
     assert read_company_photo_index(tmp_path) == {}
+
+
+def test_reviewed_model_illustration_is_not_an_identity_join():
+    from app.service.company_site_photos import apply_marketing_illustration
+    tile = {'key': 'marketing:12', 'marketing_row': 12, 'unique_id': None, 'vin': '',
+            'platforms': [{'source': 'auto_ru', 'state': 'unknown'}]}
+    before = copy.deepcopy(tile)
+    entry = {'basis': 'reviewed_marketing_material', 'source_url': PAGE, 'image_url': PHOTO,
+             'reviewed_targets': [{'cycle_id': 'original', 'key': 'marketing:12'}]}
+    data = {'illustrations': [entry]}
+    apply_marketing_illustration(tile, data, 'other-cycle')
+    assert tile == before
+    apply_marketing_illustration(tile, data, 'original')
+    assert tile['image'] == PHOTO and tile['image_source'] == 'Иллюстрация модели'
+    assert tile['unique_id'] is None and tile['vin'] == ''
+    assert tile['platforms'] == before['platforms']
+    future = {**before, 'key': 'marketing:22', 'website_url': PAGE}
+    apply_marketing_illustration(future, data, 'future-cycle')
+    assert future['image'] == PHOTO
+
+
+def test_illustration_cannot_override_verified_image_or_choose_ambiguous_source():
+    from app.service.company_site_photos import apply_marketing_illustration
+    entry = {'basis': 'reviewed_marketing_material', 'source_url': PAGE, 'image_url': PHOTO}
+    tile = {'key': 'x', 'website_url': PAGE, 'image': 'verified.jpg'}
+    apply_marketing_illustration(tile, {'illustrations': [entry]}, 'cycle')
+    assert tile['image'] == 'verified.jpg'
+    tile['image'] = None
+    apply_marketing_illustration(tile, {'illustrations': [entry, entry]}, 'cycle')
+    assert tile['image'] is None

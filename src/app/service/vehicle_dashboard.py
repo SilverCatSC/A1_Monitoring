@@ -5,7 +5,7 @@ from collections import defaultdict
 
 from app.models import EngineType
 from app.scraper.base import canonical_listing_key, evidence_manifest_name, is_marketplace_listing_url
-from app.service.company_site_photos import apply_company_photo
+from app.service.company_site_photos import apply_company_photo, apply_marketing_illustration
 from app.service.coverage import absence_proven
 from app.service.feed_photos import safe_feed_photo_url
 from app.service.monitoring_digest import _link
@@ -69,6 +69,8 @@ def marketing_vehicle_snapshot(snapshot, verified_cards=()):
             'vin': row[10], 'price': row[11], 'year': row[12], 'mileage': row[13],
             'owners': row[14], 'responsible': row[4], 'marketing_status': row[5],
             'marketing_row': number, 'image': next((u for u in images if _link(u)), None) if uid else None,
+            'website_url': _link(row[25]),
+            'photo_source_urls': re.findall(r'https://[^\s<>"|]+', row[0]),
             'expected_urls': {'auto_ru': _link(row[22]), 'avito': _link(row[23])},
             'invalid_urls': {source: str(value) for source, value in [('auto_ru', row[22]), ('avito', row[23])]
                              if str(value).strip() and not (_link(value) and is_marketplace_listing_url(EngineType(source), value))},
@@ -193,8 +195,9 @@ def vehicle_dashboard(report, *, apply_brief=True, photo_index=None, display_bin
             if len(candidates) == 1:
                 illustration = dict(candidates[0])
                 apply_company_photo(illustration, photo_index)
+                apply_marketing_illustration(illustration, photo_index, report['cycle_id'])
                 if illustration.get('image_source'):
-                    for field in ('image', 'image_source', 'image_source_url', 'image_captured_at'):
+                    for field in ('image', 'image_source', 'image_source_url', 'image_captured_at', 'image_note'):
                         tile[field] = illustration.get(field)
         positions = saved.get('supplemental_search_positions') or saved.get('search_positions') or []
         if not reviewed or not positions or not any(p.get('page') is not None or p.get('label') == '5+' for p in positions):
@@ -283,6 +286,7 @@ def vehicle_dashboard(report, *, apply_brief=True, photo_index=None, display_bin
         tile['image'] = _link(tile.get('image'))
         if photo_index:
             apply_company_photo(tile, photo_index)
+            apply_marketing_illustration(tile, photo_index, report['cycle_id'])
         tile['sheet_url'] = _link(tile.get('sheet_url'))
         tile['status'] = 'attention' if tile['attention'] else 'incomplete' if tile['incomplete'] else 'ok'
         if all(p['state'] == 'unplanned' for p in tile['platforms']) and tile.get('marketing_row'):

@@ -72,6 +72,7 @@
   </div>
   <div class="vehicle-body">
     <h2>{{ car.title }}</h2>
+    {% if car.image_note %}<p class="vehicle-origin">{{ car.image_note }}</p>{% endif %}
     <p class="vehicle-year">Год: <strong>{{ car.year or 'не указан' }}</strong></p>
     <p class="vehicle-vin">VIN <strong>{{ car.vin or 'Не подтверждён в таблице' }}</strong></p>
     <div class="vehicle-platforms">
