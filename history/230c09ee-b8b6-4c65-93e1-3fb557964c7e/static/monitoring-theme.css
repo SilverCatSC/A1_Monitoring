@@ -147,7 +147,7 @@ body.workbench.monitoring-workspace {
 .monitoring-workspace .vehicle-pagination button {min-height:44px;border:1px solid #dbe4f1;border-radius:24px;padding:10px 22px;background:#fff;color:#6d85ab;font-size:12px;font-weight:500;transition:box-shadow .18s,transform .18s}
 .monitoring-workspace .vehicle-pagination #vehicle-show-all {background:transparent;border-color:transparent;color:#929fb4}
 .monitoring-workspace .report-view-enter {animation:panel-enter .18s ease-out}
-.monitoring-workspace .vehicle-tile,.monitoring-workspace .brief-group,.monitoring-workspace .monitor-toolbar {scroll-margin-top:170px}
+.monitoring-workspace .vehicle-tile,.monitoring-workspace .brief-group,.monitoring-workspace .monitor-toolbar {scroll-margin-top:16px}
 /* Keep supporting data readable on the light surfaces. */
 .monitoring-workspace .vehicle-origin,.monitoring-workspace .vehicle-facts dt,.monitoring-workspace .vehicle-vin,.monitoring-workspace .vehicle-platform>small,.monitoring-workspace .vehicle-details,.monitoring-workspace .vehicle-details>summary,.monitoring-workspace .marketing-brief .monitor-intro p,.monitoring-workspace .marketing-brief>.muted,.monitoring-workspace .brief-case p,.monitoring-workspace .brief-case small {color:#657187}
 .monitoring-workspace .vehicle-tag.active {color:#32664f}
@@ -163,7 +163,8 @@ body.workbench.monitoring-workspace {
 }
 @media (min-width:961px) {
   .monitoring-workspace .app-nav .nav-text,.monitoring-workspace .app-nav .nav-label,.monitoring-workspace .app-brand>span:not(.brand-symbol) {display:none}
-  .monitoring-workspace .workspace-bar {position:sticky;top:16px;backdrop-filter:blur(14px)}
+  /* Navigation must scroll with the page, without covering cards or controls. */
+  .monitoring-workspace .workspace-bar {position:relative;top:auto}
   /* Keep search in document flow: a tall sticky panel obscures vehicle photos. */
   .monitoring-workspace .monitor-toolbar {position:static;top:auto;z-index:auto}
   .monitoring-workspace .skip-link {left:116px}
