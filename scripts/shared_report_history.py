@@ -10,6 +10,18 @@ from bs4 import BeautifulSoup
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from app.service.monitoring_history import load_history, summarize_observations
+from scripts.export_shared_dashboard import upgrade_report_header
+
+
+def refresh_archive_presentation(site, target):
+    for name in ('shared.css', 'monitoring-header.css', 'a1-logo.png'):
+        if (site / 'static' / name).exists():
+            (target / 'static').mkdir(exist_ok=True)
+            shutil.copyfile(site / 'static' / name, target / 'static' / name)
+    soup = BeautifulSoup((target / 'index.html').read_text(), 'html.parser')
+    if (target / 'static/a1-logo.png').exists():
+        upgrade_report_header(soup)
+    return soup
 
 
 def refresh_manifest(site, manifest):
@@ -48,9 +60,7 @@ def prepare_history(root, site, manifest, base_url, *, export_fn, checks_fn):
                     continue
             shutil.copytree(cached, target)
         # Apply current shared layout fixes to archived snapshots without changing observations.
-        if (site / 'static/shared.css').exists():
-            shutil.copyfile(site / 'static/shared.css', target / 'static/shared.css')
-        soup = BeautifulSoup((target / 'index.html').read_text(), 'html.parser')
+        soup = refresh_archive_presentation(site, target)
         for a in soup.select('a[href]'):
             if a['href'].startswith('history.html'):
                 a['href'] = '../../' + a['href']
@@ -112,8 +122,9 @@ def preserve_archives(repo, site, manifest):
         if any(p.is_symlink() for p in source.rglob('*')):
             raise ValueError('Symlink in published archive')
         shutil.copytree(source, site / 'history' / cid)
-        if (site / 'static/shared.css').exists():
-            shutil.copyfile(site / 'static/shared.css', site / 'history' / cid / 'static/shared.css')
+        target = site / 'history' / cid
+        archive = refresh_archive_presentation(site, target)
+        (target / 'index.html').write_text(str(archive))
         row['href'] = f'history/{cid}/index.html'
         new.append(row)
         li = soup.new_tag('li')

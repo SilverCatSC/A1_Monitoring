@@ -20,7 +20,28 @@ from bs4 import BeautifulSoup, Comment
 ROOT = Path(__file__).resolve().parents[1]
 LINK_HOSTS = {'auto.ru', 'www.auto.ru', 'avito.ru', 'www.avito.ru', 'a1auto.ru', 'www.a1auto.ru'}
 SECTIONS = ('#business-review', '.monitor-tabs', '#vehicle-panel', '#marketing-panel', '#publication-alerts')
-CSS = ('app.css', 'navigation-responsive.css', 'monitoring.css', 'monitoring-theme.css')
+CSS = ('app.css', 'navigation-responsive.css', 'monitoring.css', 'monitoring-theme.css', 'monitoring-header.css')
+
+
+def upgrade_report_header(page):
+    """Update branding without changing archived findings or navigation targets."""
+    header = page.select_one('.workspace-bar')
+    if not header:
+        return
+    header['class'] = list(dict.fromkeys([*header.get('class', []), 'page-heading']))
+    identity = header.select_one('.workspace-identity')
+    if identity:
+        identity.clear()
+        identity.append(page.new_tag('img', src='static/a1-logo.png', width='48', height='54',
+                                     alt='А1 АВТО', attrs={'class': 'workspace-logo'}))
+        title = page.new_tag('span', attrs={'class': 'workspace-title'})
+        title.string = 'Мониторинг объявлений'
+        subtitle = page.new_tag('small')
+        subtitle.string = 'Auto.ru и Avito'
+        title.append(subtitle)
+        identity.append(title)
+    if page.head and not page.select_one('link[href="static/monitoring-header.css"]'):
+        page.head.append(page.new_tag('link', rel='stylesheet', href='static/monitoring-header.css'))
 
 
 def public_url(value: str, *, image: bool = False) -> bool:
@@ -121,6 +142,8 @@ def project_html(html: str, *, checks: list[str] | None = None) -> tuple[str, st
                 del node[attr]
     for comment in page.find_all(string=lambda value: isinstance(value, Comment)):
         comment.extract()
+    # Local brand asset is inserted after external-image sanitization.
+    upgrade_report_header(page)
     footer = page.new_tag('footer', attrs={'class': 'app-footer'})
     footer.string = f'А1 АВТО · Снимок проверки {cycle_id} · Обновляется после завершения мониторинга.'
     page.main.append(footer)
@@ -151,6 +174,7 @@ def export(base_url: str, output: Path, *, cycle_id: str | None = None,
         body = (ROOT / 'src/app/static' / name).read_text().replace("'/static/", "'./")
         (static / name).write_text(body)
     shutil.copytree(ROOT / 'src/app/static/fonts', static / 'fonts')
+    shutil.copyfile(ROOT / 'src/app/static/a1-logo.png', static / 'a1-logo.png')
     js = (ROOT / 'src/app/static/monitoring.js').read_text()
     js = js.replace("document.getElementById('monitoring-evidence').open = true;",
                     "document.getElementById('business-review').scrollIntoView();")

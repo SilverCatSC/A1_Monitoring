@@ -1,8 +1,9 @@
 {% set monitor = data.monitoring %}{% set fleet = data.vehicles %}
 <link rel="stylesheet" href="/static/monitoring.css?v={{ ui_asset_revision|default('1') }}">
 <link rel="stylesheet" href="/static/monitoring-theme.css?v={{ ui_asset_revision|default('1') }}">
+<link rel="stylesheet" href="/static/monitoring-header.css?v={{ ui_asset_revision|default('1') }}">
 <header class="workspace-bar page-heading">
-  <div class="workspace-identity"><span class="workspace-mark">A1</span><span>Рабочее пространство<small>Мониторинг объявлений</small></span></div>
+  <div class="workspace-identity"><img class="workspace-logo" src="/static/a1-logo.png" width="48" height="54" alt="А1 АВТО"><span class="workspace-title">Мониторинг объявлений<small>Auto.ru и Avito</small></span></div>
   <nav class="workspace-navigation" aria-label="Быстрые переходы"><a href="#business-review" aria-current="page">Мониторинг</a><a href="/api/v1/dashboard/monitoring-history">История</a><a href="/api/v1/dashboard/settings">Настройки</a></nav>
   <span class="workspace-snapshot"><span aria-hidden="true"></span>Сохранённый прогон</span>
 </header>
