@@ -1,0 +1,431 @@
+[
+  {
+    "cycle_id": "230c09ee-b8b6-4c65-93e1-3fb557964c7e",
+    "date": "2026-11-02T07:20:47.387700+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 30
+    },
+    "finding_count": 106,
+    "sha256": "bf59a3642958fd5cd8095200ed1aad1e0b57687cd1211c707b8bec3c7d7a3e59",
+    "href": "history/230c09ee-b8b6-4c65-93e1-3fb557964c7e/index.html"
+  },
+  {
+    "cycle_id": "02287cac-1a7f-4838-a3c9-e3c85defba7d",
+    "date": "2026-10-30T14:19:18.826982+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 30
+    },
+    "finding_count": 106,
+    "sha256": "b09bc366a239093348a88c2754256af468e475158517ab279cab26c77bedfa1c",
+    "href": "history/02287cac-1a7f-4838-a3c9-e3c85defba7d/index.html"
+  },
+  {
+    "cycle_id": "37587d7a-df0e-45a6-ad4a-f09971cd7b14",
+    "date": "2026-10-30T12:46:21.439715+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 30
+    },
+    "finding_count": 106,
+    "sha256": "07deb1ce7b458fb68ac2ad9ab3813b5b8763889108b521064cbe58492a79912f",
+    "href": "history/37587d7a-df0e-45a6-ad4a-f09971cd7b14/index.html"
+  },
+  {
+    "cycle_id": "4769dd25-865e-4f69-85c5-59d81446a3af",
+    "date": "2026-10-30T12:26:38.351972+00:00",
+    "counts": {
+      "auto_ru": 30,
+      "avito": 0
+    },
+    "finding_count": 83,
+    "sha256": "4cf913ebba848360ce3d12c5669cf6dbbec19157a6a483d029802a6dff67cf45",
+    "href": "history/4769dd25-865e-4f69-85c5-59d81446a3af/index.html"
+  },
+  {
+    "cycle_id": "6268d930-61c2-4d82-9107-d4cdab53758a",
+    "date": "2026-10-30T09:56:00.825815+00:00",
+    "counts": {
+      "auto_ru": 30,
+      "avito": 30
+    },
+    "finding_count": 104,
+    "sha256": "186625d4b220e5b3dcfc54a632fbd943da998b8335742dd8a3a6020686d33610",
+    "href": "history/6268d930-61c2-4d82-9107-d4cdab53758a/index.html"
+  },
+  {
+    "cycle_id": "7982df1a-b655-481e-8802-84cdf82c19b7",
+    "date": "2026-10-30T09:48:09.984092+00:00",
+    "counts": {
+      "auto_ru": 30,
+      "avito": 30
+    },
+    "finding_count": 107,
+    "sha256": "020bbf4254f9d01b44737a9cd2366fd23be2fb6e3711f1d6f9666c969f21e11e",
+    "href": "history/7982df1a-b655-481e-8802-84cdf82c19b7/index.html"
+  },
+  {
+    "cycle_id": "be539954-0799-4961-8057-a636be7b6ad7",
+    "date": "2026-10-30T08:48:31.953122+00:00",
+    "counts": {
+      "auto_ru": 30,
+      "avito": 30
+    },
+    "finding_count": 100,
+    "sha256": "96dd3233061c90b941e9867d7e627a8843f4890ddd270ca13785d10cf16dc875",
+    "href": "history/be539954-0799-4961-8057-a636be7b6ad7/index.html"
+  },
+  {
+    "cycle_id": "10d83fb3-ffdd-4aa7-afac-7dbf8e03a99e",
+    "date": "2026-10-30T07:50:38.848060+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 30
+    },
+    "finding_count": 58,
+    "sha256": "86a9a75dc40b7daf93ac21f7758efeab5c953dcfa994adb682381b9e60967dae",
+    "href": "history/10d83fb3-ffdd-4aa7-afac-7dbf8e03a99e/index.html"
+  },
+  {
+    "cycle_id": "034e0a22-e438-4e08-854f-212c24339ca7",
+    "date": "2026-10-30T07:32:47.023456+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 82,
+    "sha256": "42e4eecfaded5ee0daecc3a5eb851e19a73770477106688146aca93f4b0a27ef",
+    "href": "history/034e0a22-e438-4e08-854f-212c24339ca7/index.html"
+  },
+  {
+    "cycle_id": "658eec46-87a1-4eec-ac6c-4e84f1960c34",
+    "date": "2026-10-28T15:15:53.427848+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 8
+    },
+    "finding_count": 90,
+    "sha256": "a82efdf94d7a877375ad69fa8e447800ec7d1fdb0dfd0781a80d373195f45aec",
+    "href": "history/658eec46-87a1-4eec-ac6c-4e84f1960c34/index.html"
+  },
+  {
+    "cycle_id": "61ba812c-8fe9-4bec-9640-7683b405395f",
+    "date": "2026-10-28T07:49:58.530699+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 30
+    },
+    "finding_count": 128,
+    "sha256": "82eb67168632766204f5c6cf02a88157804210f68186d89ab5dd9c48fae8de1f",
+    "href": "history/61ba812c-8fe9-4bec-9640-7683b405395f/index.html"
+  },
+  {
+    "cycle_id": "0cd10260-0f30-4b6d-a959-b1ebfcef4d69",
+    "date": "2026-10-27T07:34:13.934242+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 15
+    },
+    "finding_count": 93,
+    "sha256": "ee1f7ce0db4fea777a84f610de4fa785fec008bf81cdc5db29e33ac0ad3e1b15",
+    "href": "history/0cd10260-0f30-4b6d-a959-b1ebfcef4d69/index.html"
+  },
+  {
+    "cycle_id": "d0e0a066-796d-4d99-bb50-d9b4badcf08c",
+    "date": "2026-10-26T06:50:32.001816+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 15
+    },
+    "finding_count": 93,
+    "sha256": "ccaa6f0c48ee60b811e9077ee97d41d5f6182bc76ef751650f858853d3e563a2",
+    "href": "history/d0e0a066-796d-4d99-bb50-d9b4badcf08c/index.html"
+  },
+  {
+    "cycle_id": "4be1cce3-f3cd-4b0f-b63b-c5fcb8cccad0",
+    "date": "2026-10-21T08:04:52.891221+00:00",
+    "counts": {
+      "auto_ru": 30,
+      "avito": 24
+    },
+    "finding_count": 103,
+    "sha256": "04747de01f15f8a819e540108c4b1d68ee28b3a823993afd585a799aeb613cb5",
+    "href": "history/4be1cce3-f3cd-4b0f-b63b-c5fcb8cccad0/index.html"
+  },
+  {
+    "cycle_id": "779982e9-6579-47c7-843d-2c871409254d",
+    "date": "2026-10-20T13:46:11.250585+00:00",
+    "counts": {
+      "auto_ru": 11,
+      "avito": 27
+    },
+    "finding_count": 101,
+    "sha256": "23bcbfc42ad0e85a3b7a51c318cfbe3024e48b4de56033450061ee63019c72c6",
+    "href": "history/779982e9-6579-47c7-843d-2c871409254d/index.html"
+  },
+  {
+    "cycle_id": "e0d676bd-55ab-482e-b719-9a028c344e45",
+    "date": "2026-10-15T03:53:34.450389+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 29
+    },
+    "finding_count": 60,
+    "sha256": "f167637f5f9f1c3d17fd9316118b3fb7cd3ed8df4269dc7496577eb5dc6ba68b",
+    "href": "history/e0d676bd-55ab-482e-b719-9a028c344e45/index.html"
+  },
+  {
+    "cycle_id": "50a62ff2-9e06-4e2a-b5eb-4e7a96aa2499",
+    "date": "2026-10-14T18:51:10.864678+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 0
+    },
+    "finding_count": 35,
+    "sha256": "8bb78bbb5d1456ce5c644f639a5ba3a5f5e8afc256aff233ec1b3b21e8181ccc",
+    "href": "history/50a62ff2-9e06-4e2a-b5eb-4e7a96aa2499/index.html"
+  },
+  {
+    "cycle_id": "4e85d37f-ecd7-412f-8032-07a543293f21",
+    "date": "2026-10-14T18:36:33.570340+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 0
+    },
+    "finding_count": 35,
+    "sha256": "adc09c6d8ad490c79c9ecaff03789a0be246c96a16a77558f96ffece67000563",
+    "href": "history/4e85d37f-ecd7-412f-8032-07a543293f21/index.html"
+  },
+  {
+    "cycle_id": "1f3a3b47-661e-4443-bccc-6ec27d0ca428",
+    "date": "2026-10-14T15:28:07.270943+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 24
+    },
+    "finding_count": 56,
+    "sha256": "aedb4283f9a11ab0b61134d4941c34d3febc9981a5407ea921521027c90d0e64",
+    "href": "history/1f3a3b47-661e-4443-bccc-6ec27d0ca428/index.html"
+  },
+  {
+    "cycle_id": "4f16c2c5-f8a5-4b69-acc8-3496bd813dd1",
+    "date": "2026-10-14T12:17:43.209885+00:00",
+    "counts": {
+      "auto_ru": 29,
+      "avito": 12
+    },
+    "finding_count": 93,
+    "sha256": "e44f2a67973d9cf6018e4fb7f958ee36379a697f078c7ff8946acc0b0cee52e9",
+    "href": "history/4f16c2c5-f8a5-4b69-acc8-3496bd813dd1/index.html"
+  },
+  {
+    "cycle_id": "62632422-cf43-4975-8888-f33871ae63d9",
+    "date": "2026-10-14T07:29:18.929205+00:00",
+    "counts": {
+      "auto_ru": 28,
+      "avito": 0
+    },
+    "finding_count": 84,
+    "sha256": "b161493651386d7f12fa091a623531389ddccd23065382f84d6f5b18f9585c20",
+    "href": "history/62632422-cf43-4975-8888-f33871ae63d9/index.html"
+  },
+  {
+    "cycle_id": "afb51796-e452-46ae-aa2e-d8b4bb9c78d3",
+    "date": "2026-10-12T11:28:38.813327+00:00",
+    "counts": {
+      "auto_ru": 28,
+      "avito": 0
+    },
+    "finding_count": 89,
+    "sha256": "4e9238da3aeda7e9733f0ec8afb8c9a754bbbe0e9bfaf41d19cccb21d3abb2f2",
+    "href": "history/afb51796-e452-46ae-aa2e-d8b4bb9c78d3/index.html"
+  },
+  {
+    "cycle_id": "1e164897-f46e-49f1-ac1b-d17a2adbd953",
+    "date": "2026-10-12T07:40:35.943082+00:00",
+    "counts": {
+      "auto_ru": 32,
+      "avito": 8
+    },
+    "finding_count": 97,
+    "sha256": "15f452adbe11b3fd8472d1e83ab901b53d051a27cc271a1d453fd2998af49926",
+    "href": "history/1e164897-f46e-49f1-ac1b-d17a2adbd953/index.html"
+  },
+  {
+    "cycle_id": "960e6f73-13fb-483d-b3f2-8044941fec49",
+    "date": "2026-10-09T08:09:45.866544+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 8
+    },
+    "finding_count": 43,
+    "sha256": "964dcecf7ac311a023741b46ddfa16dd39edbbb5205d69701bd9fb640754c110",
+    "href": "history/960e6f73-13fb-483d-b3f2-8044941fec49/index.html"
+  },
+  {
+    "cycle_id": "a859528f-3d73-4e7b-9788-157fe1f3e563",
+    "date": "2026-10-09T07:28:14.723331+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 8
+    },
+    "finding_count": 41,
+    "sha256": "62e0f3acda648c942349206a173071dfc51b75af0f520473c7a1f1809be24f74",
+    "href": "history/a859528f-3d73-4e7b-9788-157fe1f3e563/index.html"
+  },
+  {
+    "cycle_id": "a27ad972-1b3d-49d3-bf77-c1dff02f63d3",
+    "date": "2026-10-08T13:46:24.623719+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 8
+    },
+    "finding_count": 41,
+    "sha256": "aeef7f23cfbdaa95cc679a6d3729db93e70f85bd918d39d59921503e0b5ee696",
+    "href": "history/a27ad972-1b3d-49d3-bf77-c1dff02f63d3/index.html"
+  },
+  {
+    "cycle_id": "8e45472e-1ce6-4a18-a83e-dfa5ac31a871",
+    "date": "2026-10-08T09:37:03.735101+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 8
+    },
+    "finding_count": 95,
+    "sha256": "50847f609f29e38041744139649cd5e714ba6bf29812c1460f7174878ca70e00",
+    "href": "history/8e45472e-1ce6-4a18-a83e-dfa5ac31a871/index.html"
+  },
+  {
+    "cycle_id": "6d26ecf5-5fc3-4401-8f81-3311a05ad1dd",
+    "date": "2026-10-07T17:35:55.472878+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 8
+    },
+    "finding_count": 40,
+    "sha256": "825e1992addb3a655f42bb68fa127525ccc2bf0132c50e76b76e4d9f5f3ad45f",
+    "href": "history/6d26ecf5-5fc3-4401-8f81-3311a05ad1dd/index.html"
+  },
+  {
+    "cycle_id": "7a0c6763-448d-4188-9604-1c1b4fca3abc",
+    "date": "2026-10-07T15:20:34.467787+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 87,
+    "sha256": "9590a57fcdfd1abc92da803ce1978b6ce39b17b273147c906088c366290ca643",
+    "href": "history/7a0c6763-448d-4188-9604-1c1b4fca3abc/index.html"
+  },
+  {
+    "cycle_id": "88750a9d-f60c-42b4-a133-fa03c564cdf6",
+    "date": "2026-10-07T15:11:15.917750+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 87,
+    "sha256": "e7c0e122b4934f51321a1e83d84607d58c82eb14810428d1c017169b65b670da",
+    "href": "history/88750a9d-f60c-42b4-a133-fa03c564cdf6/index.html"
+  },
+  {
+    "cycle_id": "c85e8e85-f8d6-4079-a2fc-35d26b214e33",
+    "date": "2026-10-07T14:57:08.432865+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 87,
+    "sha256": "9bf23ff4e8a6ae94231a4421354bb09c88d6de4cbaa736f894373cc108ac19b6",
+    "href": "history/c85e8e85-f8d6-4079-a2fc-35d26b214e33/index.html"
+  },
+  {
+    "cycle_id": "d53e523c-1cc9-49ca-89bc-2d752864d9bc",
+    "date": "2026-10-07T13:57:21.983223+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 7
+    },
+    "finding_count": 94,
+    "sha256": "8c49672a1734c61d5ab8d80d60453f0332bc893c77bfa1b9f62c17d65bd2ed31",
+    "href": "history/d53e523c-1cc9-49ca-89bc-2d752864d9bc/index.html"
+  },
+  {
+    "cycle_id": "ef6338df-2512-49c7-a80e-80a43bd82d88",
+    "date": "2026-10-07T13:13:44.639847+00:00",
+    "counts": {
+      "auto_ru": 0,
+      "avito": 7
+    },
+    "finding_count": 40,
+    "sha256": "50ed80bfb672447eefb9788b18a10d371d4d6876beda42d63b5832323f602e38",
+    "href": "history/ef6338df-2512-49c7-a80e-80a43bd82d88/index.html"
+  },
+  {
+    "cycle_id": "1870e5bb-91c5-402f-9f29-c79ec47f39b2",
+    "date": "2026-10-07T11:58:04.225406+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 87,
+    "sha256": "d635006b852bc736290b2c3976556f8a7ff3998ca562aa762302b9204a235392",
+    "href": "history/1870e5bb-91c5-402f-9f29-c79ec47f39b2/index.html"
+  },
+  {
+    "cycle_id": "d9b4139e-9394-4d69-a50f-4794bcefbf9e",
+    "date": "2026-10-07T09:51:06.864776+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 7
+    },
+    "finding_count": 91,
+    "sha256": "3aa95d97f72f7ff6c75cbeed7fd8583edaac9391a7fac6840ef7119961df5a10",
+    "href": "history/d9b4139e-9394-4d69-a50f-4794bcefbf9e/index.html"
+  },
+  {
+    "cycle_id": "dc9cf9ef-8613-4973-9672-3dc483cc2b65",
+    "date": "2026-10-07T08:07:28.399356+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 7
+    },
+    "finding_count": 94,
+    "sha256": "3a35274cd921775846a3bd476090c59b86b6a839f14847fb81c3adfaad4baef8",
+    "href": "history/dc9cf9ef-8613-4973-9672-3dc483cc2b65/index.html"
+  },
+  {
+    "cycle_id": "ec9f65a6-f538-4863-8a0c-b53cf160fb62",
+    "date": "2026-10-06T15:07:26.184843+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 7
+    },
+    "finding_count": 94,
+    "sha256": "a2c03161161bfd9a584d5638bb45edf4224d65d29848439962d4708e9b9667e2",
+    "href": "history/ec9f65a6-f538-4863-8a0c-b53cf160fb62/index.html"
+  },
+  {
+    "cycle_id": "56ba95af-672b-48a2-b5e0-24cfaa11eba7",
+    "date": "2026-10-05T11:15:27.592559+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 87,
+    "sha256": "d1faf47f6c8b0afc22296c8ca7355679a7059e89fbacb5330da63fff075b13c9",
+    "href": "history/56ba95af-672b-48a2-b5e0-24cfaa11eba7/index.html"
+  },
+  {
+    "cycle_id": "10fa8dc1-d5c4-4b82-8210-4b1ce5af6a58",
+    "date": "2026-10-05T09:25:43.895567+00:00",
+    "counts": {
+      "auto_ru": 31,
+      "avito": 0
+    },
+    "finding_count": 87,
+    "sha256": "5120e08dfd1824833cbd6d6cb46ac0e59106755c155120f25012dd94d63db28b",
+    "href": "history/10fa8dc1-d5c4-4b82-8210-4b1ce5af6a58/index.html"
+  }
+]
