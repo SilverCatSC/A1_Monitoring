@@ -47,6 +47,9 @@ def prepare_history(root, site, manifest, base_url, *, export_fn, checks_fn):
                     unavailable.append(cid)
                     continue
             shutil.copytree(cached, target)
+        # Apply current shared layout fixes to archived snapshots without changing observations.
+        if (site / 'static/shared.css').exists():
+            shutil.copyfile(site / 'static/shared.css', target / 'static/shared.css')
         soup = BeautifulSoup((target / 'index.html').read_text(), 'html.parser')
         for a in soup.select('a[href]'):
             if a['href'].startswith('history.html'):
@@ -109,6 +112,8 @@ def preserve_archives(repo, site, manifest):
         if any(p.is_symlink() for p in source.rglob('*')):
             raise ValueError('Symlink in published archive')
         shutil.copytree(source, site / 'history' / cid)
+        if (site / 'static/shared.css').exists():
+            shutil.copyfile(site / 'static/shared.css', site / 'history' / cid / 'static/shared.css')
         row['href'] = f'history/{cid}/index.html'
         new.append(row)
         li = soup.new_tag('li')

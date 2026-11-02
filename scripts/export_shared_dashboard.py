@@ -160,6 +160,7 @@ def export(base_url: str, output: Path, *, cycle_id: str | None = None,
         'width:100%;max-width:1600px;padding:24px;box-sizing:border-box}'
         '.shared-report .workspace-navigation{display:flex;flex-wrap:wrap}'
         '.shared-report .workspace-bar{position:relative;top:auto}'
+        '.monitoring-workspace .monitor-toolbar{position:static;top:auto;z-index:auto}'
         '.shared-history-entry a{display:inline-flex;align-items:center;min-height:44px;gap:8px;padding:10px 16px;border-radius:12px;background:#e8eefb;color:#284d8b;font-weight:650}'
         '@media(max-width:600px){.monitoring-workspace.shared-report .app-content{padding:12px}}'
     )

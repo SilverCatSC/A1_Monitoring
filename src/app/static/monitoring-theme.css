@@ -164,7 +164,8 @@ body.workbench.monitoring-workspace {
 @media (min-width:961px) {
   .monitoring-workspace .app-nav .nav-text,.monitoring-workspace .app-nav .nav-label,.monitoring-workspace .app-brand>span:not(.brand-symbol) {display:none}
   .monitoring-workspace .workspace-bar {position:sticky;top:16px;backdrop-filter:blur(14px)}
-  .monitoring-workspace .monitor-toolbar {position:sticky;top:100px}
+  /* Keep search in document flow: a tall sticky panel obscures vehicle photos. */
+  .monitoring-workspace .monitor-toolbar {position:static;top:auto;z-index:auto}
   .monitoring-workspace .skip-link {left:116px}
 }
 @media (max-width:1199px) {
