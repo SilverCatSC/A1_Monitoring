@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "scope": "public-vehicle-dashboard",
+  "cycle_id": "230c09ee-b8b6-4c65-93e1-3fb557964c7e",
+  "published_at_utc": "2026-11-02T07:28:43.397811+00:00",
+  "read_only": true,
+  "contains_vehicle_details": true,
+  "live_updates": false,
+  "files": {
+    ".nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "index.html": "317eb9d0c97e25b66432f293ece3e712a2b3c7338f2d51be378e87853c21939e",
+    "static/app.css": "7b65b34ddbdfa67e6c2be04b7c2f079ca14a3bee1ee002f1791e5e04532c3f19",
+    "static/fonts/Inter-LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "static/fonts/InterVariable.woff2": "693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3",
+    "static/monitoring-theme.css": "820c17e31790d7841b418993c80e997819364d46e1af080843a5fc5d7fe14cd3",
+    "static/monitoring.css": "4ac02a8a6a304d73256ff24f00885e0df345e4c239764833245f42a0b52d97f9",
+    "static/monitoring.js": "a005bbf8aff69556f1ee61a0ccbae45f9e4bd33a6653c57ce96fa750959767ee",
+    "static/navigation-responsive.css": "91cfb7451349e2868c06afa017f2d1bb58993bc465a430f50973561c89a60815",
+    "static/shared.css": "07faa8e2d1451d4337e2853e5f9456f0e5645fddeb780a9776dccc26a387302b"
+  }
+}
