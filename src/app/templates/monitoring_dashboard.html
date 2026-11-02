@@ -3,7 +3,7 @@
 <link rel="stylesheet" href="/static/monitoring-theme.css?v={{ ui_asset_revision|default('1') }}">
 <header class="workspace-bar page-heading">
   <div class="workspace-identity"><span class="workspace-mark">A1</span><span>Рабочее пространство<small>Мониторинг объявлений</small></span></div>
-  <nav class="workspace-navigation" aria-label="Быстрые переходы"><a href="#business-review" aria-current="page">Мониторинг</a><a href="/api/v1/dashboard/history">История</a><a href="/api/v1/dashboard/settings">Настройки</a></nav>
+  <nav class="workspace-navigation" aria-label="Быстрые переходы"><a href="#business-review" aria-current="page">Мониторинг</a><a href="/api/v1/dashboard/monitoring-history">История</a><a href="/api/v1/dashboard/settings">Настройки</a></nav>
   <span class="workspace-snapshot"><span aria-hidden="true"></span>Сохранённый прогон</span>
 </header>
 <section class="monitor-overview" id="business-review">
@@ -79,6 +79,7 @@
       <div class="vehicle-platform {{ platform.state }}"><strong>{{ 'Auto.ru' if platform.source == 'auto_ru' else 'Avito' }}</strong><span title="{{ platform.label }}">{{ 'Активно' if platform.state == 'active' else 'У партнёра' if platform.known_exception else 'Неактивно' if platform.state == 'inactive' else 'Связь не подтверждена' if platform.state == 'unknown' and platform.url and platform.label.startswith('Ссылка активна') else 'Не проверено' if platform.state == 'unknown' else 'Ошибка ссылки' if platform.state == 'invalid_link' else 'Нет ссылки' if car.marketing_row else 'Нет данных' }}</span>
       {% if platform.state == 'active' %}<b>{{ platform.position or 'Позиция не установлена' }}</b>{% endif %}
       {% if platform.state == 'active' %}<small class="platform-price">{{ platform.price }}</small>{% else %}<small>Цена не подтверждена</small>{% endif %}
+      {% if platform.activity %}<small title="Количество календарных дат UTC с подтверждением активности, не полные сутки размещения">Активность: {{ platform.activity.active_days }} дн. с проверкой</small><a href="/api/v1/dashboard/monitoring-history#vehicle-{{ platform.activity.id }}">История активности</a>{% endif %}
       {% if platform.url and platform.state == 'active' %}<a href="{{ platform.url }}" target="_blank" rel="noopener noreferrer">Открыть ↗</a>{% endif %}</div>
     {% endfor %}</div>
     <details class="vehicle-details"><summary>Подробнее{% if car.issues %} · замечания: {{ car.issues|length }}{% elif car.actionable_inactive %} · проверить размещение{% elif car.incomplete %} · есть вопросы к данным{% endif %}</summary>

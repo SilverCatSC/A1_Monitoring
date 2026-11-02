@@ -4,6 +4,14 @@ The shared read-only report is hosted at:
 
 https://silvercatsc.github.io/A1_Monitoring/
 
+Historical reports and activity days are available at:
+
+https://silvercatsc.github.io/A1_Monitoring/history.html
+
+Each publication updates the archive automatically. Activity days count distinct
+UTC dates with verified active observations, not assumed uninterrupted uptime.
+See [history and calculation rules](MONITORING_HISTORY.md).
+
 This is deliberately public. It contains vehicle details (including VIN), public
 advert links, observed prices/positions, coverage warnings and marketing findings.
 It excludes operational controls, workbook links, raw evidence and local APIs.

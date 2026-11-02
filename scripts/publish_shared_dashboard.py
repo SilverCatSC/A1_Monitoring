@@ -113,6 +113,8 @@ def push_snapshot(site: Path, manifest: dict, *, run_command=command) -> str:
         run_command([git, '-c', 'http.version=HTTP/1.1', 'clone', '--depth', '1', '--single-branch',
                      '--branch', BRANCH, REMOTE, str(repo)])
         protect_newer_snapshot(repo, manifest)
+        from scripts.shared_report_history import preserve_archives
+        preserve_archives(repo, site, manifest)
         for path in repo.iterdir():
             if path.name != '.git':
                 if path.is_dir() and not path.is_symlink():
@@ -189,6 +191,9 @@ def publish_after_run(root: Path, cycle_id: str, run_directory: Path | None = No
             with tempfile.TemporaryDirectory(prefix='snapshot-', dir=config_path.parent) as temporary:
                 site = Path(temporary) / 'site'
                 manifest = export(f'http://127.0.0.1:{port}', site, cycle_id=identity, checks=checks)
+                from scripts.shared_report_history import prepare_history
+                prepare_history(root, site, manifest, f'http://127.0.0.1:{port}',
+                                export_fn=export, checks_fn=publication_checks)
                 commit = push_snapshot(site, manifest)
             status.update(status='submitted', commit=commit, scan_at_utc=manifest['scan_at_utc'],
                           message='GitHub Pages is deploying; the public link updates after deployment.')

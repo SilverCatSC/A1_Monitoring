@@ -37,6 +37,7 @@
 
 | Задача | Документ |
 | --- | --- |
+| История отчётов и дни активности | [Архив и правила расчёта](docs/operations/MONITORING_HISTORY.md) |
 | Ежедневная работа менеджера и оператора | [Рабочая инструкция](docs/operations/OPERATOR.md) |
 | Основной MacBook / резервный Windows | [Окружение и запуск](docs/operations/ENVIRONMENT.md) |
 | Устройство и этапы проверки, карта алгоритма | [Алгоритм](docs/architecture/ALGORITHM.md) |

@@ -431,9 +431,30 @@ def placement_identity_html(
                 report, photo_index=read_company_photo_index(settings.evidence_dir),
                 display_bindings=load_display_bindings(settings.evidence_dir, report),
                 display_photos=load_display_photos(settings.evidence_dir, report))
+            from app.service.monitoring_history import load_history, publication_key
+            history = load_history(settings.evidence_dir, until=report['created_at_utc'], cycle_ids=_history_cycle_ids(db))
+            for vehicle in data['vehicles']['vehicles']:
+                for platform in vehicle['platforms']:
+                    platform['activity'] = history['by_url'].get(publication_key(platform['source'], platform.get('url')))
     return templates.TemplateResponse(
         request=request, name='placement_identity.html', context={'data': data},
     )
+
+
+def _history_cycle_ids(db):
+    return {str(c.id) for c in db.query(MonitoringCycle).all()
+            if isinstance(c.summary, dict) and isinstance(c.summary.get('placement_reconciliation'), dict)}
+
+
+@router.get('/dashboard/monitoring-history', response_class=HTMLResponse)
+def monitoring_history_html(request: Request, db: Session = Depends(get_db)):
+    require_roles(request, 'admin', 'operator', 'marketing', 'sales_director')
+    from app.service.monitoring_history import load_history
+    history = load_history(settings.evidence_dir, cycle_ids=_history_cycle_ids(db))
+    for run in history['reports']:
+        run['href'] = '/api/v1/dashboard/placement-identity?cycle_id=' + run['cycle_id']
+    return templates.TemplateResponse(request=request, name='monitoring_history.html', context={
+        'history': history, 'latest_url': '/api/v1/dashboard/placement-identity', 'unavailable': []})
 
 
 @router.get('/reconciliation/review-queue')

@@ -29,6 +29,7 @@ def stub_export(monkeypatch):
         site.mkdir()
         return {'cycle_id': CID, 'scan_at_utc': STAMP}
     monkeypatch.setattr(publisher, 'export', export)
+    monkeypatch.setattr('scripts.shared_report_history.prepare_history', lambda *a, **k: None)
     monkeypatch.setattr(publisher, 'publication_checks', lambda *args: ['Incomplete filter'])
     monkeypatch.setattr(publisher, 'confirm_deployment', lambda *args: False)
 

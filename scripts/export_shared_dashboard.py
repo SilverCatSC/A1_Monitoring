@@ -65,11 +65,16 @@ def project_html(html: str, *, checks: list[str] | None = None) -> tuple[str, st
                            '<small>Общедоступный отчёт · только чтение</small></span></div>'
                            '<nav class="workspace-navigation" aria-label="Отчёт">'
                            '<a href="#vehicle-panel">Автомобили</a>'
-                           '<a href="#marketing-summary">Маркетингу</a></nav></header>'
+                           '<a href="#marketing-summary">Маркетингу</a><a href="history.html">История</a></nav></header>'
                            '<p class="monitor-note">Сохранённый снимок последней опубликованной проверки. '
                            'Он не обновляется в реальном времени. Даты наблюдений и ограничения указаны ниже. '
                            'Непроверенное объявление не считается неактивным.</p>', 'html.parser')
     page.main.extend(list(header.contents))
+    history_link = page.new_tag('p', attrs={'class': 'shared-history-entry'})
+    action = page.new_tag('a', href='history.html')
+    action.string = 'История проверок и дни активности →'
+    history_link.append(action)
+    page.main.append(history_link)
     timestamp = source.select_one('#business-review [data-monitor-time]')
     if timestamp:
         status = page.new_tag('section', attrs={'class': 'coverage-status', 'id': 'publication-status',
@@ -93,7 +98,11 @@ def project_html(html: str, *, checks: list[str] | None = None) -> tuple[str, st
             details.decompose()
     for anchor in list(page.select('a[href]')):
         href = anchor['href']
-        if href == '#monitoring-evidence':
+        if href == 'history.html':
+            pass
+        elif href.startswith('/api/v1/dashboard/monitoring-history#vehicle-') and re.fullmatch(r'[a-f0-9]{20}', href.rsplit('vehicle-', 1)[-1]):
+            anchor['href'] = 'history.html#vehicle-' + href.rsplit('vehicle-', 1)[-1]
+        elif href == '#monitoring-evidence':
             anchor['href'] = '#business-review'
         elif not href.startswith('#') and not public_url(href):
             # Remove whole link, including workbook row/cell labels.
@@ -151,6 +160,7 @@ def export(base_url: str, output: Path, *, cycle_id: str | None = None,
         'width:100%;max-width:1600px;padding:24px;box-sizing:border-box}'
         '.shared-report .workspace-navigation{display:flex;flex-wrap:wrap}'
         '.shared-report .workspace-bar{position:relative;top:auto}'
+        '.shared-history-entry a{display:inline-flex;align-items:center;min-height:44px;gap:8px;padding:10px 16px;border-radius:12px;background:#e8eefb;color:#284d8b;font-weight:650}'
         '@media(max-width:600px){.monitoring-workspace.shared-report .app-content{padding:12px}}'
     )
     (output / 'index.html').write_text(html, encoding='utf-8')

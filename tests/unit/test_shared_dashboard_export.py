@@ -52,3 +52,10 @@ def test_images_require_approved_media_origin():
 def test_missing_report_fails_closed():
     with pytest.raises(ValueError):
         project_html('<html>Report unavailable</html>')
+
+
+def test_history_entry_is_outside_responsive_hidden_header():
+    html, _ = project_html(fixture_html())
+    soup = BeautifulSoup(html, 'html.parser')
+    link = soup.select_one('.shared-history-entry a[href="history.html"]')
+    assert link and link.find_parent('header') is None
