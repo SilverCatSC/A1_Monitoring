@@ -161,6 +161,7 @@ def export(base_url: str, output: Path, *, cycle_id: str | None = None,
         '.shared-report .workspace-navigation{display:flex;flex-wrap:wrap}'
         '.shared-report .workspace-bar{position:relative;top:auto}'
         '.monitoring-workspace .monitor-toolbar{position:static;top:auto;z-index:auto}'
+        '.monitoring-workspace .vehicle-tile,.monitoring-workspace .brief-group,.monitoring-workspace .monitor-toolbar{scroll-margin-top:16px}'
         '.shared-history-entry a{display:inline-flex;align-items:center;min-height:44px;gap:8px;padding:10px 16px;border-radius:12px;background:#e8eefb;color:#284d8b;font-weight:650}'
         '@media(max-width:600px){.monitoring-workspace.shared-report .app-content{padding:12px}}'
     )
