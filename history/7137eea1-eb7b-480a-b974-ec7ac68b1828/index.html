@@ -6,7 +6,7 @@
 <p class="muted">Проверка · <time data-monitor-short="" data-monitor-time="2026-11-05T07:53:56.724225+00:00">2026-11-05 07:53:56 UTC</time></p>
 <div aria-label="Полнота сохранённой проверки" class="coverage-status" role="note">
 <p><strong>Сохранённая проверка</strong> · частичный цикл</p>
-<p class="coverage-source partial"><strong>Auto.ru</strong> — каталог: полностью; карточки и unique_id: не полностью</p><p class="coverage-source complete"><strong>Avito</strong> — каталог: полностью; карточки и unique_id: полностью</p>
+<p class="coverage-source partial"><strong>Auto.ru</strong> — каталог: полностью; данные объявлений и их номера: проверены не полностью</p><p class="coverage-source complete"><strong>Avito</strong> — каталог: полностью; данные объявлений и их номера: проверены</p>
 <p class="coverage-warning">Проверка неполная (Auto.ru): пробелы не доказывают исчезновение.</p>
 </div>
 </div>
@@ -15,7 +15,7 @@
 <button data-monitor-action="all" type="button"><strong>36</strong><span>Активных объявлений</span><small>Auto.ru 29 · Avito 7</small></button>
 <button data-monitor-action="attention" type="button"><strong>24</strong><span>Записей с сигналами</span><small>Показать автомобили →</small></button>
 <button data-monitor-action="inactive" type="button"><strong>23</strong><span>Неактивных публикаций</span><small>По сохранённому каталогу</small></button>
-<button data-monitor-action="identity" type="button"><strong>32<small> / 36</small></strong><span>unique_id подтверждены</span><small>Проверить связи →</small></button>
+<button data-monitor-action="identity" type="button"><strong>32<small> / 36</small></strong><span>Номера найдены</span><small>Зачем это нужно →</small></button>
 </div>
 <details class="overview-breakdown" open=""><summary>Подробнее о проверке</summary>
 <div class="monitor-bento">
@@ -30,9 +30,9 @@
 <button class="cell-action" data-monitor-action="attention" type="button">Показать автомобили <span aria-hidden="true">↗</span></button>
 <small>Размещение проверяет маркетинг; причина отсутствия не установлена</small>
 </article>
-<article class="summary-cell identity-cell"><div class="cell-heading"><span>Сопоставление по unique_id</span><span aria-hidden="true" class="cell-symbol">✓</span></div>
-<div class="identity-visual"><svg aria-label="Подтверждено 32 из 36 карточек" role="img" viewbox="0 0 120 120"><circle class="identity-track" cx="60" cy="60" r="48"></circle><circle class="identity-progress" cx="60" cy="60" r="48" stroke-dasharray="268.0826666666667 301.593"></circle><text text-anchor="middle" x="60" y="58">32</text><text class="identity-total-label" text-anchor="middle" x="60" y="78">из 36</text></svg><div><strong>4</strong><span>карточек без подтверждённой связи</span></div></div>
-<button class="cell-action" data-monitor-action="identity" type="button">Разобрать идентификаторы <span aria-hidden="true">↗</span></button>
+<article class="summary-cell identity-cell"><div class="cell-heading"><span>Номера объявлений</span><span aria-hidden="true" class="cell-symbol">✓</span></div>
+<div class="identity-visual"><svg aria-label="Номер найден в 32 из 36 проверенных объявлений" role="img" viewbox="0 0 120 120"><circle class="identity-track" cx="60" cy="60" r="48"></circle><circle class="identity-progress" cx="60" cy="60" r="48" stroke-dasharray="268.0826666666667 301.593"></circle><text text-anchor="middle" x="60" y="58">32</text><text class="identity-total-label" text-anchor="middle" x="60" y="78">из 36</text></svg><div><strong>4</strong><span>объявлений без подтверждённого номера</span></div></div>
+<p class="muted">Номер помогает найти автомобиль в таблице маркетинга. Если его нет, соответствие нужно проверить отдельно.</p><button class="cell-action" data-monitor-action="identity" type="button">Посмотреть объявления <span aria-hidden="true">↗</span></button>
 </article>
 </div>
 <details class="monitor-help"><summary>Как читать статусы и кто исправляет ошибки</summary><p class="monitor-note">«5+» — объявление активно, но не найдено в первых пяти страницах заданного поиска. «Неактивно» — публикация не обнаружена в полностью прочитанном активном каталоге. Причина не установлена; продажа автомобиля не подтверждена. «Не проверено» — данных недостаточно. Исправления выполняет маркетинг; характеристики и условия продажи подтверждает отдел продаж.</p><a href="#business-review">Полнота и доказательства проверки ↗</a></details>
@@ -43,7 +43,7 @@
 </div><section aria-label="Автомобили" id="vehicle-panel">
 <h2 class="monitor-section-title">Автомобили</h2>
 <div class="monitor-toolbar"><label>Найти автомобиль <input id="vehicle-search" placeholder="Модель, VIN, unique_id" type="search"/></label>
-<label>Показать <select aria-label="Показать автомобили" id="vehicle-filter"><option value="all">Все автомобили</option><option value="attention">Требуют внимания</option><option value="inactive">Есть неактивная публикация</option><option value="incomplete">Недостаточно данных</option><option value="ok">Без выявленных расхождений</option><option value="exception">Известное исключение</option><option value="unplanned">Без ссылок на размещение</option></select></label>
+<label>Показать <select aria-label="Показать автомобили" id="vehicle-filter"><option value="all">Все автомобили</option><option value="attention">Требуют внимания</option><option value="inactive">Есть неактивная публикация</option><option value="incomplete">Недостаточно данных</option><option value="ok">Без выявленных расхождений</option><option value="exception">Есть подтверждённое объяснение</option><option value="unplanned">Без ссылок на размещение</option></select></label>
 <span aria-live="polite" id="vehicle-count">37 записей</span></div>
 <div class="vehicle-grid">
 <article class="vehicle-tile" data-inactive="yes" data-incomplete="no" data-search="hongqi hq9  · business jet hohq011220262508260016 lfb1f0097s2a02345 хомайко" data-status="attention">
@@ -85,7 +85,7 @@
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>HOHQ011220262508260016</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>HOHQ011220262508260016</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/hongqi_hq9_2.0_at_2026_8047934697" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -135,7 +135,7 @@
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>HOHQ011220262508260017</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>HOHQ011220262508260017</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/hongqi_hq9_2.0_at_2026_8176083067" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -186,7 +186,7 @@
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>LRRR011220252508260014</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>LRRR011220252508260014</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/land_rover_range_rover_4.4_at_2026_8016651901" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -237,7 +237,7 @@
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>LRRR011220252508260015</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>LRRR011220252508260015</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/land-rover-range-rover_17_04_1.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/land_rover_range_rover_4.4_at_2026_8016198496" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -285,7 +285,7 @@
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MAS8011220262508260019</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MAS8011220262508260019</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/maextro_s800_1.5_at_2026_8047929828" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -333,7 +333,7 @@
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>MBSP011220242209260035</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBSP011220242209260035</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p class="vehicle-callout">Объединено по точной ссылке маркетинга. Точная ссылка из строки 29 сохранённой таблицы; ожидаемый ID фида MBSP011220242209260035. На Auto.ru unique_id не опубликован; объединение только для отображения автомобиля.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-sprinter-business-jet_27_02.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
@@ -384,7 +384,7 @@
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>MBSP011220262209260037</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBSP011220262209260037</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p class="vehicle-callout">Объединено по точной ссылке маркетинга. Точная ссылка из строки 31 сохранённой таблицы; ожидаемый ID фида MBSP011220262209260037. На Auto.ru unique_id не опубликован; объединение только для отображения автомобиля.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-sprinter-businessjet-23-04.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
@@ -438,7 +438,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2021</dd></div><div><dt>Пробег</dt><dd>76 470 км.</dd></div><div><dt>Владельцы</dt><dd>2 владельца</dd></div><div><dt>Ответственный</dt><dd>Оленев</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 2</p>
-<p>unique_id: <strong>MBVC022220212508260023</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022220212508260023</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-businessjet_14_07.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -487,7 +487,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MBVC011220262508260009</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220262508260009</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/comfort-guard.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8176281881" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -535,7 +535,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>MBVC011220252508260028</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220252508260028</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-solo-vision_03_09.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_4497394087" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -583,7 +583,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Печеный</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MBVC011220262508260030</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220262508260030</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8271920707" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -629,7 +629,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Печеный</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MBVC011220261509260031</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220261509260031</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-vip_15_09_1.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8386348008" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -675,7 +675,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Печеный</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MBVC011220261509260032</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220261509260032</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-vip_15_09_2.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8421250750" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -723,7 +723,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>MBVC011220262508260027</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220262508260027</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8080447555" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -773,7 +773,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>MBVC011220252508260001</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220252508260001</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-vip_01_04.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2025_8144304706" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -821,7 +821,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Володин</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MBVC011220262508260003</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220262508260003</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-vip-whitewhite.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8080855114" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -869,7 +869,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 2 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>MBVC011220252508260007</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220252508260007</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8143909622" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -920,7 +920,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2020</dd></div><div><dt>Пробег</dt><dd>73 000 км.</dd></div><div><dt>Владельцы</dt><dd>1 владелец</dd></div><div><dt>Ответственный</dt><dd>Печеный</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>MBVC022220202508260022</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022220202508260022</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-vip_24_06.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://auto.ru/cars/used/sale/mercedes/v_klasse/1116069469-a91415fd/" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Auto.ru · ссылка из таблицы ↗</a></p>
@@ -970,7 +970,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>MBVC011220262508260005</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220262508260005</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8144322988" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -1020,7 +1020,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 2 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>MBVC011220260810260041</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC011220260810260041</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_v-klass_2.0_at_2026_8340173468" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -1068,7 +1068,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>25 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>MBMS011120262508260013</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBMS011120262508260013</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p><a href="https://auto.ru/cars/new/group/mercedes/s_class_maybach/25017320/25018266/1133335015-d840915c/" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Auto.ru · ссылка из таблицы ↗</a></p><p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_maybach_s-klass_4.0_at_2026_8144042468" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
 <p></p>
 </details>
@@ -1108,7 +1108,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Радченко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>VODR011220262209260033</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>VODR011220262209260033</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/voyah_dream_1.5_at_2026_8302635260" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
 <p></p>
 </details>
@@ -1148,7 +1148,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Радченко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
-<p>unique_id: <strong>VODR011220262209260034</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>VODR011220262209260034</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/voyah_dream_1.5_at_2026_8479029041" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
 <p></p>
 </details>
@@ -1193,7 +1193,7 @@ W1V44781313871282</strong></p>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Маркетингу:</strong> проверить размещение. В таблице актуально, публикация не найдена; причина не установлена.</p>
 <p class="vehicle-issue-summary">Расхождения: 1 · Вопросы к данным: 0</p>
-<p>unique_id: <strong>ZE9X011220262508260018</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>ZE9X011220262508260018</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/zeekr-business-jet.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://www.avito.ru/moskva/avtomobili/zeekr_9x_2.0_at_2026_8175889787" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
@@ -1239,7 +1239,7 @@ W1V44781313871282</strong></p>
 </div>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
-<p>unique_id: <strong>HYST011220262509260039</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>HYST011220262509260039</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1282,7 +1282,7 @@ W1V44781313871282</strong></p>
 </div>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
-<p>unique_id: <strong>не подтверждён</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>не подтверждён</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> · сохранено <time data-monitor-time="2026-11-02T10:40:51.476806+00:00">2026-11-02T10:40:51.476806+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://auto.ru/cars/new/group/maextro/v/25045759/25112891/1134043411-7b7a90c4/" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Auto.ru · ссылка из таблицы ↗</a></p>
 <p></p>
@@ -1325,7 +1325,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>10 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>MBSP011220262209260036</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBSP011220262209260036</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p class="vehicle-callout">Объединено по точной ссылке маркетинга. Точная ссылка из строки 30 сохранённой таблицы; ожидаемый ID фида MBSP011220262209260036. На Auto.ru unique_id не опубликован; объединение только для отображения автомобиля.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-sprinter.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
@@ -1373,7 +1373,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2024</dd></div><div><dt>Пробег</dt><dd>9540 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-callout"><strong>Известное исключение: Grades.</strong> Публикация А1 отсутствует; учтено подтверждённое размещение у партнёра. Текущая активность объявления партнёра этим прогоном не проверялась. Основание: Владелец сообщил: Sprinter 2024, дом на колёсах 4x4 за 19 990 000 ₽ передан партнёру Grades; публикация Авито А1 снята в рамках партнёрского размещения.</p>
-<p>unique_id: <strong>MBSP022320242209260038</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBSP022320242209260038</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-sprinter_24_01.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://auto.ru/lcv/used/sale/mercedes/sprinter/1126771072-2b6f5948/" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Auto.ru · ссылка из таблицы ↗</a></p><p><a href="https://www.avito.ru/moskva/avtomobili/mercedes-benz_sprinter_3.0_at_2024_9_540_km_7888801666" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Avito · ссылка из таблицы ↗</a></p>
 <p></p>
@@ -1419,7 +1419,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2019</dd></div><div><dt>Пробег</dt><dd>57 250 км.</dd></div><div><dt>Владельцы</dt><dd>4</dd></div><div><dt>Ответственный</dt><dd>Оленев</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 4</p>
-<p>unique_id: <strong>MBVC022120192508260024</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022120192508260024</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-businessjet_09_02.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1471,7 +1471,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2019</dd></div><div><dt>Пробег</dt><dd>114 000 км.</dd></div><div><dt>Владельцы</dt><dd>4</dd></div><div><dt>Ответственный</dt><dd>Печеный</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 4</p>
-<p>unique_id: <strong>MBVC022120192508260025</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022120192508260025</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-businessjet_26_09.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1523,7 +1523,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2023</dd></div><div><dt>Пробег</dt><dd>43 900 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Печеный</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 4</p>
-<p>unique_id: <strong>MBVC022220232508260020</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022220232508260020</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-solo_29_07.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1572,7 +1572,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2020</dd></div><div><dt>Пробег</dt><dd>199 000 км</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Не указан</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Связь с таблицей не подтверждена</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 2</p>
-<p>unique_id: <strong>MBVC022220202508260021</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022220202508260021</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <div class="vehicle-issue"><strong>Avito · Описание похоже на общий шаблон</strong><p>Не выявлено достаточного индивидуального описания машины.</p><p>Недостаточно данных для окончательного вывода. Проверить исходные данные или полноту чтения.</p><p class="muted">Проверить и дополнить фактические сведения о машине.</p>
@@ -1619,7 +1619,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>Нет данных</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Не указан</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Связь с таблицей не подтверждена</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>не подтверждён</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>не подтверждён</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-vle_2.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Иллюстрация модели ↗</a> · сохранено <time data-monitor-time="2026-11-02T10:40:51.476794+00:00">2026-11-02T10:40:51.476794+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <div class="vehicle-issue"><strong>Auto.ru · Сверка с маркетингом не завершена</strong><p>Связь по unique_id не подтверждена: id_missing_or_invalid.</p><p>Недостаточно данных для окончательного вывода. Проверить исходные данные или полноту чтения.</p><p class="muted">Уточнить данные источника; не назначать объявлению идентификатор по VIN, цене или ссылке.</p>
@@ -1664,7 +1664,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2021</dd></div><div><dt>Пробег</dt><dd>48 000 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 1</p>
-<p>unique_id: <strong>MBVC022320213010260042</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022320213010260042</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1708,7 +1708,7 @@ W1V44781313871282</strong></p>
 </div>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>25 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
-<p>unique_id: <strong>не подтверждён</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>не подтверждён</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/mercedes-benz-vle_2.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Иллюстрация модели ↗</a> · сохранено <time data-monitor-time="2026-11-02T10:40:51.476794+00:00">2026-11-02T10:40:51.476794+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p><a href="https://auto.ru/cars/new/group/mercedes/vle/25032431/25069598/1134239616-a4e80a13/" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Auto.ru · ссылка из таблицы ↗</a></p>
 <p></p>
@@ -1751,7 +1751,7 @@ W1V44781313871282</strong></p>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2026</dd></div><div><dt>Пробег</dt><dd>0 км.</dd></div><div><dt>Владельцы</dt><dd>Нет данных</dd></div><div><dt>Ответственный</dt><dd>Хомайко</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
 <p class="vehicle-issue-summary">Расхождения: 0 · Вопросы к данным: 2</p>
-<p>unique_id: <strong>MBVL011120260210260040</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVL011120260210260040</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p> · сохранено <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1799,7 +1799,7 @@ W1V44781313871282</strong></p>
 </div>
 <dl class="vehicle-facts"><div><dt>Год</dt><dd>2018</dd></div><div><dt>Пробег</dt><dd>154 550 км.</dd></div><div><dt>Владельцы</dt><dd>4</dd></div><div><dt>Ответственный</dt><dd>Оленев</dd></div></dl>
 <p class="vehicle-origin">Маркетинг: Актуально</p>
-<p>unique_id: <strong>MBVC022220182508260026</strong>. VIN используется только для связи строк внутри таблицы.</p>
+<p>Номер для сверки (unique_id): <strong>MBVC022220182508260026</strong>. По нему мониторинг сопоставляет объявление с данными маркетинга. Если номер не найден, проверить соответствие автоматически нельзя; это не означает, что объявление неактивно.</p>
 <p> — доказательство проверки, не фотография автомобиля.</p>
 <p><a href="https://a1auto.ru/cars-for-sale/v-businessjet_18_06.html" referrerpolicy="no-referrer" rel="noopener noreferrer" target="_blank">Фото с A1auto.ru ↗</a> · сохранено <time data-monitor-time="2026-10-28T19:42:13.608158+00:00">2026-10-28T19:42:13.608158+00:00</time>. Иллюстрация, не доказательство активности объявления.</p>
 <p></p>
@@ -1815,7 +1815,7 @@ W1V44781313871282</strong></p>
 <div class="monitor-intro"><div><h2 id="marketing-summary-title">Что проверить маркетингу</h2>
 <p>Сводка сформирована автоматически по сохранённым данным этого прогона. Подтверждения уточняют действия; исходные расхождения сохраняются.</p></div>
 </div>
-<p class="muted">Данные: <time data-monitor-time="2026-11-05T07:53:56.724225+00:00">2026-11-05T07:53:56.724225+00:00</time> · Сводка: <time data-monitor-time="2026-11-05T09:10:24.960330+00:00">2026-11-05T09:10:24.960330+00:00</time>. 48 вопросов к проверке (у одного автомобиля их может быть несколько) · 1 с подтверждённым значением · 1 исключений.</p>
+<p class="muted">Данные: <time data-monitor-time="2026-11-05T07:53:56.724225+00:00">2026-11-05T07:53:56.724225+00:00</time> · Сводка: <time data-monitor-time="2026-11-05T09:32:03.167040+00:00">2026-11-05T09:32:03.167040+00:00</time>. 48 вопросов к проверке (у одного автомобиля их может быть несколько) · 1 с подтверждённым значением · 1 исключений.</p>
 <p class="muted">Снимок таблицы маркетинга: <time data-monitor-time="2026-11-05T07:50:40.840050+00:00">2026-11-05T07:50:40.840050+00:00</time>. Дата снимка таблицы может отличаться от даты сохранённых карточек.</p>
 <details class="brief-group" data-brief-group="price">
 <summary>Цены <span class="brief-count">2</span></summary>
