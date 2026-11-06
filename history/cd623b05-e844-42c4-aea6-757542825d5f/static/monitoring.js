@@ -1,14 +1,14 @@
 (() => {
   const search = document.getElementById('vehicle-search');
   const filter = document.getElementById('vehicle-filter');
-  if (!search || !filter) return;
   for (const time of document.querySelectorAll('[data-monitor-time]')) {
     const date = new Date(time.dataset.monitorTime);
     if (!Number.isNaN(date.getTime())) {
-      time.textContent = new Intl.DateTimeFormat('ru-RU', {dateStyle: 'medium', timeStyle: 'short'}).format(date) + (time.hasAttribute('data-monitor-short') ? '' : ' · время вашего устройства');
-      time.title = 'Время вашего устройства';
+      time.textContent = new Intl.DateTimeFormat('ru-RU', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow'}).format(date) + ' МСК';
+      time.title = 'Московское время';
     }
   }
+  if (!search || !filter) return;
   const tiles = [...document.querySelectorAll('.vehicle-tile')];
   const tabs = [...document.querySelectorAll('.monitor-tabs [role="tab"]')];
   const panels = [document.getElementById('vehicle-panel'), document.getElementById('marketing-panel')];
