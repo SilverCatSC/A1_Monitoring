@@ -1,5 +1,16 @@
 [
   {
+    "cycle_id": "827296bf-77b2-4570-a344-c3ef55a81099",
+    "date": "2026-11-09T07:19:46.180723+00:00",
+    "counts": {
+      "auto_ru": 28,
+      "avito": 29
+    },
+    "finding_count": 105,
+    "sha256": "fe4a868ddd87eda3e40af04b8cb12e88b985ef07fc5a83068a2dde9bdcea541d",
+    "href": "history/827296bf-77b2-4570-a344-c3ef55a81099/index.html"
+  },
+  {
     "cycle_id": "125d5930-b053-4894-9922-c559316e7f92",
     "date": "2026-11-07T11:04:11.728388+00:00",
     "counts": {
