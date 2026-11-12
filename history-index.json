@@ -1,5 +1,27 @@
 [
   {
+    "cycle_id": "0a464e14-1811-42a7-8c72-93195f45e252",
+    "date": "2026-11-12T08:24:38.565463+00:00",
+    "counts": {
+      "auto_ru": 27,
+      "avito": 25
+    },
+    "finding_count": 97,
+    "sha256": "07683c1ee362dd5c4ba196049d53871d6140e193422b3402ab692edeac406f29",
+    "href": "history/0a464e14-1811-42a7-8c72-93195f45e252/index.html"
+  },
+  {
+    "cycle_id": "e3e5c25d-f47b-4e7f-b26d-75f43006b76e",
+    "date": "2026-11-12T07:50:06.897875+00:00",
+    "counts": {
+      "auto_ru": 27,
+      "avito": 1
+    },
+    "finding_count": 81,
+    "sha256": "8a3c622f79e66d85717802cf1b88389fbcf2629209dfd79c65c5dce2db96daa5",
+    "href": "history/e3e5c25d-f47b-4e7f-b26d-75f43006b76e/index.html"
+  },
+  {
     "cycle_id": "c94d99df-ded7-4956-9fa2-ac146e032213",
     "date": "2026-11-11T07:49:08.332721+00:00",
     "counts": {
