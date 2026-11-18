@@ -58,7 +58,11 @@ body.workbench.monitoring-workspace {
 .attention-tasks strong {font-size:32px;line-height:1.2}
 .attention-tasks span {font-size:14px;line-height:1.4}
 .remark-sources {display:grid;gap:8px;margin:12px 0;padding:12px;border:1px solid #e2e5ed;border-radius:12px;background:#f7f9fc;overflow-wrap:anywhere}
-.remark-sources>div {display:grid;gap:4px;padding-top:8px;border-top:1px solid #e2e5ed}
+.remark-sources>div {display:grid;gap:4px 12px;padding-top:8px;border-top:1px solid #e2e5ed}
+.remark-sources-compact>div {grid-template-columns:minmax(0,1fr) auto;align-items:baseline}
+.remark-sources-compact>div>strong {text-align:right;font-variant-numeric:tabular-nums}
+.remark-sources-compact>div>small {grid-column:1/-1}
+@media(max-width:600px){.remark-sources-compact>div{grid-template-columns:minmax(0,1fr)}.remark-sources-compact>div>strong{text-align:left}}
 .remark-sources small {color:#637087}
 .remark-actions {display:flex;flex-wrap:wrap;gap:4px 16px}
 .remark-actions a,.remark-sources a {text-decoration:underline;text-underline-offset:2px}
