@@ -1,13 +1,14 @@
 {
   "schema_version": 1,
   "scope": "public-vehicle-dashboard",
-  "cycle_id": "131e83d3-6d09-425a-b427-e5982dde35a3",
-  "scan_at_utc": "2026-11-17T12:15:37.269015+00:00",
+  "cycle_id": "693040ed-e50e-42d4-a4b0-c69084b9d92f",
+  "scan_at_utc": "2026-11-18T07:31:21.766111+00:00",
   "incomplete_checks": [
     "\u041f\u043e\u0438\u0441\u043a\u043e\u0432\u044b\u0435 \u0444\u0438\u043b\u044c\u0442\u0440\u044b \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u044b: 19 \u0438\u0437 19.",
-    "Auto.ru: \u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d, \u043d\u043e \u0441\u043e\u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043f\u043e unique_id \u043d\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e."
+    "Auto.ru: \u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d, \u043d\u043e \u0441\u043e\u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043f\u043e unique_id \u043d\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e.",
+    "Avito: \u043a\u0430\u0442\u0430\u043b\u043e\u0433 \u043f\u0440\u043e\u0447\u0438\u0442\u0430\u043d, \u043d\u043e \u0441\u043e\u043f\u043e\u0441\u0442\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u043a\u0430\u0440\u0442\u043e\u0447\u0435\u043a \u043f\u043e unique_id \u043d\u0435 \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u043e."
   ],
-  "published_at_utc": "2026-11-17T12:15:45.261972+00:00",
+  "published_at_utc": "2026-11-18T07:31:26.086863+00:00",
   "read_only": true,
   "contains_vehicle_details": true,
   "live_updates": false,
@@ -296,6 +297,17 @@
     "history/658eec46-87a1-4eec-ac6c-4e84f1960c34/static/monitoring.js": "a005bbf8aff69556f1ee61a0ccbae45f9e4bd33a6653c57ce96fa750959767ee",
     "history/658eec46-87a1-4eec-ac6c-4e84f1960c34/static/navigation-responsive.css": "91cfb7451349e2868c06afa017f2d1bb58993bc465a430f50973561c89a60815",
     "history/658eec46-87a1-4eec-ac6c-4e84f1960c34/static/shared.css": "79c3a25cfb4f7371e15f51d56b7b9b2b93896d7e1f2b6849dec561b241495213",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/index.html": "5a48d09f5f32762e6441389500e170cb0aa436519c98210f410a0aa7588fe856",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/a1-logo.png": "87d69af5c1faa2bd0c1e8c3351c2b752e30cad97c093d48c5c97147f7b989557",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/app.css": "7b65b34ddbdfa67e6c2be04b7c2f079ca14a3bee1ee002f1791e5e04532c3f19",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/fonts/Inter-LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/fonts/InterVariable.woff2": "693b77d4f32ee9b8bfc995589b5fad5e99adf2832738661f5402f9978429a8e3",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/monitoring-header.css": "392cf88d6e920ad567dbcf772993c1ae92c0f86ea184a067e915fd8b319c54ce",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/monitoring-theme.css": "68280a1a54d39b8a847626eb8fe3947982b3875dc24a778c3645d995a6a458eb",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/monitoring.css": "4ac02a8a6a304d73256ff24f00885e0df345e4c239764833245f42a0b52d97f9",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/monitoring.js": "b4de93401f39d7f5dee3cd3fc95fc1506ee575fcca44247f79b8e8367f57b4c1",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/navigation-responsive.css": "58a8f08ba933f6291f4c69dfba7c29574226c5892685d2c4765929540ac8d984",
+    "history/693040ed-e50e-42d4-a4b0-c69084b9d92f/static/shared.css": "79c3a25cfb4f7371e15f51d56b7b9b2b93896d7e1f2b6849dec561b241495213",
     "history/6d26ecf5-5fc3-4401-8f81-3311a05ad1dd/.nojekyll": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
     "history/6d26ecf5-5fc3-4401-8f81-3311a05ad1dd/index.html": "00a109fc99bac6f36ab183dd8daa3178d064c74c967f751b3d2f2d3709445928",
     "history/6d26ecf5-5fc3-4401-8f81-3311a05ad1dd/static/a1-logo.png": "87d69af5c1faa2bd0c1e8c3351c2b752e30cad97c093d48c5c97147f7b989557",
@@ -623,9 +635,9 @@
     "history/ef6338df-2512-49c7-a80e-80a43bd82d88/static/monitoring.js": "a005bbf8aff69556f1ee61a0ccbae45f9e4bd33a6653c57ce96fa750959767ee",
     "history/ef6338df-2512-49c7-a80e-80a43bd82d88/static/navigation-responsive.css": "91cfb7451349e2868c06afa017f2d1bb58993bc465a430f50973561c89a60815",
     "history/ef6338df-2512-49c7-a80e-80a43bd82d88/static/shared.css": "79c3a25cfb4f7371e15f51d56b7b9b2b93896d7e1f2b6849dec561b241495213",
-    "history-index.json": "60222a00f9327067ef51ab4926b17398a1737d6ecbfb3ea5c5834baef269255f",
-    "history.html": "b4886a7cc7b934e98a7e58e465429980d542e897575c67ad96768537b3820f8d",
-    "index.html": "9a35de8499a24d94ddbc255e042178741d095fe3b0ee9940be94e9943bd44caf",
+    "history-index.json": "ae9639a624f90d7f9dbfdbc21345736e3c62ca8c03ee9cd83b8603bc2c058da9",
+    "history.html": "54bb58d315e7d190f3498558dda795af877cfda58c1bb30253d01c05069cb5b2",
+    "index.html": "3b17bbf91fff769afe873402c2b6a24193d4e0a8ad361eacc6d3bb2f62f3349c",
     "static/a1-logo.png": "87d69af5c1faa2bd0c1e8c3351c2b752e30cad97c093d48c5c97147f7b989557",
     "static/app.css": "7b65b34ddbdfa67e6c2be04b7c2f079ca14a3bee1ee002f1791e5e04532c3f19",
     "static/fonts/Inter-LICENSE.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
@@ -638,7 +650,7 @@
     "static/shared.css": "79c3a25cfb4f7371e15f51d56b7b9b2b93896d7e1f2b6849dec561b241495213"
   },
   "history": {
-    "reports": 52,
+    "reports": 53,
     "unavailable_reports": 9,
     "activity_rows": 67,
     "day_basis": "distinct_UTC_observation_dates"
