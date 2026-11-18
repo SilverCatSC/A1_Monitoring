@@ -109,6 +109,10 @@
   };
   more?.addEventListener('click', () => reveal(false));
   showAll?.addEventListener('click', () => reveal(true));
+  for (const button of document.querySelectorAll('[data-monitor-action="tasks"]')) button.addEventListener('click', () => {
+    activateView(1, true);
+    document.getElementById('marketing-summary')?.scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
+  });
   for (const button of document.querySelectorAll('[data-monitor-action="attention"], [data-monitor-action="all"], [data-monitor-action="inactive"]')) button.addEventListener('click', () => {
     search.value = '';
     filter.value = button.dataset.monitorAction;
