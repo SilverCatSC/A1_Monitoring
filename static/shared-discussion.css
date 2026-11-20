@@ -1,61 +1,148 @@
 .report-chat {
   position: fixed;
-  right: max(16px, env(safe-area-inset-right));
-  bottom: max(16px, env(safe-area-inset-bottom));
+  right: max(20px, env(safe-area-inset-right));
+  bottom: max(20px, env(safe-area-inset-bottom));
   z-index: 30;
   color-scheme: light;
+  font-family: inherit;
 }
 
+.shared-report:has(.report-chat) .app-footer { padding-bottom: 86px; }
+
 .report-chat > summary {
-  display: block;
-  margin-inline-start: auto;
-  width: fit-content;
-  padding: 12px 18px;
-  border-radius: 999px;
-  background: #193c76;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  box-sizing: border-box;
+  min-height: 62px;
+  width: max-content;
+  padding: 8px 23px 8px 10px;
+  border: 1px solid #214c84;
+  border-radius: 22px;
+  background: #173863;
   color: #fff;
-  box-shadow: 0 4px 18px #12254640;
+  box-shadow: 0 6px 22px #10233e42;
+  font-size: 16px;
+  line-height: 1.3;
   font-weight: 700;
   cursor: pointer;
 }
 
+.report-chat > summary:hover,
+.report-chat[open] > summary { background: #224a7c; }
+
+.report-chat > summary:focus-visible {
+  outline: 3px solid #629bf5;
+  outline-offset: 3px;
+}
+
 .report-chat > summary::-webkit-details-marker { display: none; }
+
+.report-chat-icon {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 42px;
+  height: 42px;
+  border-radius: 15px;
+  background: #fff;
+  color: #173863;
+}
+
+.report-chat-icon::before {
+  content: "";
+  box-sizing: border-box;
+  width: 22px;
+  height: 17px;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  transform: translateY(-1px);
+}
+
+.report-chat-icon::after {
+  content: "";
+  position: absolute;
+  left: 15px;
+  top: 26px;
+  width: 5px;
+  height: 5px;
+  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentColor;
+  background: #fff;
+  transform: skewY(-35deg);
+}
+
+.report-chat[open] .report-chat-icon::before,
+.report-chat[open] .report-chat-icon::after {
+  position: absolute;
+  inset: auto;
+  width: 19px;
+  height: 2px;
+  border: 0;
+  border-radius: 2px;
+  background: currentColor;
+  transform: rotate(45deg);
+}
+
+.report-chat[open] .report-chat-icon::after { transform: rotate(-45deg); }
 
 .report-chat > nav {
   position: absolute;
   right: 0;
-  bottom: calc(100% + 8px);
+  bottom: calc(100% + 10px);
   box-sizing: border-box;
-  width: min(22rem, calc(100vw - 32px));
-  max-height: min(28rem, calc(100dvh - 96px));
+  width: min(24rem, calc(100vw - 40px));
+  max-height: min(32rem, calc(100dvh - 106px));
   overflow-y: auto;
-  padding: 14px;
-  border: 1px solid #c7d4e8;
-  border-radius: 16px;
+  border: 1px solid #ccd8e8;
+  border-radius: 20px;
   background: #fff;
   color: #142540;
-  box-shadow: 0 8px 28px #12254640;
+  box-shadow: 0 10px 36px #12254640;
+}
+
+.report-chat nav > strong {
+  position: sticky;
+  top: 0;
+  display: block;
+  padding: 16px 18px;
+  background: #eef3fa;
+  font-size: 16px;
 }
 
 .report-chat ul {
-  padding: 0;
-  margin: 8px 0 0;
+  padding: 6px 10px 10px;
+  margin: 0;
   list-style: none;
 }
 
+.report-chat li + li { border-top: 1px solid #e1e8f2; }
+
 .report-chat a {
   display: block;
-  padding: 10px 8px;
-  border-radius: 6px;
+  padding: 12px 24px 12px 8px;
+  border-radius: 8px;
   color: #193c76;
-  text-decoration: underline;
-  text-underline-offset: 2px;
+  font-size: 15px;
+  font-weight: 700;
+  text-decoration: none;
+  position: relative;
+}
+
+.report-chat a::after {
+  content: "↗";
+  position: absolute;
+  top: 12px;
+  right: 8px;
 }
 
 .report-chat a:hover, .report-chat a:focus-visible { background: #e8eefb; }
 
-.report-chat a small {
+.report-chat-topic, .report-chat a small {
   display: block;
   color: #42526d;
+  font-weight: 400;
   overflow-wrap: anywhere;
 }
+
+.report-chat a small { margin-top: 2px; }
