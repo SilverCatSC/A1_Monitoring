@@ -43,7 +43,14 @@
     };
     activateView = activate;
     const followHash = () => {
-      activate(['#marketing-summary', '#marketing-panel'].includes(location.hash) ? 1 : 0);
+      const remark = /^#remark-[0-9a-f]{20}$/.test(location.hash) &&
+        document.getElementById(location.hash.slice(1));
+      activate(remark || ['#marketing-summary', '#marketing-panel'].includes(location.hash) ? 1 : 0);
+      if (remark) {
+        const group = remark.closest('details');
+        if (group) group.open = true;
+        requestAnimationFrame(() => remark.scrollIntoView({block:'start'}));
+      }
       if (location.hash === '#monitoring-evidence') document.getElementById('business-review').scrollIntoView();
     };
     tabs.forEach((tab, index) => {
