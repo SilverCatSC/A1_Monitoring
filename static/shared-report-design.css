@@ -136,7 +136,7 @@ body.monitoring-workspace.shared-report {
 .shared-report .phone-overview > button:nth-child(4) { background: #e2f0e8; color: #305949; }
 
 .shared-report .monitor-tabs {
-  margin-block: 20px 16px;
+  margin-block: 14px 14px;
   background: #eae5f3;
   border-color: transparent;
   border-radius: 15px;
@@ -239,7 +239,7 @@ body.monitoring-workspace.shared-report {
 
 .shared-report #vehicle-panel .monitor-section-title {
   display: block;
-  margin: 0 0 10px;
+  margin: 0 0 12px;
   font-size: 24px;
   color: var(--report-ink);
 }
@@ -344,7 +344,7 @@ body.monitoring-workspace.shared-report {
   display: inline-flex;
   gap: 3px;
   padding: 3px;
-  margin-bottom: 12px;
+  margin: 0;
   border: 1px solid var(--report-line);
   border-radius: 12px;
   background: #eeebf4;
@@ -367,6 +367,32 @@ body.monitoring-workspace.shared-report {
   color: var(--report-purple);
   box-shadow: 0 1px 3px #2b234321;
   font-weight: 650;
+}
+
+.monitoring-workspace.shared-report #vehicle-panel .monitor-toolbar {
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) auto auto;
+  align-items: end;
+  gap: 10px 12px;
+  padding: 12px;
+  margin: 0 0 14px;
+}
+
+.shared-report #vehicle-panel .monitor-toolbar > #vehicle-count { align-self: center; }
+.shared-report #vehicle-panel #placement-timeline { margin: 0 0 14px; }
+
+@media (max-width: 780px) {
+  .monitoring-workspace.shared-report #vehicle-panel .monitor-toolbar {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .shared-report #vehicle-panel .monitor-toolbar > label { grid-column: 1 / -1; }
+  .shared-report #vehicle-panel .monitor-toolbar > #vehicle-count { grid-area: auto / 1; }
+  .shared-report #vehicle-panel .report-vehicle-views { grid-column: 2; }
+}
+
+@media (max-width: 520px) {
+  .shared-report #vehicle-panel #placement-timeline { padding: 12px; }
+  .shared-report #vehicle-panel .monitor-section-title { margin-bottom: 8px; font-size: 20px; }
+  .shared-report .report-vehicle-views button { padding-inline: 9px; }
 }
 
 .shared-report .report-overview-layout .phone-overview > button:first-child {
