@@ -1,0 +1,194 @@
+/* Public dashboard presentation. Keep visual changes scoped to the published report. */
+body.monitoring-workspace.shared-report {
+  --report-ink: #202027;
+  --report-muted: #565663;
+  --report-purple: #493c94;
+  --report-line: #e3dfed;
+  --report-surface: #fff;
+  background: #efedf1;
+  color: var(--report-ink);
+}
+
+.monitoring-workspace.shared-report .app-content {
+  --report-gutter: clamp(14px, 3.6vw, 52px);
+  padding: var(--report-gutter) !important;
+  border: 0;
+  border-radius: 0;
+  background: #faf9fb;
+  box-shadow: none;
+}
+
+.shared-report .workspace-bar.page-heading {
+  display: flex;
+  gap: 12px 20px;
+  margin-bottom: clamp(24px, 4vw, 52px);
+  padding: 11px 16px;
+  border: 1px solid var(--report-line);
+  border-radius: 18px;
+  background: var(--report-surface);
+  box-shadow: none;
+}
+
+.shared-report .workspace-title { color: var(--report-ink); font-size: 17px; }
+.shared-report .workspace-title small { margin-top: 2px; color: var(--report-muted); font-size: 12px; }
+.shared-report .workspace-logo { width: 35px; height: 39px; }
+.shared-report .workspace-navigation { background: #f1eef7; border-radius: 12px; }
+.shared-report .workspace-navigation a { color: var(--report-muted); font-size: 14px; }
+.shared-report .workspace-navigation a:hover { background: #fff; color: var(--report-purple); }
+
+.shared-report #business-review > .monitor-intro { display: block; margin: 0; }
+.shared-report #business-review .eyebrow { display: none; }
+
+.shared-report #business-review h1 {
+  margin: 0 0 8px;
+  color: var(--report-ink);
+  font-size: clamp(30px, 4.2vw, 64px);
+  line-height: 1.05;
+  letter-spacing: -.045em;
+  font-weight: 730;
+  text-wrap: balance;
+}
+
+.shared-report #business-review .monitor-intro .muted {
+  margin: 0;
+  color: var(--report-muted);
+  font-size: 14px;
+}
+
+.shared-report #business-review .coverage-status {
+  margin: 16px 0 0;
+  padding: 12px 16px;
+  border-color: #e8d8b8;
+  background: #fff8eb;
+  color: #634921;
+}
+
+.shared-report .report-snapshot-details {
+  margin: 10px 0 22px;
+  padding: 0;
+  border: 0;
+  color: var(--report-muted);
+  background: transparent;
+}
+
+.shared-report .report-snapshot-details > summary {
+  width: fit-content;
+  padding: 10px 0;
+  color: var(--report-purple);
+  font-size: 14px;
+}
+
+.shared-report .monitor-bento {
+  grid-template-columns: 1.18fr 1fr 1fr;
+  gap: 14px;
+}
+
+.shared-report .summary-cell {
+  padding: clamp(16px, 2.2vw, 28px);
+  border-radius: 23px;
+  border-color: transparent;
+  box-shadow: none;
+}
+
+.shared-report .inventory-cell {
+  background: radial-gradient(ellipse at 94% 0%, #6a5aba 0%, transparent 56%), #35285f;
+  color: #fff;
+}
+
+.shared-report .inventory-cell :is(.cell-heading, .inventory-total > strong, .inventory-split strong) { color: #fff; }
+.shared-report .inventory-cell :is(.inventory-total > span, .inventory-split span, small) { color: #eae4ff; }
+.shared-report .inventory-cell .cell-symbol { color: #382968; }
+.shared-report .inventory-cell .inventory-total > strong { font-size: clamp(48px, 5vw, 72px); font-weight: 680; }
+.shared-report .inventory-cell .platform-dot.auto,
+.shared-report .inventory-cell .inventory-track > span { background: #d6c8ff; }
+.shared-report .inventory-cell .platform-dot.avito,
+.shared-report .inventory-cell .inventory-track > span + span { background: #91dec6; }
+.shared-report .attention-cell { background: #f9e4dc; }
+.shared-report .attention-cell .cell-heading { color: #703c34; }
+.shared-report .identity-cell { background: #e2f0e8; }
+.shared-report .identity-cell .cell-heading { color: #305949; }
+.shared-report .identity-track { stroke: #bcded0; }
+.shared-report .identity-progress { stroke: #36725e; }
+
+.shared-report .phone-overview {
+  gap: 10px;
+  margin: 16px 0 8px;
+}
+
+.shared-report .phone-overview > button {
+  min-height: 118px;
+  padding: 14px;
+  border: 0;
+  border-radius: 20px;
+  background: #eeebf7;
+  color: var(--report-ink);
+}
+
+.shared-report .phone-overview > button > strong { font-size: clamp(30px, 5vw, 49px); font-weight: 710; }
+.shared-report .phone-overview > button > span { font-weight: 650; }
+.shared-report .phone-overview > button > small { color: var(--report-muted); }
+.shared-report .phone-overview > button:first-child {
+  background: radial-gradient(ellipse at 95% 4%, #6a5aba 0%, transparent 60%), #35285f;
+  color: #fff;
+}
+.shared-report .phone-overview > button:first-child > small { color: #ede6ff; }
+.shared-report .phone-overview > button:nth-child(2) { background: #f9e4dc; color: #703c34; }
+.shared-report .phone-overview > button:nth-child(4) { background: #e2f0e8; color: #305949; }
+
+.shared-report .monitor-tabs {
+  margin-block: 20px 16px;
+  background: #eae5f3;
+  border-color: transparent;
+  border-radius: 15px;
+}
+
+.shared-report .monitor-tabs button { color: var(--report-muted); border-radius: 11px; }
+.shared-report .monitor-tabs button[aria-selected="true"] { background: #35285f; color: #fff; box-shadow: none; }
+.shared-report .monitor-tabs button span { background: #e5dbf8; color: #35285f; }
+
+.monitoring-workspace.shared-report :focus-visible {
+  outline: 2px solid #6b52b7;
+  outline-offset: 3px;
+}
+
+.monitoring-workspace.shared-report .report-google-signin:focus-visible { outline-color: #1a73e8; }
+
+.shared-report :is(.monitor-toolbar, .vehicle-tile, .marketing-brief) {
+  border-color: var(--report-line);
+  border-radius: 20px;
+  box-shadow: none;
+}
+
+.shared-report .monitor-toolbar :is(input, select) { background: #f8f6fb; border-color: var(--report-line); }
+.shared-report .vehicle-tile { padding: 8px; }
+.shared-report .vehicle-photo { border-radius: 14px; }
+.shared-report .vehicle-body h2 { color: var(--report-ink); }
+.shared-report .vehicle-platform { background: #f6f4fa; border-color: var(--report-line); }
+.shared-report .vehicle-platform.unknown { background: #faf8f0; }
+.shared-report .vehicle-platform.inactive { background: #fcf6f2; }
+
+.shared-report .brief-group { margin-top: 10px; padding: 4px 10px; border: 1px solid var(--report-line); border-radius: 14px; }
+.shared-report .brief-group > summary { padding: 10px 6px; color: var(--report-purple); font-weight: 650; }
+.shared-report .brief-count { background: #e9e2f7; color: var(--report-purple); }
+.shared-report .brief-case .brief-action { background: #f2edf9; border-color: #8065b8; color: #403164; }
+.shared-report .remark-actions .remark-discuss { color: var(--report-purple); font-weight: 650; }
+.shared-report .remark-sources { background: #f8f6fb; border-color: var(--report-line); }
+
+.shared-report .report-chat > summary { background: #35285f; border-color: #44347b; }
+.shared-report .report-chat > summary:hover,
+.shared-report .report-chat[open] > summary { background: #44347b; }
+.shared-report .report-chat-icon { color: #35285f; }
+.shared-report .report-chat nav > strong { background: #f0ebf8; }
+.shared-report .report-chat a { color: var(--report-purple); }
+
+@media (max-width: 639px) {
+  .shared-report .workspace-bar.page-heading { padding: 12px; }
+  .shared-report .workspace-navigation a { flex-basis: auto; padding-inline: 6px; font-size: 13px; }
+  .shared-report .monitor-bento { grid-template-columns: 1fr; }
+  .shared-report .marketing-brief { padding: 12px; }
+}
+
+@media (max-width: 380px) {
+  .shared-report .phone-overview > button:first-child { grid-column: 1 / -1; min-height: 104px; }
+  .shared-report .phone-overview > button:last-child { grid-column: 1 / -1; min-height: 96px; }
+}
