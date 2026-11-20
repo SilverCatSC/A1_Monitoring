@@ -9,7 +9,7 @@
 
 .shared-report:has(.report-chat) .app-footer { padding-bottom: 86px; }
 
-.report-chat > summary {
+.shared-report .report-chat > summary {
   display: flex;
   align-items: center;
   gap: 12px;
