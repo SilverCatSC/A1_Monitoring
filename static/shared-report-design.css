@@ -145,6 +145,7 @@ body.monitoring-workspace.shared-report {
 .shared-report .monitor-tabs button { color: var(--report-muted); border-radius: 11px; }
 .shared-report .monitor-tabs button[aria-selected="true"] { background: #35285f; color: #fff; box-shadow: none; }
 .shared-report .monitor-tabs button span { background: #e5dbf8; color: #35285f; }
+.shared-report .monitor-tabs button .tab-label { background: transparent; color: inherit; padding: 0; }
 
 .monitoring-workspace.shared-report :focus-visible {
   outline: 2px solid #6b52b7;
@@ -191,4 +192,150 @@ body.monitoring-workspace.shared-report {
 @media (max-width: 380px) {
   .shared-report .phone-overview > button:first-child { grid-column: 1 / -1; min-height: 104px; }
   .shared-report .phone-overview > button:last-child { grid-column: 1 / -1; min-height: 96px; }
+}
+
+/* Overview workspace, vehicle rows and tasks share the same reading order. */
+.shared-report .report-overview-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: clamp(20px, 4vw, 56px);
+  align-items: start;
+}
+
+.shared-report .report-overview-layout + .overview-breakdown > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  color: var(--report-purple);
+  font-size: 14px;
+}
+
+.shared-report .report-overview-layout + .overview-breakdown > summary::after { content: '+'; margin-left: auto; }
+.shared-report .report-overview-layout + .overview-breakdown[open] > summary::after { content: '−'; }
+
+.shared-report .report-overview-layout .phone-overview:not([hidden]) {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.shared-report .report-overview-layout .phone-overview > button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-width: 0;
+  padding: 14px 16px;
+  text-align: left;
+  white-space: normal;
+}
+
+.shared-report .report-overview-layout .phone-overview > button:nth-child(3) { background: #eeebf7; }
+.shared-report .report-overview-layout .phone-overview > button:hover { box-shadow: inset 0 0 0 2px #6b52b766; }
+.shared-report .report-overview-layout .phone-overview > button > strong { line-height: 1.08; }
+
+.shared-report #vehicle-panel .monitor-section-title {
+  display: block;
+  margin: 0 0 10px;
+  font-size: 24px;
+  color: var(--report-ink);
+}
+
+.shared-report .vehicle-grid:has(.report-vehicle-identity) { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+
+.shared-report .vehicle-tile:has(.report-vehicle-identity):not([hidden]) {
+  display: grid;
+  grid-template-columns: minmax(104px, 15%) minmax(0, 1fr);
+  gap: 14px;
+  padding: 12px;
+}
+
+.shared-report .vehicle-tile:has(.report-vehicle-identity) .vehicle-photo {
+  align-self: start;
+  aspect-ratio: 4 / 3;
+  min-height: 0;
+}
+
+.shared-report .vehicle-tile:has(.report-vehicle-identity) .vehicle-placeholder { min-height: 0; }
+.shared-report .vehicle-body:has(.report-vehicle-identity) {
+  display: grid;
+  grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr);
+  column-gap: 16px;
+  padding: 0;
+}
+
+.shared-report .report-vehicle-identity { min-width: 0; overflow-wrap: anywhere; }
+.shared-report .report-vehicle-identity .vehicle-cover-status { position: static; margin: 0 0 6px; }
+.shared-report .report-vehicle-identity .vehicle-year { margin: 4px 0; }
+.shared-report .vehicle-body:has(.report-vehicle-identity) .vehicle-platforms { margin: 0; }
+.shared-report .vehicle-body:has(.report-vehicle-identity) .vehicle-details { grid-column: 1 / -1; }
+
+.shared-report .marketing-brief {
+  border: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.shared-report .brief-group:has(.report-task-work) {
+  padding: 0 12px 8px;
+  background: #eeebf4;
+}
+
+.shared-report .brief-case:has(.report-task-work) {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(224px, .44fr);
+  align-items: start;
+  gap: 12px 20px;
+  margin-bottom: 8px;
+  padding: 16px;
+  border: 1px solid var(--report-line);
+  border-radius: 14px;
+  background: #fff;
+  scroll-margin-top: 12px;
+}
+
+.shared-report .report-task-work { display: grid; gap: 6px; min-width: 0; }
+.shared-report .report-task-work h4 { margin: 0; font-size: 17px; color: var(--report-ink); }
+.shared-report .report-task-work p { margin: 0; }
+.shared-report .report-task-work .brief-action { padding: 10px 12px; border-radius: 0 10px 10px 0; }
+.shared-report .report-task-work .remark-actions { gap: 8px; }
+.shared-report .report-task-work .remark-actions a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 38px;
+  padding: 3px 10px;
+  border: 1px solid var(--report-line);
+  border-radius: 20px;
+  color: var(--report-purple);
+  font-size: 13px;
+  text-decoration: none;
+}
+
+.shared-report .report-task-work .remark-actions a:hover { background: #f4f0fa; }
+.shared-report .brief-case:has(.report-task-work) > details { border-radius: 11px; padding: 8px 10px; background: #f7f5fa; }
+.shared-report .brief-case:has(.report-task-work) > details summary { color: var(--report-purple); }
+
+@media (max-width: 860px) {
+  .shared-report .report-overview-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .shared-report .vehicle-body:has(.report-vehicle-identity) { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .shared-report .brief-case:has(.report-task-work) { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 520px) {
+  .shared-report .vehicle-tile:has(.report-vehicle-identity):not([hidden]) {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .shared-report .vehicle-tile:has(.report-vehicle-identity) .vehicle-photo {
+    width: 100%;
+    max-height: 156px;
+    aspect-ratio: 2.2;
+  }
+  .shared-report .report-overview-layout .phone-overview > button { grid-column: auto; min-height: 116px; padding: 10px; }
+  .shared-report .report-overview-layout .phone-overview > button:first-child { grid-column: 1 / -1; }
+  .shared-report .report-overview-layout .phone-overview > button:last-child { grid-column: 1 / -1; min-height: 90px; }
+  .shared-report .brief-case:has(.report-task-work) { padding: 11px; }
 }

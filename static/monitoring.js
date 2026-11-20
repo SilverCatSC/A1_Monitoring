@@ -19,9 +19,11 @@
   const compactOverview = document.querySelector('.phone-overview');
   if (breakdown && compactOverview) {
     compactOverview.hidden = false;
-    const adaptOverview = () => { breakdown.open = !phoneLayout.matches; };
-    adaptOverview();
-    phoneLayout.addEventListener('change', adaptOverview);
+    if (!compactOverview.closest('.report-overview-layout')) {
+      const adaptOverview = () => { breakdown.open = !phoneLayout.matches; };
+      adaptOverview();
+      phoneLayout.addEventListener('change', adaptOverview);
+    }
   }
   if (tabs.length === 2 && panels.every(Boolean)) {
     panels.forEach((panel, index) => {
