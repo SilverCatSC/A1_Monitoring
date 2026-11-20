@@ -385,3 +385,49 @@ body.monitoring-workspace.shared-report {
   background: url('./report-overview.webp') center / contain no-repeat;
   pointer-events: none;
 }
+
+.shared-report .report-placement-chart {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 14px 16px 16px;
+  border: 1px solid var(--report-line);
+  border-radius: 18px;
+  background: var(--report-surface);
+}
+
+.shared-report .report-placement-chart figcaption {
+  margin-bottom: 9px;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--report-muted);
+}
+
+.shared-report .report-placement-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.shared-report .report-placement-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 5px;
+  font-size: 13px;
+  color: var(--report-ink);
+}
+
+.shared-report .report-placement-label strong { font-size: 20px; line-height: 1; font-variant-numeric: tabular-nums; }
+.shared-report .report-placement-side + .report-placement-side .report-placement-label { flex-direction: row-reverse; }
+.shared-report .report-placement-rail { display: flex; height: 9px; background: #f0edf5; border-radius: 5px; overflow: hidden; }
+.shared-report .report-placement-rail span { display: block; background: #6d55ad; border-radius: 5px 0 0 5px; }
+.shared-report .report-placement-side:first-child .report-placement-rail { justify-content: flex-end; }
+.shared-report .report-placement-side + .report-placement-side .report-placement-rail span {
+  background: #438f78;
+  border-radius: 0 5px 5px 0;
+}
+
+@media (max-width: 520px) {
+  .shared-report .report-placement-chart { grid-row: 2; }
+}
