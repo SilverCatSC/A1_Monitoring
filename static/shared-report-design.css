@@ -449,3 +449,29 @@ body.monitoring-workspace.shared-report {
 .shared-report .report-check-details > .coverage-status { margin: 4px 0 0; }
 .shared-report .report-overview-layout + .overview-breakdown > summary { width: fit-content; gap: 12px; }
 .shared-report .workspace-bar.page-heading .workspace-navigation { margin-inline-start: auto; width: auto; flex: 0 0 auto; }
+
+.shared-report .report-vehicle-tasks {
+  display: grid;
+  gap: 4px;
+  margin: 7px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.shared-report .report-vehicle-tasks a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 4px 9px;
+  border: 1px solid #eeded7;
+  border-radius: 10px;
+  background: #fbf1ec;
+  color: #693e33;
+  font-size: 13px;
+  font-weight: 650;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.shared-report .report-vehicle-tasks a:hover { background: #f8e4da; }
+.shared-report .vehicle-tile[id^="report-car-"]:target { border-color: #9280bf; }

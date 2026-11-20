@@ -158,7 +158,25 @@
       group.scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
     }
   });
+  const followVehicleHash = () => {
+    if (!/^#report-car-[0-9a-f]{20}$/.test(location.hash)) return;
+    const car = document.getElementById(location.hash.slice(1));
+    const position = tiles.indexOf(car);
+    if (position === -1) return;
+    activateView(0);
+    if (car.hidden) {
+      search.value = '';
+      filter.value = 'all';
+      visibleLimit = Math.max(visibleLimit, position + 1);
+      apply();
+    }
+    car.tabIndex = -1;
+    car.focus({preventScroll:true});
+    requestAnimationFrame(() => car.scrollIntoView({block:'start'}));
+  };
   apply();
+  followVehicleHash();
+  window.addEventListener('hashchange', followVehicleHash);
   for (const img of document.querySelectorAll('.vehicle-photo img')) {
     const unavailable = () => {
       img.hidden = true;
