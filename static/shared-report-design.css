@@ -244,23 +244,23 @@ body.monitoring-workspace.shared-report {
   color: var(--report-ink);
 }
 
-.shared-report .vehicle-grid:has(.report-vehicle-identity) { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-grid:has(.report-vehicle-identity) { grid-template-columns: minmax(0, 1fr); gap: 10px; }
 
-.shared-report .vehicle-tile:has(.report-vehicle-identity):not([hidden]) {
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-tile:has(.report-vehicle-identity):not([hidden]) {
   display: grid;
   grid-template-columns: minmax(104px, 15%) minmax(0, 1fr);
   gap: 14px;
   padding: 12px;
 }
 
-.shared-report .vehicle-tile:has(.report-vehicle-identity) .vehicle-photo {
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-tile:has(.report-vehicle-identity) .vehicle-photo {
   align-self: start;
   aspect-ratio: 4 / 3;
   min-height: 0;
 }
 
-.shared-report .vehicle-tile:has(.report-vehicle-identity) .vehicle-placeholder { min-height: 0; }
-.shared-report .vehicle-body:has(.report-vehicle-identity) {
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-tile:has(.report-vehicle-identity) .vehicle-placeholder { min-height: 0; }
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-body:has(.report-vehicle-identity) {
   display: grid;
   grid-template-columns: minmax(0, .75fr) minmax(0, 1.25fr);
   column-gap: 16px;
@@ -270,8 +270,8 @@ body.monitoring-workspace.shared-report {
 .shared-report .report-vehicle-identity { min-width: 0; overflow-wrap: anywhere; }
 .shared-report .report-vehicle-identity .vehicle-cover-status { position: static; margin: 0 0 6px; }
 .shared-report .report-vehicle-identity .vehicle-year { margin: 4px 0; }
-.shared-report .vehicle-body:has(.report-vehicle-identity) .vehicle-platforms { margin: 0; }
-.shared-report .vehicle-body:has(.report-vehicle-identity) .vehicle-details { grid-column: 1 / -1; }
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-body:has(.report-vehicle-identity) .vehicle-platforms { margin: 0; }
+.shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-body:has(.report-vehicle-identity) .vehicle-details { grid-column: 1 / -1; }
 
 .shared-report .marketing-brief {
   border: 0;
@@ -320,16 +320,16 @@ body.monitoring-workspace.shared-report {
 
 @media (max-width: 860px) {
   .shared-report .report-overview-layout { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .shared-report .vehicle-body:has(.report-vehicle-identity) { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
+  .shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-body:has(.report-vehicle-identity) { grid-template-columns: minmax(0, 1fr); row-gap: 8px; }
   .shared-report .brief-case:has(.report-task-work) { grid-template-columns: minmax(0, 1fr); }
 }
 
 @media (max-width: 520px) {
-  .shared-report .vehicle-tile:has(.report-vehicle-identity):not([hidden]) {
+  .shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-tile:has(.report-vehicle-identity):not([hidden]) {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
   }
-  .shared-report .vehicle-tile:has(.report-vehicle-identity) .vehicle-photo {
+  .shared-report #vehicle-panel[data-vehicle-view="list"] .vehicle-tile:has(.report-vehicle-identity) .vehicle-photo {
     width: 100%;
     max-height: 156px;
     aspect-ratio: 2.2;
@@ -338,4 +338,50 @@ body.monitoring-workspace.shared-report {
   .shared-report .report-overview-layout .phone-overview > button:first-child { grid-column: 1 / -1; }
   .shared-report .report-overview-layout .phone-overview > button:last-child { grid-column: 1 / -1; min-height: 90px; }
   .shared-report .brief-case:has(.report-task-work) { padding: 11px; }
+}
+
+.shared-report .report-vehicle-views:not([hidden]) {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  margin-bottom: 12px;
+  border: 1px solid var(--report-line);
+  border-radius: 12px;
+  background: #eeebf4;
+}
+
+.shared-report .report-vehicle-views button {
+  min-height: 40px;
+  padding: 6px 14px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--report-muted);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.shared-report .report-vehicle-views button[aria-pressed="true"] {
+  background: #fff;
+  color: var(--report-purple);
+  box-shadow: 0 1px 3px #2b234321;
+  font-weight: 650;
+}
+
+.shared-report .report-overview-layout .phone-overview > button:first-child {
+  position: relative;
+  isolation: isolate;
+}
+
+.shared-report .report-overview-layout .phone-overview > button:first-child::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  width: min(37%, 110px);
+  aspect-ratio: 1.4;
+  top: 8px;
+  right: 10px;
+  background: url('./report-overview.webp') center / contain no-repeat;
+  pointer-events: none;
 }

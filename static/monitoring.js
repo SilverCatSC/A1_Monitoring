@@ -9,6 +9,18 @@
     }
   }
   if (!search || !filter) return;
+  const viewSwitch = document.querySelector('.report-vehicle-views');
+  if (viewSwitch) {
+    const catalog = document.getElementById('vehicle-panel');
+    const choices = [...viewSwitch.querySelectorAll('[data-vehicle-view]')];
+    for (const button of choices) {
+      button.addEventListener('click', () => {
+        catalog.dataset.vehicleView = button.dataset.vehicleView;
+        for (const choice of choices) choice.setAttribute('aria-pressed', String(choice === button));
+      });
+    }
+    viewSwitch.hidden = false;
+  }
   const tiles = [...document.querySelectorAll('.vehicle-tile')];
   const tabs = [...document.querySelectorAll('.monitor-tabs [role="tab"]')];
   const panels = [document.getElementById('vehicle-panel'), document.getElementById('marketing-panel')];
