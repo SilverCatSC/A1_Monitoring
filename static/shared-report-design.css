@@ -431,3 +431,21 @@ body.monitoring-workspace.shared-report {
 @media (max-width: 520px) {
   .shared-report .report-placement-chart { grid-row: 2; }
 }
+
+.shared-report .report-check-details {
+  display: grid;
+  gap: 8px;
+  padding: 14px 16px;
+  margin: 4px 0 10px;
+  border: 1px solid var(--report-line);
+  border-radius: 14px;
+  background: var(--report-surface);
+  color: var(--report-muted);
+  font-size: 14px;
+}
+
+.shared-report .report-check-details > div { display: flex; align-items: baseline; gap: 8px; }
+.shared-report .report-check-details > p { margin: 0; color: var(--report-muted); }
+.shared-report .report-check-details > .coverage-status { margin: 4px 0 0; }
+.shared-report .report-overview-layout + .overview-breakdown > summary { width: fit-content; gap: 12px; }
+.shared-report .workspace-bar.page-heading .workspace-navigation { margin-inline-start: auto; width: auto; flex: 0 0 auto; }

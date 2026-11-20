@@ -143,6 +143,13 @@
     document.querySelector('.monitor-toolbar').scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
   });
   for (const button of document.querySelectorAll('[data-monitor-action="identity"]')) button.addEventListener('click', () => {
+    if (button.getAttribute('aria-controls') === 'report-check-details' && breakdown) {
+      breakdown.open = true;
+      const summary = breakdown.querySelector('summary');
+      summary.focus({preventScroll:true});
+      summary.scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
+      return;
+    }
     activateView(1, true);
     const group = document.querySelector('[data-brief-group="identity"]');
     if (group) {
