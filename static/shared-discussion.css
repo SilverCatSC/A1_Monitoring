@@ -1,3 +1,40 @@
+.monitoring-workspace.shared-report .workspace-bar:has(.report-google-signin) { display: flex; }
+
+.shared-report .report-google-signin {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 12px;
+  box-sizing: border-box;
+  border: 1px solid #747775;
+  border-radius: 24px;
+  background: #fff;
+  color: #1f1f1f;
+  font: 500 14px/20px 'Google Sans', Arial, sans-serif;
+  text-decoration: none;
+}
+
+.shared-report .report-google-signin:hover { background: #f8fafd; }
+
+.shared-report .report-google-signin:focus-visible {
+  outline: 2px solid #1a73e8;
+  outline-offset: 3px;
+}
+
+/* The official Google light button contains the brand mark at x=12, y=10. */
+.report-google-mark {
+  flex: 0 0 20px;
+  height: 20px;
+  background: url('./google-signin-brand.png') -12px -10px / 180px 40px no-repeat;
+}
+
+@media (max-width: 700px) {
+  .shared-report .workspace-bar:has(.report-google-signin) .workspace-navigation { order: 1; }
+}
+
 .report-chat {
   position: fixed;
   right: max(20px, env(safe-area-inset-right));
