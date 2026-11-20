@@ -1,13 +1,566 @@
 <!DOCTYPE html>
+
 <html lang="ru"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><meta content="noindex,nofollow" name="robots"/><title>История мониторинга · А1 АВТО</title>
 <style>
 *{box-sizing:border-box}body{margin:0;background:#f6f8fc;color:#24314a;font:17px/1.5 system-ui,sans-serif}main{max-width:1200px;margin:auto;padding:24px}a{color:#315ca6;overflow-wrap:anywhere}h1{font-size:30px}h2{font-size:23px}nav{display:flex;gap:18px;flex-wrap:wrap;padding:16px 0}section,article{background:white;border:1px solid #dfe5ef;border-radius:18px;padding:20px;margin:16px 0}summary{cursor:pointer;font-weight:650;min-height:44px}small,.muted{color:#66748b}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}.grid article{margin:0}input{font:inherit;border:1px solid #c6cfdf;border-radius:12px;padding:12px;width:100%}.pill{display:inline-block;background:#ecf2fd;border-radius:9px;padding:5px 10px;margin:5px 0}li{margin:12px 0;overflow-wrap:anywhere}code{overflow-wrap:anywhere}details ul{padding-left:20px}p{overflow-wrap:anywhere}@media(max-width:600px){main{padding:12px}section,article{padding:15px}.grid{grid-template-columns:1fr}h1{font-size:26px}}
+</style><style id="placement-timeline-style">
+.placement-legend{display:flex;gap:8px 20px;flex-wrap:wrap;list-style:none;padding:0;margin:0;color:#38425b;font-size:14px}
+.placement-legend li{margin:0}
+.placement-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:6px;background:#694bb0}
+.placement-legend li:nth-child(2) i{background:#347c69}
+.placement-legend li:nth-child(3) i{background:repeating-linear-gradient(135deg,#5e5b70 0 2px,#fff 2px 4px);border:1px solid #5e5b70}
+.placement-scroll{direction:rtl;overflow:auto;margin-top:14px;border:1px solid #e1dbeb;border-radius:12px;background:#f8f6fb}
+.placement-scroll:focus-visible,.placement-day a:focus-visible{outline:2px solid #694bb0;outline-offset:1px}
+.placement-axis{direction:ltr;display:flex;align-items:stretch;width:max-content;min-width:100%;list-style:none;margin:0;padding:10px 8px}
+.placement-day{flex:0 0 60px;margin:0;text-align:center;font-size:12px;font-variant-numeric:tabular-nums}
+.placement-day a,.placement-day>div{display:grid;grid-template-rows:105px 30px 105px;align-items:stretch;color:#34334e;text-decoration:none;border-radius:7px}
+.placement-day a:hover{background:#efeafa}
+.placement-band{position:relative;display:grid;grid-template-rows:20px 1fr;justify-items:center;gap:3px;color:#49347f}
+.placement-band:last-child{grid-template-rows:1fr 20px;color:#25604f}
+.placement-value{font-size:13px;font-weight:700}
+.placement-band:last-child .placement-value{grid-row:2}
+.placement-track{grid-row:2;align-self:end;display:flex;align-items:flex-end;width:18px;height:100%}
+.placement-band:last-child .placement-track{grid-row:1;align-items:flex-start}
+.placement-bar{display:block;width:100%;max-height:100%;background:#694bb0;border-radius:4px 4px 0 0}
+.placement-band:last-child .placement-bar{background:#347c69;border-radius:0 0 4px 4px}
+.placement-bar.partial{background:repeating-linear-gradient(135deg,#694bb0 0 3px,#b8a5de 3px 6px)}
+.placement-band:last-child .placement-bar.partial{background:repeating-linear-gradient(135deg,#347c69 0 3px,#a0cebd 3px 6px)}
+.placement-day time{display:grid;place-items:center;border-block:1px solid #ddd5e9;background:#f1edf7;color:#393451}
+.placement-day a time{text-decoration:underline;text-underline-offset:2px}
 </style></head><body><main>
-<nav><a href="index.html">← Последний отчёт</a><a href="#runs">Прошлые проверки</a><a href="#activity">Дни активности</a></nav>
+<nav><a href="index.html">← Последний отчёт</a><a href="#placement-timeline">Динамика размещений</a><a href="#runs">Прошлые проверки</a><a href="#activity">Дни активности</a></nav>
 <h1>История мониторинга</h1>
 <p>Данные по состоянию на 2026-11-20 · даты и календарные дни — UTC.</p>
 <section><strong>Что означает «активных дней»</strong><p>Количество разных календарных дат, в которые сохранённая проверка подтвердила активное объявление. Это не количество полных суток размещения. Дни между проверками не засчитываются автоматически. Повторное использование снимка не добавляет новый день.</p><p>Объявления объединяются по подтверждённому unique_id отдельно для каждой площадки. Без ID — только по самой публикации. Отсутствие проверки не означает снятие объявления.</p><p>Записей, исключённых из расчёта из-за неподтверждённых данных или целостности: 13.</p></section>
-<section id="runs"><h2>Прошлые проверки · 58</h2><p class="muted">Каждый отчёт сохраняет дату исходной проверки и предупреждения о неполноте. Более поздние подтверждённые уточнения могут отображаться с отдельной датой.</p>
+<section aria-labelledby="placement-timeline-title" id="placement-timeline">
+<h2 id="placement-timeline-title">Динамика активных размещений</h2>
+<p class="muted">Последняя сохранённая проверка каждого дня по МСК. Нажмите дату, чтобы открыть её отчёт. График прокручивается к более ранним датам.</p>
+<ul class="placement-legend">
+<li><i aria-hidden="true"></i>Auto.ru ↑</li><li><i aria-hidden="true"></i>Avito ↓</li>
+<li><i aria-hidden="true"></i>Неполная проверка</li><li>— нет подтверждённого значения</li>
+</ul>
+<div aria-label="Зеркальный график размещений по дням" class="placement-scroll" role="region" tabindex="0">
+<ol class="placement-axis">
+<li class="placement-day">
+<a aria-label="2026-10-05, 14:15 МСК. Auto.ru 31, неполная проверка. Avito нет данных. Открыть отчёт" href="history/56ba95af-672b-48a2-b5e0-24cfaa11eba7/index.html" title="2026-10-05 в 14:15 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-10-05">05.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-06, 18:07 МСК. Auto.ru 31, неполная проверка. Avito 7, неполная проверка. Открыть отчёт" href="history/ec9f65a6-f538-4863-8a0c-b53cf160fb62/index.html" title="2026-10-06 в 18:07 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-10-06">06.10</time>
+<span class="placement-band"><span class="placement-value">7</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:21.212%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-07, 20:35 МСК. Auto.ru нет данных. Avito 8. Открыть отчёт" href="history/6d26ecf5-5fc3-4401-8f81-3311a05ad1dd/index.html" title="2026-10-07 в 20:35 МСК">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-07">07.10</time>
+<span class="placement-band"><span class="placement-value">8</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:24.242%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-08, 16:46 МСК. Auto.ru нет данных. Avito 8. Открыть отчёт" href="history/a27ad972-1b3d-49d3-bf77-c1dff02f63d3/index.html" title="2026-10-08 в 16:46 МСК">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-08">08.10</time>
+<span class="placement-band"><span class="placement-value">8</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:24.242%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-09, 11:09 МСК. Auto.ru нет данных. Avito 8. Открыть отчёт" href="history/960e6f73-13fb-483d-b3f2-8044941fec49/index.html" title="2026-10-09 в 11:09 МСК">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-09">09.10</time>
+<span class="placement-band"><span class="placement-value">8</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:24.242%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-10, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-10">10.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-11, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-11">11.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-12, 14:28 МСК. Auto.ru 28, неполная проверка. Avito нет данных. Открыть отчёт" href="history/afb51796-e452-46ae-aa2e-d8b4bb9c78d3/index.html" title="2026-10-12 в 14:28 МСК">
+<span class="placement-band"><span class="placement-value">28</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:84.848%"></span></span>
+</span>
+<time datetime="2026-10-12">12.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-13, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-13">13.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-14, 21:51 МСК. Auto.ru нет данных. Avito нет данных. Открыть отчёт" href="history/50a62ff2-9e06-4e2a-b5eb-4e7a96aa2499/index.html" title="2026-10-14 в 21:51 МСК">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-14">14.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-15, 06:53 МСК. Auto.ru нет данных. Avito 29, неполная проверка. Открыть отчёт" href="history/e0d676bd-55ab-482e-b719-9a028c344e45/index.html" title="2026-10-15 в 06:53 МСК">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-15">15.10</time>
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:87.879%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-16, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-16">16.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-17, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-17">17.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-18, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-18">18.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-19, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-19">19.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-20, 16:46 МСК. Auto.ru 11, неполная проверка. Avito 27. Открыть отчёт" href="history/779982e9-6579-47c7-843d-2c871409254d/index.html" title="2026-10-20 в 16:46 МСК">
+<span class="placement-band"><span class="placement-value">11</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:33.333%"></span></span>
+</span>
+<time datetime="2026-10-20">20.10</time>
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:81.818%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-21, 11:04 МСК. Auto.ru 30, неполная проверка. Avito 24, неполная проверка. Открыть отчёт" href="history/4be1cce3-f3cd-4b0f-b63b-c5fcb8cccad0/index.html" title="2026-10-21 в 11:04 МСК">
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:90.909%"></span></span>
+</span>
+<time datetime="2026-10-21">21.10</time>
+<span class="placement-band"><span class="placement-value">24</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:72.727%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-22, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-22">22.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-23, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-23">23.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-24, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-24">24.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-25, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-25">25.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-26, 09:50 МСК. Auto.ru 31, неполная проверка. Avito 15. Открыть отчёт" href="history/d0e0a066-796d-4d99-bb50-d9b4badcf08c/index.html" title="2026-10-26 в 09:50 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-10-26">26.10</time>
+<span class="placement-band"><span class="placement-value">15</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:45.455%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-27, 10:34 МСК. Auto.ru 31, неполная проверка. Avito 15. Открыть отчёт" href="history/0cd10260-0f30-4b6d-a959-b1ebfcef4d69/index.html" title="2026-10-27 в 10:34 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-10-27">27.10</time>
+<span class="placement-band"><span class="placement-value">15</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:45.455%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-28, 18:15 МСК. Auto.ru 31, неполная проверка. Avito 8. Открыть отчёт" href="history/658eec46-87a1-4eec-ac6c-4e84f1960c34/index.html" title="2026-10-28 в 18:15 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-10-28">28.10</time>
+<span class="placement-band"><span class="placement-value">8</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:24.242%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-29, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-29">29.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-10-30, 17:19 МСК. Auto.ru 31, неполная проверка. Avito 30. Открыть отчёт" href="history/02287cac-1a7f-4838-a3c9-e3c85defba7d/index.html" title="2026-10-30 в 17:19 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-10-30">30.10</time>
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:90.909%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-10-31, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-10-31">31.10</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-11-01, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-11-01">01.11</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-02, 10:20 МСК. Auto.ru 31, неполная проверка. Avito 30. Открыть отчёт" href="history/230c09ee-b8b6-4c65-93e1-3fb557964c7e/index.html" title="2026-11-02 в 10:20 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-11-02">02.11</time>
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:90.909%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-03, 10:55 МСК. Auto.ru 31, неполная проверка. Avito 30. Открыть отчёт" href="history/442d212c-e510-44ca-92e8-7699623066e8/index.html" title="2026-11-03 в 10:55 МСК">
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:93.939%"></span></span>
+</span>
+<time datetime="2026-11-03">03.11</time>
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:90.909%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-11-04, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-11-04">04.11</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-05, 15:22 МСК. Auto.ru 29, неполная проверка. Avito 29. Открыть отчёт" href="history/7167cce3-e06c-4982-8e92-77bc20b30d7c/index.html" title="2026-11-05 в 15:22 МСК">
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:87.879%"></span></span>
+</span>
+<time datetime="2026-11-05">05.11</time>
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:87.879%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-06, 10:45 МСК. Auto.ru 29, неполная проверка. Avito 29. Открыть отчёт" href="history/cd623b05-e844-42c4-aea6-757542825d5f/index.html" title="2026-11-06 в 10:45 МСК">
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:87.879%"></span></span>
+</span>
+<time datetime="2026-11-06">06.11</time>
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:87.879%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-07, 14:04 МСК. Auto.ru 28, неполная проверка. Avito 29. Открыть отчёт" href="history/125d5930-b053-4894-9922-c559316e7f92/index.html" title="2026-11-07 в 14:04 МСК">
+<span class="placement-band"><span class="placement-value">28</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:84.848%"></span></span>
+</span>
+<time datetime="2026-11-07">07.11</time>
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:87.879%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-11-08, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-11-08">08.11</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-09, 10:19 МСК. Auto.ru 28, неполная проверка. Avito 29. Открыть отчёт" href="history/827296bf-77b2-4570-a344-c3ef55a81099/index.html" title="2026-11-09 в 10:19 МСК">
+<span class="placement-band"><span class="placement-value">28</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:84.848%"></span></span>
+</span>
+<time datetime="2026-11-09">09.11</time>
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:87.879%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-10, 10:32 МСК. Auto.ru 28, неполная проверка. Avito 7. Открыть отчёт" href="history/7fdec2a6-7498-4920-b17a-7502d7cb5e8a/index.html" title="2026-11-10 в 10:32 МСК">
+<span class="placement-band"><span class="placement-value">28</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:84.848%"></span></span>
+</span>
+<time datetime="2026-11-10">10.11</time>
+<span class="placement-band"><span class="placement-value">7</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:21.212%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-11, 10:49 МСК. Auto.ru 27, неполная проверка. Avito 27. Открыть отчёт" href="history/c94d99df-ded7-4956-9fa2-ac146e032213/index.html" title="2026-11-11 в 10:49 МСК">
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:81.818%"></span></span>
+</span>
+<time datetime="2026-11-11">11.11</time>
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:81.818%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-12, 11:24 МСК. Auto.ru 27, неполная проверка. Avito 25. Открыть отчёт" href="history/0a464e14-1811-42a7-8c72-93195f45e252/index.html" title="2026-11-12 в 11:24 МСК">
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:81.818%"></span></span>
+</span>
+<time datetime="2026-11-12">12.11</time>
+<span class="placement-band"><span class="placement-value">25</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:75.758%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-13, 11:06 МСК. Auto.ru 30, неполная проверка. Avito 27. Открыть отчёт" href="history/7104d7ae-25aa-4de7-94e7-bb5cbb603893/index.html" title="2026-11-13 в 11:06 МСК">
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:90.909%"></span></span>
+</span>
+<time datetime="2026-11-13">13.11</time>
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:81.818%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<div aria-label="2026-11-14, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-11-14">14.11</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<div aria-label="2026-11-15, нет сохранённой проверки">
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+<time datetime="2026-11-15">15.11</time>
+<span class="placement-band"><span class="placement-value">—</span>
+<span aria-hidden="true" class="placement-track"></span>
+</span>
+</div>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-16, 09:49 МСК. Auto.ru 30, неполная проверка. Avito 27. Открыть отчёт" href="history/a3bb921b-585c-43fe-8bd2-689679d31ec4/index.html" title="2026-11-16 в 09:49 МСК">
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:90.909%"></span></span>
+</span>
+<time datetime="2026-11-16">16.11</time>
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:81.818%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-17, 15:15 МСК. Auto.ru 30, неполная проверка. Avito 27. Открыть отчёт" href="history/131e83d3-6d09-425a-b427-e5982dde35a3/index.html" title="2026-11-17 в 15:15 МСК">
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:90.909%"></span></span>
+</span>
+<time datetime="2026-11-17">17.11</time>
+<span class="placement-band"><span class="placement-value">27</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:81.818%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-18, 18:01 МСК. Auto.ru 29, неполная проверка. Avito 33. Открыть отчёт" href="history/455f6b4f-e802-4956-bfe4-e3a022d61a9e/index.html" title="2026-11-18 в 18:01 МСК">
+<span class="placement-band"><span class="placement-value">29</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:87.879%"></span></span>
+</span>
+<time datetime="2026-11-18">18.11</time>
+<span class="placement-band"><span class="placement-value">33</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:100.0%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-19, 17:10 МСК. Auto.ru 30, неполная проверка. Avito 31. Открыть отчёт" href="history/1ebcc39d-0011-4223-a524-21ad31da0063/index.html" title="2026-11-19 в 17:10 МСК">
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:90.909%"></span></span>
+</span>
+<time datetime="2026-11-19">19.11</time>
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:93.939%"></span></span>
+</span>
+</a>
+</li>
+<li class="placement-day">
+<a aria-label="2026-11-20, 10:23 МСК. Auto.ru 30, неполная проверка. Avito 31. Открыть отчёт" href="history/65e0623a-70ee-4a40-a0da-0a6a04ed1e1b/index.html" title="2026-11-20 в 10:23 МСК">
+<span class="placement-band"><span class="placement-value">30</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar partial" style="height:90.909%"></span></span>
+</span>
+<time datetime="2026-11-20">20.11</time>
+<span class="placement-band"><span class="placement-value">31</span>
+<span aria-hidden="true" class="placement-track"><span class="placement-bar" style="height:93.939%"></span></span>
+</span>
+</a>
+</li>
+</ol>
+</div>
+</section><section id="runs"><h2>Прошлые проверки · 58</h2><p class="muted">Каждый отчёт сохраняет дату исходной проверки и предупреждения о неполноте. Более поздние подтверждённые уточнения могут отображаться с отдельной датой.</p>
 <p>Не удалось подготовить архивных отчётов: 9. Они не выданы за завершённые; исходные материалы сохранены локально.</p>
 <ul><li><a href="history/65e0623a-70ee-4a40-a0da-0a6a04ed1e1b/index.html"><time data-check-time="2026-11-20T07:23:07.649391+00:00">2026-11-20 07:23:07 UTC</time></a> · Auto.ru 30, Avito 31 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/1ebcc39d-0011-4223-a524-21ad31da0063/index.html"><time data-check-time="2026-11-19T14:10:15.811627+00:00">2026-11-19 14:10:15 UTC</time></a> · Auto.ru 30, Avito 31 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/2235b1ad-790b-4a06-b45e-a2d99c43b0c6/index.html"><time data-check-time="2026-11-19T10:13:47.324809+00:00">2026-11-19 10:13:47 UTC</time></a> · Auto.ru 30, Avito 31 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/b6e9b57e-3ad0-4bc5-9c41-45c870e92c5b/index.html"><time data-check-time="2026-11-19T07:15:45.455306+00:00">2026-11-19 07:15:45 UTC</time></a> · Auto.ru 30, Avito 32 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/455f6b4f-e802-4956-bfe4-e3a022d61a9e/index.html"><time data-check-time="2026-11-18T15:01:39.642966+00:00">2026-11-18 15:01:39 UTC</time></a> · Auto.ru 29, Avito 33 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/693040ed-e50e-42d4-a4b0-c69084b9d92f/index.html"><time data-check-time="2026-11-18T07:31:21.766111+00:00">2026-11-18 07:31:21 UTC</time></a> · Auto.ru 29, Avito 26 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/131e83d3-6d09-425a-b427-e5982dde35a3/index.html"><time data-check-time="2026-11-17T12:15:37.269015+00:00">2026-11-17 12:15:37 UTC</time></a> · Auto.ru 30, Avito 27 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/a3bb921b-585c-43fe-8bd2-689679d31ec4/index.html"><time data-check-time="2026-11-16T06:49:37.607360+00:00">2026-11-16 06:49:37 UTC</time></a> · Auto.ru 30, Avito 27 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/7104d7ae-25aa-4de7-94e7-bb5cbb603893/index.html"><time data-check-time="2026-11-13T08:06:18.804915+00:00">2026-11-13 08:06:18 UTC</time></a> · Auto.ru 30, Avito 27 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/0a464e14-1811-42a7-8c72-93195f45e252/index.html"><time data-check-time="2026-11-12T08:24:38.565463+00:00">2026-11-12 08:24:38 UTC</time></a> · Auto.ru 27, Avito 25 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/e3e5c25d-f47b-4e7f-b26d-75f43006b76e/index.html"><time data-check-time="2026-11-12T07:50:06.897875+00:00">2026-11-12 07:50:06 UTC</time></a> · Auto.ru 27, Avito 1 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/c94d99df-ded7-4956-9fa2-ac146e032213/index.html"><time data-check-time="2026-11-11T07:49:08.332721+00:00">2026-11-11 07:49:08 UTC</time></a> · Auto.ru 27, Avito 27 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/7fdec2a6-7498-4920-b17a-7502d7cb5e8a/index.html"><time data-check-time="2026-11-10T07:32:44.676533+00:00">2026-11-10 07:32:44 UTC</time></a> · Auto.ru 28, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/827296bf-77b2-4570-a344-c3ef55a81099/index.html"><time data-check-time="2026-11-09T07:19:46.180723+00:00">2026-11-09 07:19:46 UTC</time></a> · Auto.ru 28, Avito 29 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/125d5930-b053-4894-9922-c559316e7f92/index.html"><time data-check-time="2026-11-07T11:04:11.728388+00:00">2026-11-07 11:04:11 UTC</time></a> · Auto.ru 28, Avito 29 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/cd623b05-e844-42c4-aea6-757542825d5f/index.html"><time data-check-time="2026-11-06T07:45:18.441212+00:00">2026-11-06 07:45:18 UTC</time></a> · Auto.ru 29, Avito 29 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/7167cce3-e06c-4982-8e92-77bc20b30d7c/index.html"><time data-check-time="2026-11-05T12:22:24.724508+00:00">2026-11-05 12:22:24 UTC</time></a> · Auto.ru 29, Avito 29 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/7137eea1-eb7b-480a-b974-ec7ac68b1828/index.html"><time data-check-time="2026-11-05T07:53:56.724225+00:00">2026-11-05 07:53:56 UTC</time></a> · Auto.ru 29, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/442d212c-e510-44ca-92e8-7699623066e8/index.html"><time data-check-time="2026-11-03T07:55:49.522333+00:00">2026-11-03 07:55:49 UTC</time></a> · Auto.ru 31, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/230c09ee-b8b6-4c65-93e1-3fb557964c7e/index.html"><time data-check-time="2026-11-02T07:20:47.387700+00:00">2026-11-02 07:20:47 UTC</time></a> · Auto.ru 31, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/02287cac-1a7f-4838-a3c9-e3c85defba7d/index.html"><time data-check-time="2026-10-30T14:19:18.826982+00:00">2026-10-30 14:19:18 UTC</time></a> · Auto.ru 31, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/37587d7a-df0e-45a6-ad4a-f09971cd7b14/index.html"><time data-check-time="2026-10-30T12:46:21.439715+00:00">2026-10-30 12:46:21 UTC</time></a> · Auto.ru 31, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/4769dd25-865e-4f69-85c5-59d81446a3af/index.html"><time data-check-time="2026-10-30T12:26:38.351972+00:00">2026-10-30 12:26:38 UTC</time></a> · Auto.ru 30, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/6268d930-61c2-4d82-9107-d4cdab53758a/index.html"><time data-check-time="2026-10-30T09:56:00.825815+00:00">2026-10-30 09:56:00 UTC</time></a> · Auto.ru 30, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/7982df1a-b655-481e-8802-84cdf82c19b7/index.html"><time data-check-time="2026-10-30T09:48:09.984092+00:00">2026-10-30 09:48:09 UTC</time></a> · Auto.ru 30, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/be539954-0799-4961-8057-a636be7b6ad7/index.html"><time data-check-time="2026-10-30T08:48:31.953122+00:00">2026-10-30 08:48:31 UTC</time></a> · Auto.ru 30, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/10d83fb3-ffdd-4aa7-afac-7dbf8e03a99e/index.html"><time data-check-time="2026-10-30T07:50:38.848060+00:00">2026-10-30 07:50:38 UTC</time></a> · Auto.ru 0, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/034e0a22-e438-4e08-854f-212c24339ca7/index.html"><time data-check-time="2026-10-30T07:32:47.023456+00:00">2026-10-30 07:32:47 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/658eec46-87a1-4eec-ac6c-4e84f1960c34/index.html"><time data-check-time="2026-10-28T15:15:53.427848+00:00">2026-10-28 15:15:53 UTC</time></a> · Auto.ru 31, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/61ba812c-8fe9-4bec-9640-7683b405395f/index.html"><time data-check-time="2026-10-28T07:49:58.530699+00:00">2026-10-28 07:49:58 UTC</time></a> · Auto.ru 31, Avito 30 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/0cd10260-0f30-4b6d-a959-b1ebfcef4d69/index.html"><time data-check-time="2026-10-27T07:34:13.934242+00:00">2026-10-27 07:34:13 UTC</time></a> · Auto.ru 31, Avito 15 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/d0e0a066-796d-4d99-bb50-d9b4badcf08c/index.html"><time data-check-time="2026-10-26T06:50:32.001816+00:00">2026-10-26 06:50:32 UTC</time></a> · Auto.ru 31, Avito 15 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/4be1cce3-f3cd-4b0f-b63b-c5fcb8cccad0/index.html"><time data-check-time="2026-10-21T08:04:52.891221+00:00">2026-10-21 08:04:52 UTC</time></a> · Auto.ru 30, Avito 24 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/779982e9-6579-47c7-843d-2c871409254d/index.html"><time data-check-time="2026-10-20T13:46:11.250585+00:00">2026-10-20 13:46:11 UTC</time></a> · Auto.ru 11, Avito 27 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/e0d676bd-55ab-482e-b719-9a028c344e45/index.html"><time data-check-time="2026-10-15T03:53:34.450389+00:00">2026-10-15 03:53:34 UTC</time></a> · Auto.ru 0, Avito 29 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/50a62ff2-9e06-4e2a-b5eb-4e7a96aa2499/index.html"><time data-check-time="2026-10-14T18:51:10.864678+00:00">2026-10-14 18:51:10 UTC</time></a> · Auto.ru 0, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/4e85d37f-ecd7-412f-8032-07a543293f21/index.html"><time data-check-time="2026-10-14T18:36:33.570340+00:00">2026-10-14 18:36:33 UTC</time></a> · Auto.ru 0, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/1f3a3b47-661e-4443-bccc-6ec27d0ca428/index.html"><time data-check-time="2026-10-14T15:28:07.270943+00:00">2026-10-14 15:28:07 UTC</time></a> · Auto.ru 0, Avito 24 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/4f16c2c5-f8a5-4b69-acc8-3496bd813dd1/index.html"><time data-check-time="2026-10-14T12:17:43.209885+00:00">2026-10-14 12:17:43 UTC</time></a> · Auto.ru 29, Avito 12 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/62632422-cf43-4975-8888-f33871ae63d9/index.html"><time data-check-time="2026-10-14T07:29:18.929205+00:00">2026-10-14 07:29:18 UTC</time></a> · Auto.ru 28, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/afb51796-e452-46ae-aa2e-d8b4bb9c78d3/index.html"><time data-check-time="2026-10-12T11:28:38.813327+00:00">2026-10-12 11:28:38 UTC</time></a> · Auto.ru 28, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/1e164897-f46e-49f1-ac1b-d17a2adbd953/index.html"><time data-check-time="2026-10-12T07:40:35.943082+00:00">2026-10-12 07:40:35 UTC</time></a> · Auto.ru 32, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/960e6f73-13fb-483d-b3f2-8044941fec49/index.html"><time data-check-time="2026-10-09T08:09:45.866544+00:00">2026-10-09 08:09:45 UTC</time></a> · Auto.ru 0, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/a859528f-3d73-4e7b-9788-157fe1f3e563/index.html"><time data-check-time="2026-10-09T07:28:14.723331+00:00">2026-10-09 07:28:14 UTC</time></a> · Auto.ru 0, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/a27ad972-1b3d-49d3-bf77-c1dff02f63d3/index.html"><time data-check-time="2026-10-08T13:46:24.623719+00:00">2026-10-08 13:46:24 UTC</time></a> · Auto.ru 0, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/8e45472e-1ce6-4a18-a83e-dfa5ac31a871/index.html"><time data-check-time="2026-10-08T09:37:03.735101+00:00">2026-10-08 09:37:03 UTC</time></a> · Auto.ru 31, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/6d26ecf5-5fc3-4401-8f81-3311a05ad1dd/index.html"><time data-check-time="2026-10-07T17:35:55.472878+00:00">2026-10-07 17:35:55 UTC</time></a> · Auto.ru 0, Avito 8 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/7a0c6763-448d-4188-9604-1c1b4fca3abc/index.html"><time data-check-time="2026-10-07T15:20:34.467787+00:00">2026-10-07 15:20:34 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/88750a9d-f60c-42b4-a133-fa03c564cdf6/index.html"><time data-check-time="2026-10-07T15:11:15.917750+00:00">2026-10-07 15:11:15 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/c85e8e85-f8d6-4079-a2fc-35d26b214e33/index.html"><time data-check-time="2026-10-07T14:57:08.432865+00:00">2026-10-07 14:57:08 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/d53e523c-1cc9-49ca-89bc-2d752864d9bc/index.html"><time data-check-time="2026-10-07T13:57:21.983223+00:00">2026-10-07 13:57:21 UTC</time></a> · Auto.ru 31, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/ef6338df-2512-49c7-a80e-80a43bd82d88/index.html"><time data-check-time="2026-10-07T13:13:44.639847+00:00">2026-10-07 13:13:44 UTC</time></a> · Auto.ru 0, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/1870e5bb-91c5-402f-9f29-c79ec47f39b2/index.html"><time data-check-time="2026-10-07T11:58:04.225406+00:00">2026-10-07 11:58:04 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/d9b4139e-9394-4d69-a50f-4794bcefbf9e/index.html"><time data-check-time="2026-10-07T09:51:06.864776+00:00">2026-10-07 09:51:06 UTC</time></a> · Auto.ru 31, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/dc9cf9ef-8613-4973-9672-3dc483cc2b65/index.html"><time data-check-time="2026-10-07T08:07:28.399356+00:00">2026-10-07 08:07:28 UTC</time></a> · Auto.ru 31, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/ec9f65a6-f538-4863-8a0c-b53cf160fb62/index.html"><time data-check-time="2026-10-06T15:07:26.184843+00:00">2026-10-06 15:07:26 UTC</time></a> · Auto.ru 31, Avito 7 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/56ba95af-672b-48a2-b5e0-24cfaa11eba7/index.html"><time data-check-time="2026-10-05T11:15:27.592559+00:00">2026-10-05 11:15:27 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li><li><a href="history/10fa8dc1-d5c4-4b82-8210-4b1ce5af6a58/index.html"><time data-check-time="2026-10-05T09:25:43.895567+00:00">2026-10-05 09:25:43 UTC</time></a> · Auto.ru 31, Avito 0 активных публикаций<br/><small>Сохранённая проверка; полнота указана в отчёте</small></li></ul></section>
 <section id="activity"><h2>Дни активности по автомобилям и площадкам</h2><label>Поиск по названию или unique_id<input id="history-search" placeholder="Например, V-Class или unique_id" type="search"/></label><p aria-live="polite" id="history-count">72 записей</p><div class="grid">
