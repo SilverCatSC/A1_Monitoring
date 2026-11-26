@@ -1,5 +1,20 @@
 [
   {
+    "cycle_id": "a6ba37f4-f96b-47e1-8ba7-02344fca9fd4",
+    "date": "2026-11-26T07:23:40.776148+00:00",
+    "counts": {
+      "auto_ru": 30,
+      "avito": 31
+    },
+    "placement_coverage": {
+      "auto_ru": false,
+      "avito": true
+    },
+    "finding_count": 97,
+    "sha256": "8ec97b2440f9acf23804b432a84cd473b80075dfc97491fd148a3403208b5fdf",
+    "href": "history/a6ba37f4-f96b-47e1-8ba7-02344fca9fd4/index.html"
+  },
+  {
     "cycle_id": "cbcf949c-b337-41a5-9626-554776e46da4",
     "date": "2026-11-25T07:36:11.679999+00:00",
     "counts": {
