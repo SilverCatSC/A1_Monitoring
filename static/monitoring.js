@@ -1,25 +1,13 @@
 (() => {
   const search = document.getElementById('vehicle-search');
   const filter = document.getElementById('vehicle-filter');
+  if (!search || !filter) return;
   for (const time of document.querySelectorAll('[data-monitor-time]')) {
     const date = new Date(time.dataset.monitorTime);
     if (!Number.isNaN(date.getTime())) {
-      time.textContent = new Intl.DateTimeFormat('ru-RU', {dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Moscow'}).format(date) + ' МСК';
-      time.title = 'Московское время';
+      time.textContent = new Intl.DateTimeFormat('ru-RU', {dateStyle: 'medium', timeStyle: 'short'}).format(date) + (time.hasAttribute('data-monitor-short') ? '' : ' · время вашего устройства');
+      time.title = 'Время вашего устройства';
     }
-  }
-  if (!search || !filter) return;
-  const viewSwitch = document.querySelector('.report-vehicle-views');
-  if (viewSwitch) {
-    const catalog = document.getElementById('vehicle-panel');
-    const choices = [...viewSwitch.querySelectorAll('[data-vehicle-view]')];
-    for (const button of choices) {
-      button.addEventListener('click', () => {
-        catalog.dataset.vehicleView = button.dataset.vehicleView;
-        for (const choice of choices) choice.setAttribute('aria-pressed', String(choice === button));
-      });
-    }
-    viewSwitch.hidden = false;
   }
   const tiles = [...document.querySelectorAll('.vehicle-tile')];
   const tabs = [...document.querySelectorAll('.monitor-tabs [role="tab"]')];
@@ -31,11 +19,9 @@
   const compactOverview = document.querySelector('.phone-overview');
   if (breakdown && compactOverview) {
     compactOverview.hidden = false;
-    if (!compactOverview.closest('.report-overview-layout')) {
-      const adaptOverview = () => { breakdown.open = !phoneLayout.matches; };
-      adaptOverview();
-      phoneLayout.addEventListener('change', adaptOverview);
-    }
+    const adaptOverview = () => { breakdown.open = !phoneLayout.matches; };
+    adaptOverview();
+    phoneLayout.addEventListener('change', adaptOverview);
   }
   if (tabs.length === 2 && panels.every(Boolean)) {
     panels.forEach((panel, index) => {
@@ -57,14 +43,7 @@
     };
     activateView = activate;
     const followHash = () => {
-      const remark = /^#remark-[0-9a-f]{20}$/.test(location.hash) &&
-        document.getElementById(location.hash.slice(1));
-      activate(remark || ['#marketing-summary', '#marketing-panel'].includes(location.hash) ? 1 : 0);
-      if (remark) {
-        const group = remark.closest('details');
-        if (group) group.open = true;
-        requestAnimationFrame(() => remark.scrollIntoView({block:'start'}));
-      }
+      activate(['#marketing-summary', '#marketing-panel'].includes(location.hash) ? 1 : 0);
       if (location.hash === '#monitoring-evidence') document.getElementById('business-review').scrollIntoView();
     };
     tabs.forEach((tab, index) => {
@@ -130,10 +109,6 @@
   };
   more?.addEventListener('click', () => reveal(false));
   showAll?.addEventListener('click', () => reveal(true));
-  for (const button of document.querySelectorAll('[data-monitor-action="tasks"]')) button.addEventListener('click', () => {
-    activateView(1, true);
-    document.getElementById('marketing-summary')?.scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
-  });
   for (const button of document.querySelectorAll('[data-monitor-action="attention"], [data-monitor-action="all"], [data-monitor-action="inactive"]')) button.addEventListener('click', () => {
     search.value = '';
     filter.value = button.dataset.monitorAction;
@@ -143,13 +118,6 @@
     document.querySelector('.monitor-toolbar').scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
   });
   for (const button of document.querySelectorAll('[data-monitor-action="identity"]')) button.addEventListener('click', () => {
-    if (button.getAttribute('aria-controls') === 'report-check-details' && breakdown) {
-      breakdown.open = true;
-      const summary = breakdown.querySelector('summary');
-      summary.focus({preventScroll:true});
-      summary.scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
-      return;
-    }
     activateView(1, true);
     const group = document.querySelector('[data-brief-group="identity"]');
     if (group) {
@@ -158,25 +126,7 @@
       group.scrollIntoView({behavior:reducedMotion() ? 'instant' : 'smooth', block:'start'});
     }
   });
-  const followVehicleHash = () => {
-    if (!/^#report-car-[0-9a-f]{20}$/.test(location.hash)) return;
-    const car = document.getElementById(location.hash.slice(1));
-    const position = tiles.indexOf(car);
-    if (position === -1) return;
-    activateView(0);
-    if (car.hidden) {
-      search.value = '';
-      filter.value = 'all';
-      visibleLimit = Math.max(visibleLimit, position + 1);
-      apply();
-    }
-    car.tabIndex = -1;
-    car.focus({preventScroll:true});
-    requestAnimationFrame(() => car.scrollIntoView({block:'start'}));
-  };
   apply();
-  followVehicleHash();
-  window.addEventListener('hashchange', followVehicleHash);
   for (const img of document.querySelectorAll('.vehicle-photo img')) {
     const unavailable = () => {
       img.hidden = true;
