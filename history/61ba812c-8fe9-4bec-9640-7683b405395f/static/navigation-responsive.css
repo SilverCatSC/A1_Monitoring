@@ -1,4 +1,5 @@
 /* The same destinations on every device; native disclosure needs no JavaScript. */
+.app-nav nav .nav-text {width:auto;min-width:0;font-size:inherit}
 @media (max-width: 960px) {
   .app-nav {position:relative;inset:auto;width:auto;padding:16px 20px;overflow:visible}
   .workbench .app-brand {margin:0;min-height:44px;max-width:calc(100% - 82px)}
@@ -10,6 +11,8 @@
   .nav-mobile-menu>summary::-webkit-details-marker {display:none}
   .app-nav .nav-mobile-menu nav {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;overflow:visible;padding:16px 0 0}
   .workbench .nav-mobile-menu nav a {min-height:44px;padding:10px 12px;white-space:normal;font-size:14px;overflow-wrap:anywhere}
+  /* Legacy compact navigation hides every span; keep disclosure labels visible. */
+  .app-nav .nav-mobile-menu .nav-text {display:block;flex:1;font-size:16px;line-height:1.4}
   .workbench main {margin:0;padding:24px 20px;min-width:0}
   .workbench header:not(.page-heading) {margin:0;padding:24px 20px 0}
   .skip-link {left:16px}
